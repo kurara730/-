@@ -8,6 +8,7 @@
 #include <wrl/client.h>
 #include <xaudio2.h>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstring>
@@ -277,6 +278,7 @@ struct AudioSystem::Impl
             currentLoop = loop;
             return false;
         }
+        sourceVoice->SetVolume(volume);
 
         XAUDIO2_BUFFER buffer{};
         buffer.Flags = XAUDIO2_END_OF_STREAM;
@@ -308,6 +310,15 @@ struct AudioSystem::Impl
         startedAt = std::chrono::steady_clock::now();
         lastError.clear();
         return true;
+    }
+
+    void SetVolume(float value)
+    {
+        volume = std::max(0.0f, std::min(value, 1.0f));
+        if (sourceVoice)
+        {
+            sourceVoice->SetVolume(volume);
+        }
     }
 
     void Stop()
@@ -348,6 +359,7 @@ struct AudioSystem::Impl
     std::wstring currentPath;
     bool currentLoop = false;
     float activeDuration = 0.0f;
+    float volume = 1.0f;
     std::chrono::steady_clock::time_point startedAt{};
     std::wstring lastError;
 };
@@ -377,6 +389,16 @@ bool AudioSystem::PlayOnce(MusicTrack track, const std::wstring& relativePath)
 void AudioSystem::Stop()
 {
     impl_->Stop();
+}
+
+void AudioSystem::SetVolume(float volume)
+{
+    impl_->SetVolume(volume);
+}
+
+float AudioSystem::Volume() const
+{
+    return impl_->volume;
 }
 
 MusicTrack AudioSystem::CurrentTrack() const

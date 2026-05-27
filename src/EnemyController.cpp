@@ -325,20 +325,21 @@ void SweetsApp::DamageEnemy(Enemy& e, float dmg, V2 from, float knock)
 
 void SweetsApp::DamageEnemy(Enemy& e, float dmg, V2 from, float knock, bool reflected, int ownerIndex)
 {
+    const float incoming = dmg;
     if (e.type == EnemyType::Mirror && !reflected)
     {
-        e.flash = 0.08f;
-        return;
+        dmg *= 0.22f;
     }
     if (e.type == EnemyType::Shield)
     {
         const float front = Dot(FromAngle(e.face), Normalize(from - e.pos));
-        if (front > 0.25f) dmg *= 0.35f;
+        if (front > 0.25f) dmg = std::max(dmg * 0.35f, incoming * 0.12f);
     }
     if (e.barrierT > 0.0f)
     {
-        dmg *= 0.30f;
+        dmg = std::max(dmg * 0.30f, incoming * 0.10f);
     }
+    dmg = std::max(dmg, 1.0f);
 
     e.hp -= dmg;
     e.flash = 0.12f;

@@ -8,7 +8,7 @@
 - XAudio2 + Media Foundationによるプレイ中/ゲームオーバー/隠しボスBGM
 - 5段階難易度とLunaticクリア後の隠しボス耐久戦
 - タイトルBGM、Story/Endless開始項目、ゲームオーバー時のRetry/Title選択
-- Debugビルド限定のFPS表示、RT/TAA確認、開発チート
+- Debugビルド限定のF1クリック式デバッグパネル、FPS表示、RT/TAA確認、開発チート
 - 反射倍率、反射キル、鏡敵、チーズ壁による敵弾反射
 - 1Pキーボード/マウスだけで遊べるソロ優先
 - 直感的な4キャラカード式の性能選択
@@ -16,6 +16,7 @@
 - 日本語DirectWrite HUD
 - `assets/shaders` 配下の外部HLSLシェーダー
 - `assets/textures` 配下の差し替え可能な仮PNGテクスチャ
+- `assets/video/title.mp4` 配置時のタイトル動画再生
 
 ## 操作
 
@@ -26,7 +27,7 @@
 | W / S または Up / Down | タイトル画面でStory/Endless/Creditsを選択 |
 | Left / Right または A / D | タイトルのキャラ選択 / 難易度画面 / ゲームオーバー選択 |
 | 難易度カードをクリック | 難易度を選択 |
-| F1-F12 | Debugビルド限定のデバッグ表示/チート/RT/TAA確認 |
+| F1 | Debugビルド限定のクリック式デバッグパネルを開閉 |
 | WASD / 矢印キー | 移動 |
 | マウス | 照準 |
 | 左クリック / Space | 小さい通常弾を連射 |
@@ -41,7 +42,7 @@
 | 4 | ロール |
 | C | タイトル画面でクレジットを表示 |
 | XInputゲームパッド | 将来のP2-P4ローカル協力用 |
-| P / Esc | 一時停止 |
+| P / Esc | 一時停止。ポーズ画面でResume/Titleと音量を操作 |
 | R | リスタート |
 
 ## ソース構成
@@ -73,6 +74,7 @@
 | `assets/audio/233_BPM163.mp3` | ゲームプレイ中BGM |
 | `assets/audio/ruins.mp3` | ゲームオーバーBGM |
 | `assets/audio/Lonery boy.wav` | 隠しボスBGM |
+| `assets/video/title.mp4` | 任意配置のタイトル画面動画 |
 
 ## クレジット
 
@@ -81,4 +83,4 @@
 
 ## アセット差し替え
 
-`AssetCatalog` が見た目の差し替え窓口です。各ビジュアル役割は `texturePath`、`spritePath`、`modelPath` を持てます。`TextureLibrary` はWICでPNG/JPEG/BMPを読み込み、`SpriteLibrary` はUVを管理します。現在の描画は内蔵メッシュへフォールバックするため、画像や将来のFBX/glTFが未設定でもゲームは起動します。
+`AssetCatalog` が見た目の差し替え窓口です。各ビジュアル役割は `texturePath`、`spritePath`、`modelPath` を持てます。`TextureLibrary` はWICでPNG/JPEG/BMPを読み込み、`SpriteLibrary` はUVを管理します。現在の描画は内蔵メッシュへフォールバックするため、画像や将来のFBX/glTFが未設定でもゲームは起動します。タイトル動画は `assets/video/title.mp4` を置くと右側メディア枠でループ再生され、無い場合はフォールバック表示になります。

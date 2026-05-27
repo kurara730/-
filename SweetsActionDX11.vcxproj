@@ -112,6 +112,7 @@
     <ClCompile Include="src\StageFactory.cpp" />
     <ClCompile Include="src\SweetsApp.cpp" />
     <ClCompile Include="src\TextureLibrary.cpp" />
+    <ClCompile Include="src\VideoSystem.cpp" />
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -126,6 +127,7 @@
     <ClInclude Include="src\StageFactory.h" />
     <ClInclude Include="src\SweetsApp.h" />
     <ClInclude Include="src\TextureLibrary.h" />
+    <ClInclude Include="src\VideoSystem.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include=".gitignore" />
@@ -147,6 +149,7 @@
     <None Include="assets\textures\pickup.png" />
     <None Include="assets\textures\roll.png" />
     <None Include="assets\textures\shortcake.png" />
+    <None Include="assets\video\README_video.md" />
     <None Include="docs\game_spec.md" />
     <None Include="docs\implementation_notes.md" />
     <None Include="docs\technical_design.md" />

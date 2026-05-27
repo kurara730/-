@@ -33,6 +33,7 @@
     <ClCompile Include="src\StageFactory.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\SweetsApp.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\TextureLibrary.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\VideoSystem.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\main.cpp"><Filter>Source Files</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -47,6 +48,7 @@
     <ClInclude Include="src\StageFactory.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\SweetsApp.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\TextureLibrary.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="src\VideoSystem.h"><Filter>Header Files</Filter></ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="assets\shaders\basic_lit.hlsl"><Filter>Shaders</Filter></None>
@@ -64,6 +66,7 @@
     <None Include="assets\audio\Lonery boy.wav"><Filter>Assets</Filter></None>
     <None Include="assets\audio\ruins.mp3"><Filter>Assets</Filter></None>
     <None Include="assets\README_assets.md"><Filter>Assets</Filter></None>
+    <None Include="assets\video\README_video.md"><Filter>Assets</Filter></None>
     <None Include="docs\game_spec.md"><Filter>Docs</Filter></None>
     <None Include="docs\implementation_notes.md"><Filter>Docs</Filter></None>
     <None Include="docs\technical_design.md"><Filter>Docs</Filter></None>

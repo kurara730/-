@@ -1,5 +1,7 @@
 #include "SweetsApp.h"
 
+#include <algorithm>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 
@@ -13,6 +15,25 @@ std::filesystem::path SaveFilePath()
     DWORD len = GetEnvironmentVariableW(L"LOCALAPPDATA", localAppData, MAX_PATH);
     std::filesystem::path base = (len > 0 && len < MAX_PATH) ? std::filesystem::path(localAppData) : std::filesystem::current_path();
     return base / L"SweetsPanicDX11" / L"save.dat";
+}
+
+bool PointInRect(float sx, float sy, float left, float top, float right, float bottom)
+{
+    return sx >= left && sx <= right && sy >= top && sy <= bottom;
+}
+
+float ParseSaveFloat(const std::string& line, const char* key, float fallback)
+{
+    const std::string prefix = std::string(key) + "=";
+    if (line.rfind(prefix, 0) != 0) return fallback;
+    try
+    {
+        return ClampFloat(std::stof(line.substr(prefix.size())), 0.0f, 1.0f);
+    }
+    catch (...)
+    {
+        return fallback;
+    }
 }
 }
 
@@ -53,7 +74,9 @@ bool SweetsApp::Initialize(HINSTANCE instance, int showCmd)
     CreateRenderTargets();
     CreateMeshes();
     LoadAssets();
+    titleVideo_.Open(L"assets/video/title.mp4", true);
     LoadProgress();
+    ApplyAudioVolume();
     ResetGame();
     screen_ = Screen::Title;
 
@@ -135,17 +158,32 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_MOUSEMOVE:
         mouseX_ = static_cast<float>(GET_X_LPARAM(lp));
         mouseY_ = static_cast<float>(GET_Y_LPARAM(lp));
+        if (screen_ == Screen::Paused && HandlePauseDrag(mouseX_, mouseY_))
+        {
+            return 0;
+        }
         return 0;
     case WM_LBUTTONDOWN:
-        if (screen_ == Screen::Title && SelectTitleMenuAt(static_cast<float>(GET_X_LPARAM(lp)), static_cast<float>(GET_Y_LPARAM(lp))))
+        mouseX_ = static_cast<float>(GET_X_LPARAM(lp));
+        mouseY_ = static_cast<float>(GET_Y_LPARAM(lp));
+        if (HandleDebugClick(mouseX_, mouseY_))
         {
             return 0;
         }
-        if (screen_ == Screen::Title && SelectLoadoutAt(static_cast<float>(GET_X_LPARAM(lp)), static_cast<float>(GET_Y_LPARAM(lp))))
+        if (screen_ == Screen::Paused && HandlePauseClick(mouseX_, mouseY_))
+        {
+            SetCapture(hwnd);
+            return 0;
+        }
+        if (screen_ == Screen::Title && SelectTitleMenuAt(mouseX_, mouseY_))
         {
             return 0;
         }
-        if (screen_ == Screen::DifficultySelect && SelectDifficultyAt(static_cast<float>(GET_X_LPARAM(lp)), static_cast<float>(GET_Y_LPARAM(lp))))
+        if (screen_ == Screen::Title && SelectLoadoutAt(mouseX_, mouseY_))
+        {
+            return 0;
+        }
+        if (screen_ == Screen::DifficultySelect && SelectDifficultyAt(mouseX_, mouseY_))
         {
             return 0;
         }
@@ -154,6 +192,11 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         return 0;
     case WM_LBUTTONUP:
         mouseLeft_ = false;
+        if (draggingVolume_ >= 0)
+        {
+            SaveSettings();
+        }
+        draggingVolume_ = -1;
         ReleaseCapture();
         return 0;
     case WM_RBUTTONDOWN:
@@ -178,6 +221,52 @@ void SweetsApp::OnKeyDown(WPARAM key)
 {
     if (HandleDebugKey(key))
     {
+        return;
+    }
+
+    if (screen_ == Screen::Video)
+    {
+        if (eventVideoSkippable_ && (key == VK_ESCAPE || key == VK_RETURN || key == VK_SPACE))
+        {
+            eventVideo_.Stop();
+            eventVideoBitmap_.Reset();
+            screen_ = eventVideoNextScreen_;
+        }
+        return;
+    }
+
+    if (screen_ == Screen::Paused)
+    {
+        if (key == 'P' || key == VK_ESCAPE)
+        {
+            screen_ = Screen::Playing;
+            return;
+        }
+        if (key == VK_UP || key == 'W')
+        {
+            pauseMenuIndex_ = (pauseMenuIndex_ + 5) % 6;
+            return;
+        }
+        if (key == VK_DOWN || key == 'S')
+        {
+            pauseMenuIndex_ = (pauseMenuIndex_ + 1) % 6;
+            return;
+        }
+        if ((key == VK_LEFT || key == 'A') && pauseMenuIndex_ >= 2)
+        {
+            SetVolumeSlider(pauseMenuIndex_ - 2, VolumeSliderValue(pauseMenuIndex_ - 2) - 0.05f, true);
+            return;
+        }
+        if ((key == VK_RIGHT || key == 'D') && pauseMenuIndex_ >= 2)
+        {
+            SetVolumeSlider(pauseMenuIndex_ - 2, VolumeSliderValue(pauseMenuIndex_ - 2) + 0.05f, true);
+            return;
+        }
+        if (key == VK_RETURN || key == VK_SPACE)
+        {
+            ActivatePauseMenuItem();
+            return;
+        }
         return;
     }
 
@@ -297,7 +386,16 @@ void SweetsApp::OnKeyDown(WPARAM key)
 
     if ((key == 'P' || key == VK_ESCAPE) && (screen_ == Screen::Playing || screen_ == Screen::Paused))
     {
-        screen_ = screen_ == Screen::Paused ? Screen::Playing : Screen::Paused;
+        if (screen_ == Screen::Paused)
+        {
+            screen_ = Screen::Playing;
+        }
+        else
+        {
+            pauseMenuIndex_ = 0;
+            draggingVolume_ = -1;
+            screen_ = Screen::Paused;
+        }
     }
     if (screen_ == Screen::Playing || screen_ == Screen::HiddenBoss)
     {
@@ -310,27 +408,86 @@ void SweetsApp::OnKeyDown(WPARAM key)
 bool SweetsApp::HandleDebugKey(WPARAM key)
 {
 #if defined(_DEBUG)
-    switch (key)
+    if (key == VK_F1)
     {
-    case VK_F1:
         debug_.hud = !debug_.hud;
         return true;
-    case VK_F2:
-        debug_.overlays = !debug_.overlays;
+    }
+    if (key >= VK_F2 && key <= VK_F12)
+    {
         return true;
-    case VK_F3:
+    }
+    return false;
+#else
+    (void)key;
+    return false;
+#endif
+}
+
+bool SweetsApp::DebugPanelContains(float sx, float sy) const
+{
+#if defined(_DEBUG)
+    if (!debug_.hud) return false;
+    const float left = static_cast<float>(width_) - 360.0f;
+    return sx >= left && sx <= static_cast<float>(width_) && sy >= 0.0f && sy <= static_cast<float>(height_);
+#else
+    (void)sx;
+    (void)sy;
+    return false;
+#endif
+}
+
+bool SweetsApp::HandleDebugClick(float sx, float sy)
+{
+#if defined(_DEBUG)
+    if (!DebugPanelContains(sx, sy)) return false;
+
+    const float left = static_cast<float>(width_) - 342.0f;
+    const float buttonW = 148.0f;
+    const float buttonH = 30.0f;
+    const float gap = 10.0f;
+    const float top = 178.0f;
+    for (int i = 0; i < 11; ++i)
+    {
+        const int col = i % 2;
+        const int row = i / 2;
+        const float x = left + col * (buttonW + gap);
+        const float y = top + row * (buttonH + 8.0f);
+        if (PointInRect(sx, sy, x, y, x + buttonW, y + buttonH))
+        {
+            ExecuteDebugAction(i);
+            return true;
+        }
+    }
+    return true;
+#else
+    (void)sx;
+    (void)sy;
+    return false;
+#endif
+}
+
+void SweetsApp::ExecuteDebugAction(int action)
+{
+#if defined(_DEBUG)
+    switch (action)
+    {
+    case 0:
         debug_.taa = !debug_.taa;
         debug_.taaFrame = 0;
-        return true;
-    case VK_F4:
+        break;
+    case 1:
         debug_.additiveView = !debug_.additiveView;
-        return true;
-    case VK_F5:
+        break;
+    case 2:
+        debug_.overlays = !debug_.overlays;
+        break;
+    case 3:
         debug_.invincible = !debug_.invincible;
-        message_ = debug_.invincible ? L"DEBUG: 無敵 ON" : L"DEBUG: 無敵 OFF";
+        message_ = debug_.invincible ? L"DEBUG: Invincible ON" : L"DEBUG: Invincible OFF";
         messageT_ = 1.4f;
-        return true;
-    case VK_F6:
+        break;
+    case 4:
         for (auto& p : players_)
         {
             if (!p.active) continue;
@@ -340,10 +497,10 @@ bool SweetsApp::HandleDebugKey(WPARAM key)
             p.downed = false;
             p.alive = true;
         }
-        message_ = L"DEBUG: HP/ボム/必殺 回復";
+        message_ = L"DEBUG: Refilled";
         messageT_ = 1.4f;
-        return true;
-    case VK_F7:
+        break;
+    case 5:
         if (screen_ == Screen::Playing)
         {
             boss_.active = false;
@@ -357,8 +514,8 @@ bool SweetsApp::HandleDebugKey(WPARAM key)
         {
             hiddenBossT_ = HiddenBossDurationSeconds;
         }
-        return true;
-    case VK_F8:
+        break;
+    case 6:
         if (screen_ == Screen::Playing)
         {
             enemies_.clear();
@@ -370,36 +527,159 @@ bool SweetsApp::HandleDebugKey(WPARAM key)
             message_ = L"DEBUG: Boss Spawn";
             messageT_ = 1.4f;
         }
-        return true;
-    case VK_F9:
+        break;
+    case 7:
         SaveProgress();
-        message_ = L"DEBUG: 隠しボス解禁";
+        message_ = L"DEBUG: Hidden practice unlocked";
         messageT_ = 1.4f;
-        return true;
-    case VK_F10:
+        break;
+    case 8:
         for (auto& s : shots_)
         {
             if (s.enemy) s.dead = true;
         }
-        message_ = L"DEBUG: 敵弾消去";
+        message_ = L"DEBUG: Enemy bullets cleared";
         messageT_ = 1.4f;
-        return true;
-    case VK_F11:
+        break;
+    case 9:
         CreateShadersAndStates();
         message_ = L"DEBUG: Shader Reload";
         messageT_ = 1.4f;
-        return true;
-    case VK_F12:
+        break;
+    case 10:
         debug_.frameStep = true;
         debug_.stepOnce = true;
-        return true;
+        if (screen_ == Screen::Playing)
+        {
+            screen_ = Screen::Paused;
+        }
+        break;
     default:
         break;
     }
 #else
-    (void)key;
+    (void)action;
 #endif
-    return false;
+}
+
+void SweetsApp::ActivatePauseMenuItem()
+{
+    if (pauseMenuIndex_ == 0)
+    {
+        screen_ = Screen::Playing;
+    }
+    else if (pauseMenuIndex_ == 1)
+    {
+        SaveSettings();
+        draggingVolume_ = -1;
+        screen_ = Screen::Title;
+    }
+}
+
+bool SweetsApp::HandlePauseClick(float sx, float sy)
+{
+    const float panelW = 480.0f;
+    const float panelH = 370.0f;
+    const float left = (static_cast<float>(width_) - panelW) * 0.5f;
+    const float top = (static_cast<float>(height_) - panelH) * 0.5f;
+    if (!PointInRect(sx, sy, left, top, left + panelW, top + panelH))
+    {
+        return false;
+    }
+
+    const float buttonW = 190.0f;
+    const float buttonH = 42.0f;
+    const float buttonX = left + 44.0f;
+    for (int i = 0; i < 2; ++i)
+    {
+        const float y = top + 76.0f + i * 56.0f;
+        if (PointInRect(sx, sy, buttonX, y, buttonX + buttonW, y + buttonH))
+        {
+            pauseMenuIndex_ = i;
+            ActivatePauseMenuItem();
+            return true;
+        }
+    }
+
+    const float sliderLeft = left + 170.0f;
+    const float sliderRight = left + panelW - 48.0f;
+    for (int i = 0; i < 4; ++i)
+    {
+        const float y = top + 196.0f + i * 38.0f;
+        if (PointInRect(sx, sy, sliderLeft - 8.0f, y - 12.0f, sliderRight + 8.0f, y + 16.0f))
+        {
+            pauseMenuIndex_ = i + 2;
+            draggingVolume_ = i;
+            SetVolumeSlider(i, (sx - sliderLeft) / (sliderRight - sliderLeft), true);
+            return true;
+        }
+    }
+    return true;
+}
+
+bool SweetsApp::HandlePauseDrag(float sx, float sy)
+{
+    (void)sy;
+    if (draggingVolume_ < 0) return false;
+    const float panelW = 480.0f;
+    const float left = (static_cast<float>(width_) - panelW) * 0.5f;
+    const float sliderLeft = left + 170.0f;
+    const float sliderRight = left + panelW - 48.0f;
+    SetVolumeSlider(draggingVolume_, (sx - sliderLeft) / (sliderRight - sliderLeft), false);
+    return true;
+}
+
+float* SweetsApp::MutableVolumeSliderValue(int index)
+{
+    switch (index)
+    {
+    case 0: return &masterVolume_;
+    case 1: return &bgmVolume_;
+    case 2: return &seVolume_;
+    case 3: return &uiVolume_;
+    default: return nullptr;
+    }
+}
+
+float SweetsApp::VolumeSliderValue(int index) const
+{
+    switch (index)
+    {
+    case 0: return masterVolume_;
+    case 1: return bgmVolume_;
+    case 2: return seVolume_;
+    case 3: return uiVolume_;
+    default: return 0.0f;
+    }
+}
+
+void SweetsApp::SetVolumeSlider(int index, float value, bool save)
+{
+    if (float* target = MutableVolumeSliderValue(index))
+    {
+        *target = ClampFloat(value, 0.0f, 1.0f);
+        ApplyAudioVolume();
+        if (save)
+        {
+            SaveSettings();
+        }
+    }
+}
+
+void SweetsApp::PlayVideo(const std::wstring& relativePath, Screen nextScreen, bool skippable)
+{
+    eventVideoNextScreen_ = nextScreen;
+    eventVideoSkippable_ = skippable;
+    eventVideoBitmap_.Reset();
+    eventVideoSerial_ = 0;
+    if (eventVideo_.Open(relativePath, false))
+    {
+        screen_ = Screen::Video;
+    }
+    else
+    {
+        screen_ = nextScreen;
+    }
 }
 
 void SweetsApp::RestartCurrentRun()
@@ -445,16 +725,15 @@ bool SweetsApp::SelectLoadoutAt(float sx, float sy)
 
 bool SweetsApp::SelectTitleMenuAt(float sx, float sy)
 {
-    const float itemW = 190.0f;
-    const float itemH = 42.0f;
-    const float gap = 14.0f;
-    const float totalW = itemW * 3.0f + gap * 2.0f;
-    const float startX = (static_cast<float>(width_) - totalW) * 0.5f;
-    const float top = static_cast<float>(height_) * 0.39f;
+    const float itemW = 248.0f;
+    const float itemH = 58.0f;
+    const float gap = 12.0f;
+    const float startX = 42.0f;
+    const float top = std::max(112.0f, static_cast<float>(height_) * 0.18f);
     for (int i = 0; i < 3; ++i)
     {
-        const float x = startX + i * (itemW + gap);
-        if (sx >= x && sx <= x + itemW && sy >= top && sy <= top + itemH)
+        const float y = top + i * (itemH + gap);
+        if (sx >= startX && sx <= startX + itemW && sy >= y && sy <= y + itemH)
         {
             titleMenuIndex_ = i;
             StartSelectedTitleItem();
@@ -492,6 +771,10 @@ bool SweetsApp::SelectDifficultyAt(float sx, float sy)
 void SweetsApp::LoadProgress()
 {
     hiddenBossUnlocked_ = false;
+    masterVolume_ = 1.0f;
+    bgmVolume_ = 1.0f;
+    seVolume_ = 1.0f;
+    uiVolume_ = 1.0f;
     const std::filesystem::path path = SaveFilePath();
     std::ifstream in(path);
     if (!in) return;
@@ -503,18 +786,32 @@ void SweetsApp::LoadProgress()
         {
             hiddenBossUnlocked_ = true;
         }
+        masterVolume_ = ParseSaveFloat(line, "masterVolume", masterVolume_);
+        bgmVolume_ = ParseSaveFloat(line, "bgmVolume", bgmVolume_);
+        seVolume_ = ParseSaveFloat(line, "seVolume", seVolume_);
+        uiVolume_ = ParseSaveFloat(line, "uiVolume", uiVolume_);
     }
+    ApplyAudioVolume();
 }
 
-void SweetsApp::SaveProgress()
+void SweetsApp::SaveSettings()
 {
-    hiddenBossUnlocked_ = true;
     const std::filesystem::path path = SaveFilePath();
     std::error_code ec;
     std::filesystem::create_directories(path.parent_path(), ec);
     std::ofstream out(path, std::ios::trunc);
     if (!out) return;
-    out << "hiddenBossUnlocked=1\n";
+    out << "hiddenBossUnlocked=" << (hiddenBossUnlocked_ ? 1 : 0) << "\n";
+    out << "masterVolume=" << ClampFloat(masterVolume_, 0.0f, 1.0f) << "\n";
+    out << "bgmVolume=" << ClampFloat(bgmVolume_, 0.0f, 1.0f) << "\n";
+    out << "seVolume=" << ClampFloat(seVolume_, 0.0f, 1.0f) << "\n";
+    out << "uiVolume=" << ClampFloat(uiVolume_, 0.0f, 1.0f) << "\n";
+}
+
+void SweetsApp::SaveProgress()
+{
+    hiddenBossUnlocked_ = true;
+    SaveSettings();
 }
 
 bool SweetsApp::KeyDown(int key) const

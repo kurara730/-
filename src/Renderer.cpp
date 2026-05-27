@@ -43,6 +43,11 @@ std::wstring FindAssetFile(const std::wstring& relativePath)
     }
     return relativePath;
 }
+
+bool PointInRect(float sx, float sy, float left, float top, float right, float bottom)
+{
+    return sx >= left && sx <= right && sy >= top && sy <= bottom;
+}
 }
 
 void SweetsApp::CreateDevice()
@@ -207,6 +212,8 @@ void SweetsApp::CreateOffscreenTarget(ComPtr<ID3D11Texture2D>& texture, ComPtr<I
 void SweetsApp::ReleaseRenderTargets()
 {
     if (d2dContext_) d2dContext_->SetTarget(nullptr);
+    titleVideoBitmap_.Reset();
+    eventVideoBitmap_.Reset();
     textBrush_.Reset();
     d2dTarget_.Reset();
     dsv_.Reset();
@@ -864,6 +871,73 @@ void SweetsApp::DrawHud()
     {
         textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.72f));
         d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
+
+        const float dividerX = 322.0f;
+        textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.80f));
+        d2dContext_->DrawLine(D2D1::Point2F(dividerX, 0.0f), D2D1::Point2F(dividerX, static_cast<float>(height_)), textBrush_.Get(), 2.5f);
+
+        titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.86f, 0.36f, 1.0f));
+        const wchar_t* title = L"Sweets Panic";
+        d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), titleFormat_.Get(),
+            D2D1::RectF(38.0f, 34.0f, dividerX - 22.0f, 92.0f), textBrush_.Get());
+
+        const std::array<const wchar_t*, 3> items{ L"Story", L"Endless", L"Credits" };
+        const float itemW = 248.0f;
+        const float itemH = 58.0f;
+        const float gap = 12.0f;
+        const float menuX = 42.0f;
+        const float menuTop = std::max(112.0f, static_cast<float>(height_) * 0.18f);
+        for (int i = 0; i < 3; ++i)
+        {
+            const float y = menuTop + i * (itemH + gap);
+            const D2D1_RECT_F rect = D2D1::RectF(menuX, y, menuX + itemW, y + itemH);
+            const bool selected = i == titleMenuIndex_;
+            const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
+            if (hover)
+            {
+                textBrush_->SetColor(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.16f));
+                d2dContext_->FillRectangle(rect, textBrush_.Get());
+            }
+            else if (selected)
+            {
+                textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, 0.10f));
+                d2dContext_->FillRectangle(rect, textBrush_.Get());
+            }
+            textBrush_->SetColor(selected || hover ? D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f) : D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f));
+            d2dContext_->DrawTextW(items[i], static_cast<UINT32>(wcslen(items[i])), titleFormat_.Get(),
+                D2D1::RectF(rect.left + 8.0f, rect.top - 2.0f, rect.right, rect.bottom + 8.0f), textBrush_.Get());
+        }
+
+        const float mediaLeft = dividerX + 52.0f;
+        const float mediaTop = 72.0f;
+        const float mediaRight = static_cast<float>(width_) - 48.0f;
+        const float mediaBottom = std::min(static_cast<float>(height_) * 0.47f, 390.0f);
+        DrawTitleMediaFrame(D2D1::RectF(mediaLeft, mediaTop, mediaRight, mediaBottom));
+
+        textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.90f));
+        const wchar_t* hint = L"Click a menu item. Left/Right or 1-4 selects character.";
+        d2dContext_->DrawTextW(hint, static_cast<UINT32>(wcslen(hint)), smallFormat_.Get(),
+            D2D1::RectF(40.0f, menuTop + itemH * 3.0f + gap * 3.0f + 8.0f, dividerX - 18.0f, static_cast<float>(height_) - 24.0f), textBrush_.Get());
+
+        DrawLoadoutSelection();
+        DrawDebugHud();
+
+        const HRESULT hr = d2dContext_->EndDraw();
+        if (hr == D2DERR_RECREATE_TARGET)
+        {
+            ReleaseRenderTargets();
+            CreateRenderTargets();
+        }
+        return;
+    }
+
+    if (screen_ == Screen::Title)
+    {
+        textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.72f));
+        d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
         textBrush_->SetColor(D2D1::ColorF(1.0f, 0.86f, 0.36f, 1.0f));
         const wchar_t* title = L"スイーツパニック DX11";
         titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
@@ -917,14 +991,11 @@ void SweetsApp::DrawHud()
     }
     else if (screen_ == Screen::Paused)
     {
-        textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.65f));
-        d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
-        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.86f, 0.36f, 1.0f));
-        hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-        const wchar_t* paused = L"一時停止";
-        d2dContext_->DrawTextW(paused, static_cast<UINT32>(wcslen(paused)), hudFormat_.Get(),
-            D2D1::RectF(0, static_cast<float>(height_) * 0.46f, static_cast<float>(width_), static_cast<float>(height_) * 0.54f), textBrush_.Get());
-        hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        DrawPauseMenu();
+    }
+    else if (screen_ == Screen::Video)
+    {
+        DrawVideoScreen();
     }
     else if (screen_ == Screen::GameOver)
     {
@@ -1014,30 +1085,228 @@ void SweetsApp::DrawCredits()
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 
+void SweetsApp::DrawTitleMediaFrame(const D2D1_RECT_F& rect)
+{
+    textBrush_->SetColor(D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.88f));
+    d2dContext_->FillRectangle(rect, textBrush_.Get());
+    textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.88f));
+    d2dContext_->DrawRectangle(rect, textBrush_.Get(), 2.0f);
+
+    if (titleVideo_.HasFrame())
+    {
+        const uint64_t serial = titleVideo_.FrameSerial();
+        if (!titleVideoBitmap_ || titleVideoSerial_ != serial)
+        {
+            titleVideoBitmap_.Reset();
+            const auto props = D2D1::BitmapProperties1(
+                D2D1_BITMAP_OPTIONS_NONE,
+                D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE));
+            d2dContext_->CreateBitmap(
+                D2D1::SizeU(titleVideo_.Width(), titleVideo_.Height()),
+                titleVideo_.Pixels().data(),
+                titleVideo_.Width() * 4u,
+                props,
+                &titleVideoBitmap_);
+            titleVideoSerial_ = serial;
+        }
+        if (titleVideoBitmap_)
+        {
+            d2dContext_->DrawBitmap(titleVideoBitmap_.Get(), rect, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+            return;
+        }
+    }
+
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.88f));
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    const wchar_t* placeholder = L"Title media";
+    d2dContext_->DrawTextW(placeholder, static_cast<UINT32>(wcslen(placeholder)), hudFormat_.Get(),
+        D2D1::RectF(rect.left, rect.top + (rect.bottom - rect.top) * 0.42f, rect.right, rect.bottom), textBrush_.Get());
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    const wchar_t* hint = L"assets/video/title.mp4";
+    textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.76f));
+    d2dContext_->DrawTextW(hint, static_cast<UINT32>(wcslen(hint)), smallFormat_.Get(),
+        D2D1::RectF(rect.left, rect.top + (rect.bottom - rect.top) * 0.54f, rect.right, rect.bottom), textBrush_.Get());
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+}
+
+void SweetsApp::DrawPauseMenu()
+{
+    textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.70f));
+    d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
+
+    const float panelW = 480.0f;
+    const float panelH = 370.0f;
+    const float left = (static_cast<float>(width_) - panelW) * 0.5f;
+    const float top = (static_cast<float>(height_) - panelH) * 0.5f;
+    const D2D1_RECT_F panel = D2D1::RectF(left, top, left + panelW, top + panelH);
+    textBrush_->SetColor(D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.96f));
+    d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(panel, 8.0f, 8.0f), textBrush_.Get());
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, 0.95f));
+    d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(panel, 8.0f, 8.0f), textBrush_.Get(), 2.0f);
+
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.86f, 0.36f, 1.0f));
+    const wchar_t* title = L"Pause";
+    d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), hudFormat_.Get(),
+        D2D1::RectF(left, top + 22.0f, left + panelW, top + 58.0f), textBrush_.Get());
+
+    const std::array<const wchar_t*, 2> buttons{ L"Resume", L"Title" };
+    const float buttonW = 190.0f;
+    const float buttonH = 42.0f;
+    const float buttonX = left + 44.0f;
+    for (int i = 0; i < 2; ++i)
+    {
+        const float y = top + 76.0f + i * 56.0f;
+        const bool selected = pauseMenuIndex_ == i;
+        const D2D1_RECT_F rect = D2D1::RectF(buttonX, y, buttonX + buttonW, y + buttonH);
+        textBrush_->SetColor(selected ? D2D1::ColorF(0.23f, 0.10f, 0.15f, 1.0f) : D2D1::ColorF(0.16f, 0.07f, 0.11f, 0.94f));
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get());
+        textBrush_->SetColor(selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), selected ? 2.5f : 1.0f);
+        d2dContext_->DrawTextW(buttons[i], static_cast<UINT32>(wcslen(buttons[i])), hudFormat_.Get(),
+            D2D1::RectF(rect.left, rect.top + 9.0f, rect.right, rect.bottom), textBrush_.Get());
+    }
+
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    const std::array<const wchar_t*, 4> labels{ L"Master", L"BGM", L"SE", L"UI" };
+    const float sliderLeft = left + 170.0f;
+    const float sliderRight = left + panelW - 48.0f;
+    for (int i = 0; i < 4; ++i)
+    {
+        const float y = top + 196.0f + i * 38.0f;
+        const bool selected = pauseMenuIndex_ == i + 2;
+        textBrush_->SetColor(selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.92f));
+        d2dContext_->DrawTextW(labels[i], static_cast<UINT32>(wcslen(labels[i])), smallFormat_.Get(),
+            D2D1::RectF(left + 48.0f, y - 10.0f, left + 152.0f, y + 14.0f), textBrush_.Get());
+        textBrush_->SetColor(D2D1::ColorF(0.24f, 0.11f, 0.17f, 0.94f));
+        d2dContext_->FillRectangle(D2D1::RectF(sliderLeft, y, sliderRight, y + 8.0f), textBrush_.Get());
+        const float value = VolumeSliderValue(i);
+        textBrush_->SetColor(D2D1::ColorF(0.65f, 0.88f, 1.0f, 0.95f));
+        d2dContext_->FillRectangle(D2D1::RectF(sliderLeft, y, sliderLeft + (sliderRight - sliderLeft) * value, y + 8.0f), textBrush_.Get());
+        textBrush_->SetColor(selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f));
+        const float knob = sliderLeft + (sliderRight - sliderLeft) * value;
+        d2dContext_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(knob, y + 4.0f), 7.0f, 7.0f), textBrush_.Get());
+        std::wostringstream pct;
+        pct << static_cast<int>(value * 100.0f + 0.5f) << L"%";
+        const std::wstring pctText = pct.str();
+        d2dContext_->DrawTextW(pctText.c_str(), static_cast<UINT32>(pctText.size()), smallFormat_.Get(),
+            D2D1::RectF(sliderRight + 10.0f, y - 10.0f, left + panelW - 8.0f, y + 14.0f), textBrush_.Get());
+    }
+}
+
+void SweetsApp::DrawVideoScreen()
+{
+    textBrush_->SetColor(D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f));
+    d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
+    if (eventVideo_.HasFrame())
+    {
+        const uint64_t serial = eventVideo_.FrameSerial();
+        if (!eventVideoBitmap_ || eventVideoSerial_ != serial)
+        {
+            eventVideoBitmap_.Reset();
+            const auto props = D2D1::BitmapProperties1(
+                D2D1_BITMAP_OPTIONS_NONE,
+                D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_IGNORE));
+            d2dContext_->CreateBitmap(
+                D2D1::SizeU(eventVideo_.Width(), eventVideo_.Height()),
+                eventVideo_.Pixels().data(),
+                eventVideo_.Width() * 4u,
+                props,
+                &eventVideoBitmap_);
+            eventVideoSerial_ = serial;
+        }
+        if (eventVideoBitmap_)
+        {
+            d2dContext_->DrawBitmap(eventVideoBitmap_.Get(),
+                D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)),
+                1.0f,
+                D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+        }
+    }
+    if (eventVideoSkippable_)
+    {
+        textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.82f));
+        const wchar_t* guide = L"Esc / Enter / Space: Skip";
+        smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_TRAILING);
+        d2dContext_->DrawTextW(guide, static_cast<UINT32>(wcslen(guide)), smallFormat_.Get(),
+            D2D1::RectF(0, static_cast<float>(height_) - 34.0f, static_cast<float>(width_) - 18.0f, static_cast<float>(height_) - 8.0f), textBrush_.Get());
+        smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    }
+}
+
 void SweetsApp::DrawDebugHud()
 {
 #if defined(_DEBUG)
     if (!debug_.hud) return;
 
-    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
-    textBrush_->SetColor(D2D1::ColorF(0.02f, 0.02f, 0.025f, 0.76f));
-    d2dContext_->FillRectangle(D2D1::RectF(static_cast<float>(width_) - 332.0f, 12.0f, static_cast<float>(width_) - 12.0f, 210.0f), textBrush_.Get());
+    {
+    const float panelLeft = static_cast<float>(width_) - 360.0f;
+    const float panelRight = static_cast<float>(width_);
+    textBrush_->SetColor(D2D1::ColorF(0.015f, 0.015f, 0.020f, 0.88f));
+    d2dContext_->FillRectangle(D2D1::RectF(panelLeft, 0.0f, panelRight, static_cast<float>(height_)), textBrush_.Get());
+    textBrush_->SetColor(D2D1::ColorF(0.65f, 0.88f, 1.0f, 0.90f));
+    d2dContext_->DrawLine(D2D1::Point2F(panelLeft, 0.0f), D2D1::Point2F(panelLeft, static_cast<float>(height_)), textBrush_.Get(), 2.0f);
 
     const int enemyBullets = static_cast<int>(std::count_if(shots_.begin(), shots_.end(), [](const Shot& s) { return s.enemy && !s.dead; }));
     const int playerShots = static_cast<int>(std::count_if(shots_.begin(), shots_.end(), [](const Shot& s) { return !s.enemy && !s.dead; }));
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     std::wostringstream ss;
-    ss << L"DEBUG F1\n"
-        << L"FPS " << static_cast<int>(debug_.fps) << L"  " << debug_.frameMs << L" ms\n"
-        << L"Screen " << static_cast<int>(screen_) << L"  Mode " << static_cast<int>(gameMode_) << L"  Diff " << CurrentDifficulty().name << L"\n"
-        << L"Wave " << wave_ << L"  Enemies " << enemies_.size() << L"  Shots " << playerShots << L"/" << enemyBullets << L"\n"
-        << L"BGM " << static_cast<int>(audio_.CurrentTrack()) << L"  TAA " << (debug_.taa ? L"ON" : L"OFF") << L"  AddRT " << (debug_.additiveView ? L"VIEW" : L"MIX") << L"\n"
-        << L"F2 overlay F3 TAA F4 AddRT F5 Inv\n"
-        << L"F6 refill F7 wave F8 boss F9 unlock\n"
-        << L"F10 clear bullets F11 shaders F12 step";
+    ss << L"DEBUG PANEL\n"
+        << L"FPS " << static_cast<int>(debug_.fps) << L"  " << static_cast<int>(debug_.frameMs * 10.0f) / 10.0f << L" ms\n"
+        << L"Screen " << static_cast<int>(screen_) << L"  Mode " << static_cast<int>(gameMode_) << L"\n"
+        << L"Difficulty " << CurrentDifficulty().name << L"\n"
+        << L"Wave " << wave_ << L"  Enemies " << enemies_.size() << L"\n"
+        << L"Shots P/E " << playerShots << L"/" << enemyBullets << L"\n"
+        << L"BGM " << static_cast<int>(audio_.CurrentTrack()) << L"  Volume " << static_cast<int>(audio_.Volume() * 100.0f) << L"%\n"
+        << L"TAA " << (debug_.taa ? L"ON" : L"OFF") << L"  AddRT " << (debug_.additiveView ? L"VIEW" : L"MIX") << L"\n"
+        << L"F1 closes this panel.";
     const std::wstring text = ss.str();
-    textBrush_->SetColor(D2D1::ColorF(0.78f, 1.0f, 0.88f, 0.96f));
+    textBrush_->SetColor(D2D1::ColorF(0.82f, 1.0f, 0.90f, 0.96f));
     d2dContext_->DrawTextW(text.c_str(), static_cast<UINT32>(text.size()), smallFormat_.Get(),
-        D2D1::RectF(static_cast<float>(width_) - 318.0f, 22.0f, static_cast<float>(width_) - 20.0f, 206.0f), textBrush_.Get());
+        D2D1::RectF(panelLeft + 18.0f, 18.0f, panelRight - 16.0f, 164.0f), textBrush_.Get());
+
+    const std::array<const wchar_t*, 11> labels{
+        L"TAA",
+        L"Additive RT",
+        L"Hitboxes",
+        L"Invincible",
+        L"Refill",
+        L"Wave Skip",
+        L"Boss Spawn",
+        L"Unlock EX",
+        L"Clear Bullets",
+        L"Reload Shaders",
+        L"Step 1F"
+    };
+    const float left = static_cast<float>(width_) - 342.0f;
+    const float buttonW = 148.0f;
+    const float buttonH = 30.0f;
+    const float gap = 10.0f;
+    const float top = 178.0f;
+    for (int i = 0; i < static_cast<int>(labels.size()); ++i)
+    {
+        const int col = i % 2;
+        const int row = i / 2;
+        const float x = left + col * (buttonW + gap);
+        const float y = top + row * (buttonH + 8.0f);
+        bool on = false;
+        if (i == 0) on = debug_.taa;
+        if (i == 1) on = debug_.additiveView;
+        if (i == 2) on = debug_.overlays;
+        if (i == 3) on = debug_.invincible;
+        const bool hover = PointInRect(mouseX_, mouseY_, x, y, x + buttonW, y + buttonH);
+        const D2D1_RECT_F rect = D2D1::RectF(x, y, x + buttonW, y + buttonH);
+        textBrush_->SetColor(on ? D2D1::ColorF(0.18f, 0.32f, 0.38f, 0.98f) : (hover ? D2D1::ColorF(0.28f, 0.28f, 0.32f, 0.98f) : D2D1::ColorF(0.12f, 0.12f, 0.15f, 0.96f)));
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get());
+        textBrush_->SetColor(on ? D2D1::ColorF(0.65f, 0.88f, 1.0f, 1.0f) : D2D1::ColorF(0.86f, 0.86f, 0.90f, 0.94f));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get(), 1.0f);
+        d2dContext_->DrawTextW(labels[i], static_cast<UINT32>(wcslen(labels[i])), smallFormat_.Get(),
+            D2D1::RectF(x + 8.0f, y + 6.0f, x + buttonW - 8.0f, y + buttonH), textBrush_.Get());
+    }
+    return;
+    }
 #endif
 }
 

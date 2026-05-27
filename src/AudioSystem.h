@@ -25,6 +25,8 @@ public:
     bool PlayLoop(MusicTrack track, const std::wstring& relativePath);
     bool PlayOnce(MusicTrack track, const std::wstring& relativePath);
     void Stop();
+    void SetVolume(float volume);
+    float Volume() const;
 
     MusicTrack CurrentTrack() const;
     float CurrentDurationSeconds() const;

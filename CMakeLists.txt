@@ -20,6 +20,7 @@ add_executable(SweetsActionDX11 WIN32
     src/StageFactory.cpp
     src/SweetsApp.cpp
     src/TextureLibrary.cpp
+    src/VideoSystem.cpp
     src/AudioSystem.h
     src/AssetLoaders.h
     src/AssetCatalog.h
@@ -31,6 +32,7 @@ add_executable(SweetsActionDX11 WIN32
     src/StageFactory.h
     src/SweetsApp.h
     src/TextureLibrary.h
+    src/VideoSystem.h
     src/main.cpp
     assets/shaders/basic_lit.hlsl
     assets/shaders/effect_additive.hlsl
@@ -40,6 +42,7 @@ add_executable(SweetsActionDX11 WIN32
     assets/audio/333_BPM177.mp3
     assets/audio/ruins.mp3
     "assets/audio/Lonery boy.wav"
+    assets/video/README_video.md
 )
 
 target_compile_features(SweetsActionDX11 PRIVATE cxx_std_17)

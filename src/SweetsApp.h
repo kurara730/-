@@ -23,6 +23,7 @@
 #include "ModelLibrary.h"
 #include "SpriteLibrary.h"
 #include "TextureLibrary.h"
+#include "VideoSystem.h"
 
 class SweetsApp
 {
@@ -75,8 +76,10 @@ private:
     void UpdateClear(float dt);
     void UpdateHiddenBossIntro(float dt);
     void UpdateHiddenBoss(float dt);
+    void UpdateEventVideo(float dt);
     void UpdatePlaying(float dt);
     void UpdateAudioForScreen();
+    void ApplyAudioVolume();
     void UpdatePlayer(float dt);
     void UpdateEnemies(float dt);
     void UpdateBoss(float dt);
@@ -109,6 +112,9 @@ private:
     void CompositeScene();
     void DrawHud();
     void DrawDebugHud();
+    void DrawPauseMenu();
+    void DrawVideoScreen();
+    void DrawTitleMediaFrame(const D2D1_RECT_F& rect);
     void DrawLoadoutSelection();
     void DrawDifficultySelection();
     void DrawClearScreen();
@@ -122,8 +128,19 @@ private:
 
     void OnKeyDown(WPARAM key);
     bool HandleDebugKey(WPARAM key);
+    bool HandleDebugClick(float sx, float sy);
+    bool DebugPanelContains(float sx, float sy) const;
+    void ExecuteDebugAction(int action);
     void RestartCurrentRun();
     void StartSelectedTitleItem();
+    void ActivatePauseMenuItem();
+    bool HandlePauseClick(float sx, float sy);
+    bool HandlePauseDrag(float sx, float sy);
+    void SetVolumeSlider(int index, float value, bool save);
+    float VolumeSliderValue(int index) const;
+    float* MutableVolumeSliderValue(int index);
+    void SaveSettings();
+    void PlayVideo(const std::wstring& relativePath, Screen nextScreen, bool skippable);
     bool SelectLoadoutAt(float sx, float sy);
     bool SelectTitleMenuAt(float sx, float sy);
     bool SelectDifficultyAt(float sx, float sy);
@@ -176,6 +193,8 @@ private:
     ComPtr<ID2D1Device> d2dDevice_;
     ComPtr<ID2D1DeviceContext> d2dContext_;
     ComPtr<ID2D1Bitmap1> d2dTarget_;
+    ComPtr<ID2D1Bitmap1> titleVideoBitmap_;
+    ComPtr<ID2D1Bitmap1> eventVideoBitmap_;
     ComPtr<ID2D1SolidColorBrush> textBrush_;
     ComPtr<IDWriteFactory> writeFactory_;
     ComPtr<IDWriteTextFormat> hudFormat_;
@@ -213,6 +232,8 @@ private:
     std::vector<Particle> particles_;
     AssetCatalog assetCatalog_;
     AudioSystem audio_;
+    VideoSystem titleVideo_;
+    VideoSystem eventVideo_;
     TextureLibrary textureLibrary_;
     SpriteLibrary spriteLibrary_;
     ModelLibrary modelLibrary_;
@@ -224,6 +245,8 @@ private:
     int loadoutIndex_ = 0;
     int titleMenuIndex_ = 0;
     int difficultyIndex_ = 1;
+    int pauseMenuIndex_ = 0;
+    int draggingVolume_ = -1;
     Difficulty difficulty_ = Difficulty::Normal;
     GameMode gameMode_ = GameMode::Story;
     GameMode pendingGameMode_ = GameMode::Story;
@@ -232,6 +255,7 @@ private:
     bool hiddenBossUnlocked_ = false;
     bool hiddenBossPractice_ = false;
     bool pendingHiddenBoss_ = false;
+    bool eventVideoSkippable_ = true;
     bool bossWave_ = false;
     bool waveStarted_ = false;
     StageType stage_ = StageType::Donut;
@@ -247,6 +271,13 @@ private:
     float hiddenPatternCd_ = 0.0f;
     int hiddenPatternStep_ = 0;
     float messageT_ = 0.0f;
+    float masterVolume_ = 1.0f;
+    float bgmVolume_ = 1.0f;
+    float seVolume_ = 1.0f;
+    float uiVolume_ = 1.0f;
+    uint64_t titleVideoSerial_ = 0;
+    uint64_t eventVideoSerial_ = 0;
+    Screen eventVideoNextScreen_ = Screen::Title;
     std::wstring message_;
 
     std::mt19937 rng_{ std::random_device{}() };

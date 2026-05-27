@@ -205,11 +205,27 @@ void SweetsApp::Update(float dt)
     {
         UpdateHiddenBoss(dt);
     }
+    else if (screen_ == Screen::Video)
+    {
+        UpdateEventVideo(dt);
+    }
     UpdateAudioForScreen();
 }
 
-void SweetsApp::UpdateTitle(float)
+void SweetsApp::UpdateTitle(float dt)
 {
+    titleVideo_.Update(dt);
+}
+
+void SweetsApp::UpdateEventVideo(float dt)
+{
+    eventVideo_.Update(dt);
+    if (!eventVideo_.IsOpen() || eventVideo_.Ended())
+    {
+        eventVideo_.Stop();
+        eventVideoBitmap_.Reset();
+        screen_ = eventVideoNextScreen_;
+    }
 }
 
 void SweetsApp::UpdateDebugTiming(float dt)
@@ -231,6 +247,7 @@ void SweetsApp::UpdateDebugTiming(float dt)
 
 void SweetsApp::UpdateAudioForScreen()
 {
+    ApplyAudioVolume();
     switch (screen_)
     {
     case Screen::Title:
@@ -252,6 +269,11 @@ void SweetsApp::UpdateAudioForScreen()
         audio_.Stop();
         break;
     }
+}
+
+void SweetsApp::ApplyAudioVolume()
+{
+    audio_.SetVolume(ClampFloat(masterVolume_, 0.0f, 1.0f) * ClampFloat(bgmVolume_, 0.0f, 1.0f));
 }
 
 void SweetsApp::UpdateClear(float dt)
@@ -580,14 +602,12 @@ void SweetsApp::UpdateShots(float dt)
                 if (e.dead) continue;
                 if (Len(s.pos - e.pos) < s.radius + e.radius)
                 {
-                    if (e.type == EnemyType::Mirror && !s.reflected)
-                    {
-                        s.dead = true;
-                        Burst(e.pos, Sky, 10);
-                        break;
-                    }
                     const bool wasChargedSplit = s.charged && s.sourceCharacter == CharacterType::Shortcake && s.splitCount > 0;
                     DamageEnemy(e, ReflectedDamage(s), s.pos, 1.0f, s.reflected, s.ownerIndex);
+                    if (e.type == EnemyType::Mirror && !s.reflected)
+                    {
+                        Burst(e.pos, Sky, 10);
+                    }
                     if (wasChargedSplit) SpawnSplitShots(s, e.pos);
                     if (s.pierce > 0) --s.pierce;
                     else s.dead = true;
