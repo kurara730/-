@@ -1,0 +1,235 @@
+#include "SweetsApp.h"
+
+LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+
+bool SweetsApp::Initialize(HINSTANCE instance, int showCmd)
+{
+    const HRESULT coHr = CoInitializeEx(nullptr, COINITBASE_MULTITHREADED);
+    comInitialized_ = SUCCEEDED(coHr);
+
+    WNDCLASSEX wc{};
+    wc.cbSize = sizeof(wc);
+    wc.style = CS_HREDRAW | CS_VREDRAW;
+    wc.lpfnWndProc = WindowProc;
+    wc.hInstance = instance;
+    wc.hCursor = LoadCursor(nullptr, IDC_ARROW);
+    wc.hIcon = LoadIcon(nullptr, IDI_APPLICATION);
+    wc.lpszClassName = L"SweetsActionDX11Window";
+    if (!RegisterClassEx(&wc)) return false;
+
+    RECT rc{ 0, 0, static_cast<LONG>(width_), static_cast<LONG>(height_) };
+    AdjustWindowRect(&rc, WS_OVERLAPPEDWINDOW, FALSE);
+    hwnd_ = CreateWindowEx(
+        0,
+        wc.lpszClassName,
+        L"Sweets Action DX11",
+        WS_OVERLAPPEDWINDOW,
+        CW_USEDEFAULT,
+        CW_USEDEFAULT,
+        rc.right - rc.left,
+        rc.bottom - rc.top,
+        nullptr,
+        nullptr,
+        instance,
+        nullptr);
+    if (!hwnd_) return false;
+
+    CreateDevice();
+    CreateShadersAndStates();
+    CreateRenderTargets();
+    CreateMeshes();
+    LoadAssets();
+    ResetGame();
+    screen_ = Screen::Title;
+
+    ShowWindow(hwnd_, showCmd);
+    UpdateWindow(hwnd_);
+    lastTick_ = std::chrono::steady_clock::now();
+    return true;
+}
+
+int SweetsApp::Run()
+{
+    MSG msg{};
+    while (msg.message != WM_QUIT)
+    {
+        if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
+        {
+            TranslateMessage(&msg);
+            DispatchMessage(&msg);
+            continue;
+        }
+
+        const auto now = std::chrono::steady_clock::now();
+        std::chrono::duration<float> diff = now - lastTick_;
+        lastTick_ = now;
+        const float dt = std::min(diff.count(), 1.0f / 20.0f);
+        Update(dt);
+        Render();
+    }
+    return static_cast<int>(msg.wParam);
+}
+
+LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    switch (msg)
+    {
+    case WM_DESTROY:
+        PostQuitMessage(0);
+        return 0;
+    case WM_SIZE:
+        if (device_ && wp != SIZE_MINIMIZED)
+        {
+            Resize(static_cast<UINT>(LOWORD(lp)), static_cast<UINT>(HIWORD(lp)));
+        }
+        return 0;
+    case WM_KEYDOWN:
+        if (wp < MaxKeys)
+        {
+            const bool repeat = (lp & (1 << 30)) != 0;
+            keys_[wp] = true;
+            if (!repeat) OnKeyDown(wp);
+        }
+        return 0;
+    case WM_KEYUP:
+        if (wp < MaxKeys) keys_[wp] = false;
+        return 0;
+    case WM_MOUSEMOVE:
+        mouseX_ = static_cast<float>(GET_X_LPARAM(lp));
+        mouseY_ = static_cast<float>(GET_Y_LPARAM(lp));
+        return 0;
+    case WM_LBUTTONDOWN:
+        if (screen_ == Screen::Title && SelectLoadoutAt(static_cast<float>(GET_X_LPARAM(lp)), static_cast<float>(GET_Y_LPARAM(lp))))
+        {
+            return 0;
+        }
+        mouseLeft_ = true;
+        SetCapture(hwnd);
+        return 0;
+    case WM_LBUTTONUP:
+        mouseLeft_ = false;
+        ReleaseCapture();
+        return 0;
+    case WM_RBUTTONDOWN:
+        mouseRight_ = true;
+        return 0;
+    case WM_RBUTTONUP:
+        mouseRight_ = false;
+        return 0;
+    default:
+        return DefWindowProc(hwnd, msg, wp, lp);
+    }
+}
+
+void SweetsApp::OnKeyDown(WPARAM key)
+{
+    if (key >= '1' && key <= '4')
+    {
+        loadoutIndex_ = static_cast<int>(key - '1');
+        player_.weapon = Loadouts[loadoutIndex_].weapon;
+        player_.character = Loadouts[loadoutIndex_].character;
+    }
+
+    if (screen_ == Screen::Title)
+    {
+        if (key == VK_LEFT || key == 'A')
+        {
+            loadoutIndex_ = (loadoutIndex_ + static_cast<int>(Loadouts.size()) - 1) % static_cast<int>(Loadouts.size());
+            player_.weapon = Loadouts[loadoutIndex_].weapon;
+            player_.character = Loadouts[loadoutIndex_].character;
+            return;
+        }
+        if (key == VK_RIGHT || key == 'D')
+        {
+            loadoutIndex_ = (loadoutIndex_ + 1) % static_cast<int>(Loadouts.size());
+            player_.weapon = Loadouts[loadoutIndex_].weapon;
+            player_.character = Loadouts[loadoutIndex_].character;
+            return;
+        }
+        if (key == VK_RETURN || key == VK_SPACE)
+        {
+            ResetGame();
+            screen_ = Screen::Playing;
+        }
+        return;
+    }
+
+    if (screen_ == Screen::GameOver)
+    {
+        if (key == VK_RETURN || key == 'R')
+        {
+            ResetGame();
+            screen_ = Screen::Playing;
+        }
+        return;
+    }
+
+    if (key == 'P' || key == VK_ESCAPE)
+    {
+        screen_ = screen_ == Screen::Paused ? Screen::Playing : Screen::Paused;
+    }
+    if (screen_ == Screen::Playing)
+    {
+        if (key == 'Q') UseUltimate();
+        if (key == 'X' || key == VK_CONTROL) UseBomb();
+        if (key == 'R') ResetGame();
+    }
+}
+
+bool SweetsApp::SelectLoadoutAt(float sx, float sy)
+{
+    const float gap = 14.0f;
+    const float cardW = std::min(250.0f, (static_cast<float>(width_) - 96.0f - gap * 3.0f) / 4.0f);
+    const float cardH = 214.0f;
+    const float startX = (static_cast<float>(width_) - (cardW * 4.0f + gap * 3.0f)) * 0.5f;
+    const float top = static_cast<float>(height_) * 0.49f;
+
+    for (int i = 0; i < static_cast<int>(Loadouts.size()); ++i)
+    {
+        const float x = startX + i * (cardW + gap);
+        if (sx >= x && sx <= x + cardW && sy >= top && sy <= top + cardH)
+        {
+            loadoutIndex_ = i;
+            player_.weapon = Loadouts[loadoutIndex_].weapon;
+            player_.character = Loadouts[loadoutIndex_].character;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool SweetsApp::KeyDown(int key) const
+{
+    if (key < 0 || key >= MaxKeys) return false;
+    return keys_[key];
+}
+
+float SweetsApp::Rand(float a, float b)
+{
+    std::uniform_real_distribution<float> dist(a, b);
+    return dist(rng_);
+}
+
+int SweetsApp::RandInt(int a, int b)
+{
+    std::uniform_int_distribution<int> dist(a, b);
+    return dist(rng_);
+}
+
+V2 SweetsApp::RandInArena(float margin)
+{
+    const float r = std::sqrt(Rand(0.0f, 1.0f)) * (ArenaRadius - margin);
+    const float a = Rand(0.0f, TwoPi);
+    return FromAngle(a) * r;
+}
+
+void SweetsApp::ClampInside(V2& p, float radius) const
+{
+    const float maxR = ArenaRadius - radius;
+    const float d = Len(p);
+    if (d > maxR && d > 0.0001f)
+    {
+        p = p / d * maxR;
+    }
+}
+
