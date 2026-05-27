@@ -104,15 +104,17 @@ void SweetsApp::UpdateGamepadPlayer(Player& p, int playerIndex, float dt)
     if (LenSq(aim) > 0.001f) p.face = AngleOf(aim);
 
     const bool attackHeld = state.Gamepad.bRightTrigger > 40 || (state.Gamepad.wButtons & XINPUT_GAMEPAD_A);
-    if (attackHeld)
+    if (attackHeld && p.fireCd <= 0.0f)
+    {
+        FirePrimaryFor(p, playerIndex, p.face);
+    }
+
+    const bool chargeHeld = (state.Gamepad.wButtons & XINPUT_GAMEPAD_X) != 0;
+    if (chargeHeld)
     {
         p.chargeT += dt;
         p.chargeReady = p.chargeT >= 0.55f;
         p.charging = true;
-        if (p.fireCd <= 0.0f)
-        {
-            FirePrimaryFor(p, playerIndex, p.face);
-        }
     }
     else if (p.charging)
     {

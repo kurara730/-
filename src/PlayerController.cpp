@@ -2,7 +2,11 @@
 
 void SweetsApp::UpdatePlayer(float dt)
 {
-    if (player_.downed) return;
+    if (player_.downed)
+    {
+        mouseRightReleased_ = false;
+        return;
+    }
 
     V2 dir{};
     if (KeyDown('W') || KeyDown(VK_UP)) dir.z += 1.0f;
@@ -42,45 +46,45 @@ void SweetsApp::UpdatePlayer(float dt)
     player_.face = AngleOf(aimPoint - player_.pos);
 
     if (player_.fireCd > 0.0f) player_.fireCd -= dt;
-    const bool attackHeld = mouseLeft_ || KeyDown(VK_SPACE);
-    if (attackHeld)
+    const bool primaryHeld = mouseLeft_ || KeyDown(VK_SPACE);
+    if (primaryHeld && player_.fireCd <= 0.0f)
     {
-        player_.charging = true;
+        FirePrimaryFor(player_, 0, player_.face);
+    }
+
+    if (mouseRight_)
+    {
         player_.chargeT += dt;
         player_.chargeReady = player_.chargeT >= 0.55f;
-        if (player_.fireCd <= 0.0f)
-        {
-            FirePrimaryFor(player_, 0, player_.face);
-        }
+        player_.charging = true;
     }
-    else if (player_.charging)
+    else if (mouseRightReleased_ || player_.charging)
     {
         if (player_.chargeReady && player_.chargeCd <= 0.0f)
         {
             FireCharged(player_, 0, player_.face, aimPoint);
         }
+        else if (mouseRightReleased_ && player_.character == CharacterType::Cheese && obstacles_.size() < 20)
+        {
+            Obstacle wall{};
+            wall.pos = aimPoint;
+            ClampInside(wall.pos, 0.8f);
+            wall.radius = 0.52f;
+            wall.hp = 110.0f + player_.level * 18.0f;
+            wall.ttl = 7.5f;
+            wall.kind = 2;
+            wall.ownerIndex = 0;
+            wall.reflectPower = 1.35f + player_.corePower;
+            wall.cheeseWall = true;
+            wall.color = Gold;
+            obstacles_.push_back(wall);
+        }
         player_.charging = false;
         player_.chargeReady = false;
         player_.chargeT = 0.0f;
     }
-    prevMouseLeft_ = attackHeld;
-
-    if (mouseRight_ && player_.character == CharacterType::Cheese && obstacles_.size() < 20)
-    {
-        Obstacle wall{};
-        wall.pos = aimPoint;
-        ClampInside(wall.pos, 0.8f);
-        wall.radius = 0.52f;
-        wall.hp = 110.0f + player_.level * 18.0f;
-        wall.ttl = 7.5f;
-        wall.kind = 2;
-        wall.ownerIndex = 0;
-        wall.reflectPower = 1.35f + player_.corePower;
-        wall.cheeseWall = true;
-        wall.color = Gold;
-        obstacles_.push_back(wall);
-        mouseRight_ = false;
-    }
+    mouseRightReleased_ = false;
+    prevMouseLeft_ = primaryHeld;
 }
 
 void SweetsApp::FirePrimary()

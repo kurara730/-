@@ -75,6 +75,7 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     switch (msg)
     {
     case WM_DESTROY:
+        audio_.Stop();
         PostQuitMessage(0);
         return 0;
     case WM_SIZE:
@@ -111,11 +112,18 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         ReleaseCapture();
         return 0;
     case WM_RBUTTONDOWN:
-        mouseRight_ = true;
+        if (screen_ == Screen::Playing)
+        {
+            mouseRight_ = true;
+        }
         return 0;
     case WM_RBUTTONUP:
+    {
+        const bool wasRightDown = mouseRight_;
         mouseRight_ = false;
+        mouseRightReleased_ = wasRightDown && screen_ == Screen::Playing;
         return 0;
+    }
     default:
         return DefWindowProc(hwnd, msg, wp, lp);
     }
@@ -132,6 +140,11 @@ void SweetsApp::OnKeyDown(WPARAM key)
 
     if (screen_ == Screen::Title)
     {
+        if (key == 'C')
+        {
+            screen_ = Screen::Credits;
+            return;
+        }
         if (key == VK_LEFT || key == 'A')
         {
             loadoutIndex_ = (loadoutIndex_ + static_cast<int>(Loadouts.size()) - 1) % static_cast<int>(Loadouts.size());
@@ -150,6 +163,15 @@ void SweetsApp::OnKeyDown(WPARAM key)
         {
             ResetGame();
             screen_ = Screen::Playing;
+        }
+        return;
+    }
+
+    if (screen_ == Screen::Credits)
+    {
+        if (key == VK_ESCAPE || key == VK_RETURN || key == VK_BACK || key == 'C')
+        {
+            screen_ = Screen::Title;
         }
         return;
     }

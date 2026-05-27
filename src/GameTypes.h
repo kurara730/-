@@ -114,6 +114,7 @@ enum class Screen
     Title,
     Playing,
     Paused,
+    Credits,
     GameOver
 };
 

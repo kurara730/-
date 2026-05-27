@@ -5,6 +5,7 @@ project(SweetsActionDX11 LANGUAGES CXX)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 add_executable(SweetsActionDX11 WIN32
+    src/AudioSystem.cpp
     src/AssetLoaders.cpp
     src/AssetCatalog.cpp
     src/ChargeAttack.cpp
@@ -19,6 +20,7 @@ add_executable(SweetsActionDX11 WIN32
     src/StageFactory.cpp
     src/SweetsApp.cpp
     src/TextureLibrary.cpp
+    src/AudioSystem.h
     src/AssetLoaders.h
     src/AssetCatalog.h
     src/GameDefs.h
@@ -33,6 +35,8 @@ add_executable(SweetsActionDX11 WIN32
     assets/shaders/basic_lit.hlsl
     assets/shaders/effect_additive.hlsl
     assets/shaders/sprite_unlit.hlsl
+    assets/audio/233_BPM163.mp3
+    assets/audio/ruins.mp3
 )
 
 target_compile_features(SweetsActionDX11 PRIVATE cxx_std_17)

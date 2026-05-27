@@ -97,6 +97,7 @@
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\AudioSystem.cpp" />
     <ClCompile Include="src\AssetCatalog.cpp" />
     <ClCompile Include="src\AssetLoaders.cpp" />
     <ClCompile Include="src\ChargeAttack.cpp" />
@@ -114,6 +115,7 @@
     <ClCompile Include="src\main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="src\AudioSystem.h" />
     <ClInclude Include="src\AssetCatalog.h" />
     <ClInclude Include="src\AssetLoaders.h" />
     <ClInclude Include="src\GameDefs.h" />
@@ -131,6 +133,8 @@
     <None Include="README.md" />
     <None Include="run_game.ps1" />
     <None Include="assets\README_assets.md" />
+    <None Include="assets\audio\233_BPM163.mp3" />
+    <None Include="assets\audio\ruins.mp3" />
     <None Include="assets\shaders\basic_lit.hlsl" />
     <None Include="assets\shaders\effect_additive.hlsl" />
     <None Include="assets\shaders\sprite_unlit.hlsl" />

@@ -620,7 +620,7 @@ void SweetsApp::DrawHud()
     }
 
     textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.88f));
-    const wchar_t* help = L"WASD/矢印: 移動  |  Shift: 低速/当たり判定  |  左クリック/Space長押し: 通常弾+チャージ  |  Q: 必殺  |  X/Ctrl: ボム  |  P: 一時停止";
+    const wchar_t* help = L"WASD/矢印: 移動  |  左クリック/Space: 通常弾  |  右クリック長押し: チャージ  |  Q: 必殺  |  X/Ctrl: ボム  |  P: 一時停止";
     d2dContext_->DrawTextW(help, static_cast<UINT32>(wcslen(help)), smallFormat_.Get(),
         D2D1::RectF(18.0f, static_cast<float>(height_) - 34.0f, static_cast<float>(width_) - 18.0f, static_cast<float>(height_) - 8.0f), textBrush_.Get());
 
@@ -643,13 +643,17 @@ void SweetsApp::DrawHud()
         d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), titleFormat_.Get(),
             D2D1::RectF(0, static_cast<float>(height_) * 0.18f, static_cast<float>(width_), static_cast<float>(height_) * 0.29f), textBrush_.Get());
         textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f));
-        const wchar_t* start = L"1Pの性能を選択してください。ソロではAIなしで開始します。";
+        const wchar_t* start = L"1Pの性能を選択してください。Cキーでクレジットを表示します。";
         d2dContext_->DrawTextW(start, static_cast<UINT32>(wcslen(start)), hudFormat_.Get(),
             D2D1::RectF(0, static_cast<float>(height_) * 0.31f, static_cast<float>(width_), static_cast<float>(height_) * 0.38f), textBrush_.Get());
         DrawLoadoutSelection();
         titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
         hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
         smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    }
+    else if (screen_ == Screen::Credits)
+    {
+        DrawCredits();
     }
     else if (screen_ == Screen::Paused)
     {
@@ -695,6 +699,39 @@ void SweetsApp::DrawHud()
         ReleaseRenderTargets();
         CreateRenderTargets();
     }
+}
+
+void SweetsApp::DrawCredits()
+{
+    textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.78f));
+    d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
+
+    titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.86f, 0.36f, 1.0f));
+    const wchar_t* title = L"クレジット";
+    d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), titleFormat_.Get(),
+        D2D1::RectF(0.0f, static_cast<float>(height_) * 0.20f, static_cast<float>(width_), static_cast<float>(height_) * 0.31f), textBrush_.Get());
+
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f));
+    const wchar_t* music1 = L"Gameplay BGM: 空想キャンパス - BGMer 様";
+    d2dContext_->DrawTextW(music1, static_cast<UINT32>(wcslen(music1)), hudFormat_.Get(),
+        D2D1::RectF(0.0f, static_cast<float>(height_) * 0.40f, static_cast<float>(width_), static_cast<float>(height_) * 0.47f), textBrush_.Get());
+
+    const wchar_t* music2 = L"Game Over BGM: ruins - DOVA-SYNDROME 様";
+    d2dContext_->DrawTextW(music2, static_cast<UINT32>(wcslen(music2)), hudFormat_.Get(),
+        D2D1::RectF(0.0f, static_cast<float>(height_) * 0.48f, static_cast<float>(width_), static_cast<float>(height_) * 0.55f), textBrush_.Get());
+
+    textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.9f));
+    const wchar_t* back = L"Esc / Enter / Backspace / C でタイトルへ戻る";
+    d2dContext_->DrawTextW(back, static_cast<UINT32>(wcslen(back)), smallFormat_.Get(),
+        D2D1::RectF(0.0f, static_cast<float>(height_) * 0.68f, static_cast<float>(width_), static_cast<float>(height_) * 0.74f), textBrush_.Get());
+
+    titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 
 void SweetsApp::DrawLoadoutSelection()
@@ -767,7 +804,7 @@ void SweetsApp::DrawLoadoutSelection()
         }
     }
 
-    const wchar_t* hint = L"カードクリック / 左右キー / 1-4で選択。長押し中も通常弾を撃ち、離すとチャージ攻撃。Enterで開始。";
+    const wchar_t* hint = L"カードクリック / 左右キー / 1-4で選択。Enterで開始、Cでクレジット。通常弾は左クリック/Space、チャージは右クリック長押し。";
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
     drawText(hint, smallFormat_.Get(), D2D1::RectF(0.0f, top + cardH + 12.0f, static_cast<float>(width_), top + cardH + 36.0f), D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.9f));
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);

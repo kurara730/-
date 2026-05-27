@@ -114,10 +114,28 @@ void SweetsApp::Update(float dt)
     {
         UpdatePlaying(dt);
     }
+    UpdateAudioForScreen();
 }
 
 void SweetsApp::UpdateTitle(float)
 {
+}
+
+void SweetsApp::UpdateAudioForScreen()
+{
+    switch (screen_)
+    {
+    case Screen::Playing:
+    case Screen::Paused:
+        audio_.PlayLoop(MusicTrack::Gameplay, L"assets/audio/233_BPM163.mp3");
+        break;
+    case Screen::GameOver:
+        audio_.PlayLoop(MusicTrack::GameOver, L"assets/audio/ruins.mp3");
+        break;
+    default:
+        audio_.Stop();
+        break;
+    }
 }
 
 void SweetsApp::UpdatePlaying(float dt)

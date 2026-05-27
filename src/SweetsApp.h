@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 
+#include "AudioSystem.h"
 #include "AssetCatalog.h"
 #include "GameTypes.h"
 #include "ModelLibrary.h"
@@ -68,6 +69,7 @@ private:
     void Update(float dt);
     void UpdateTitle(float dt);
     void UpdatePlaying(float dt);
+    void UpdateAudioForScreen();
     void UpdatePlayer(float dt);
     void UpdateEnemies(float dt);
     void UpdateBoss(float dt);
@@ -93,6 +95,7 @@ private:
     void DrawScene();
     void DrawHud();
     void DrawLoadoutSelection();
+    void DrawCredits();
     void DrawMesh(const Mesh& mesh, const XMMATRIX& world, Color tint);
     void DrawSphere(V2 p, float y, float r, Color c);
     void DrawCylinder(V2 p, float radius, float height, Color c);
@@ -153,6 +156,7 @@ private:
     bool mouseLeft_ = false;
     bool prevMouseLeft_ = false;
     bool mouseRight_ = false;
+    bool mouseRightReleased_ = false;
     float mouseX_ = 640.0f;
     float mouseY_ = 400.0f;
 
@@ -167,6 +171,7 @@ private:
     std::vector<Obstacle> obstacles_;
     std::vector<Particle> particles_;
     AssetCatalog assetCatalog_;
+    AudioSystem audio_;
     TextureLibrary textureLibrary_;
     SpriteLibrary spriteLibrary_;
     ModelLibrary modelLibrary_;
