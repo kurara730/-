@@ -21,6 +21,21 @@ out/
 *.lib
 *.exp
 *.exe
+third_party/effekseer/*.zip
+third_party/effekseer/EffekseerForCpp1.80.3/EffekseerForCpp1.80.3/Examples/
+third_party/effekseer/EffekseerForCpp1.80.3/EffekseerForCpp1.80.3/build_*
+third_party/effekseer/EffekseerForCpp1.80.3/EffekseerForCpp1.80.3/Help_Cpp_*.html
+third_party/effekseer/EffekseerForCpp1.80.3/EffekseerForCpp1.80.3/src/3rdParty/LLGI/
+third_party/effekseer/EffekseerForCpp1.80.3/EffekseerForCpp1.80.3/src/3rdParty/glslang/
+third_party/effekseer/EffekseerForCpp1.80.3/EffekseerForCpp1.80.3/src/EffekseerRendererDX12/
+third_party/effekseer/EffekseerForCpp1.80.3/EffekseerForCpp1.80.3/src/EffekseerRendererDX9/
+third_party/effekseer/EffekseerForCpp1.80.3/EffekseerForCpp1.80.3/src/EffekseerRendererGL/
+third_party/effekseer/EffekseerForCpp1.80.3/EffekseerForCpp1.80.3/src/EffekseerRendererLLGI/
+third_party/effekseer/EffekseerForCpp1.80.3/EffekseerForCpp1.80.3/src/EffekseerRendererMetal/
+third_party/effekseer/EffekseerForCpp1.80.3/EffekseerForCpp1.80.3/src/EffekseerRendererVulkan/
+third_party/effekseer/EffekseerForCpp1.80.3/EffekseerForCpp1.80.3/src/EffekseerSoundAL/
+third_party/effekseer/EffekseerForCpp1.80.3/EffekseerForCpp1.80.3/src/EffekseerSoundDSound/
+third_party/effekseer/EffekseerForCpp1.80.3/EffekseerForCpp1.80.3/src/EffekseerSoundXAudio2/
 
 # Logs and temporary files
 *.log

@@ -8,10 +8,17 @@ void SweetsApp::ResetGame()
     player_.bombs = CurrentDifficulty().initialBombs;
     for (int i = 1; i < MaxPlayers; ++i)
     {
-        players_[i] = {};
-        players_[i].index = i;
-        players_[i].active = false;
-        players_[i].ai = false;
+        if (coopSlotModes_[i] == CoopSlotMode::Off)
+        {
+            players_[i] = {};
+            players_[i].index = i;
+            players_[i].active = false;
+            players_[i].ai = false;
+            continue;
+        }
+
+        ApplyLoadout(players_[i], coopLoadoutIndices_[i], i, coopSlotModes_[i] == CoopSlotMode::AI);
+        players_[i].bombs = CurrentDifficulty().initialBombs;
     }
     boss_ = {};
     enemies_.clear();
@@ -104,7 +111,7 @@ void SweetsApp::PrepareHiddenBossResources()
     {
         if (!p.active) continue;
         p.hp = p.maxHp;
-        p.bombs = 5;
+        p.bombs = 2;
         p.ult = 100.0f;
         p.downed = false;
         p.alive = true;

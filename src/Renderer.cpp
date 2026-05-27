@@ -533,6 +533,7 @@ void SweetsApp::CreateMeshes()
 void SweetsApp::Render()
 {
     DrawScene();
+    effekseer_.Draw(view_ * proj_);
     DrawAdditiveScene();
     CompositeScene();
     DrawHud();
@@ -659,12 +660,24 @@ void SweetsApp::DrawScene()
         DrawSector(s);
     }
 
+    for (int i = 0; i < MaxPlayers; ++i)
+    {
+        DrawUltimatePreview(players_[i], i);
+    }
+
     for (const auto& p : players_)
     {
         if (!p.active) continue;
         const Color playerColor = Loadouts[static_cast<int>(p.character)].color;
-        DrawSphere(p.pos, p.radius, p.radius, p.downed ? WithAlpha(Red, 0.65f) : (p.inv > 0.0f ? Cream : playerColor));
-        DrawCylinder(p.pos + FromAngle(p.face) * 0.43f, 0.08f, 0.28f, Cream);
+        Color bodyColor = p.downed ? WithAlpha(Red, 0.65f) : (p.inv > 0.0f ? Cream : playerColor);
+        Color faceColor = Cream;
+        if (screen_ == Screen::HiddenBoss && !p.downed)
+        {
+            bodyColor = WithAlpha(bodyColor, 0.42f);
+            faceColor = WithAlpha(faceColor, 0.45f);
+        }
+        DrawSphere(p.pos, p.radius, p.radius, bodyColor);
+        DrawCylinder(p.pos + FromAngle(p.face) * 0.43f, 0.08f, 0.28f, faceColor);
         if ((p.focus || screen_ == Screen::HiddenBoss) && !p.downed)
         {
             DrawSphere(p.pos, 0.50f, p.hitboxRadius, Red);
@@ -1123,6 +1136,7 @@ void SweetsApp::DrawCharacterSelect()
         D2D1::RectF(0.0f, static_cast<float>(height_) * 0.28f, static_cast<float>(width_), static_cast<float>(height_) * 0.34f), textBrush_.Get());
 
     DrawLoadoutSelection();
+    DrawCoopSlotSelection();
 
     titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
@@ -1729,6 +1743,76 @@ void SweetsApp::DrawLoadoutSelection()
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 
+void SweetsApp::DrawCoopSlotSelection()
+{
+    const float cardH = 214.0f;
+    const float loadoutTop = static_cast<float>(height_) * 0.49f;
+    const float rowTop = loadoutTop + cardH + 46.0f;
+    const float rowH = 30.0f;
+    const float rowGap = 8.0f;
+    const float startX = std::max(42.0f, (static_cast<float>(width_) - 760.0f) * 0.5f);
+    const float labelW = 58.0f;
+    const float modeW = 72.0f;
+    const float modeGap = 8.0f;
+    const float charX = startX + labelW + (modeW + modeGap) * 3.0f + 24.0f;
+    const float charW = 230.0f;
+    const std::array<const wchar_t*, 3> modes{ L"Off", L"AI", L"Pad" };
+
+    auto fill = [&](const D2D1_RECT_F& rect, const D2D1_COLOR_F& color)
+    {
+        textBrush_->SetColor(color);
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get());
+    };
+    auto stroke = [&](const D2D1_RECT_F& rect, const D2D1_COLOR_F& color, float width)
+    {
+        textBrush_->SetColor(color);
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get(), width);
+    };
+    auto draw = [&](const std::wstring& text, const D2D1_RECT_F& rect, const D2D1_COLOR_F& color)
+    {
+        textBrush_->SetColor(color);
+        d2dContext_->DrawTextW(text.c_str(), static_cast<UINT32>(text.size()), smallFormat_.Get(), rect, textBrush_.Get());
+    };
+
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    for (int playerIndex = 1; playerIndex < MaxPlayers; ++playerIndex)
+    {
+        const float y = rowTop + (playerIndex - 1) * (rowH + rowGap);
+        std::wostringstream label;
+        label << (playerIndex + 1) << L"P";
+        draw(label.str(), D2D1::RectF(startX, y + 5.0f, startX + labelW - 8.0f, y + rowH), D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.95f));
+
+        for (int mode = 0; mode < 3; ++mode)
+        {
+            const float x = startX + labelW + mode * (modeW + modeGap);
+            const D2D1_RECT_F rect = D2D1::RectF(x, y, x + modeW, y + rowH);
+            const bool selected = coopSlotModes_[playerIndex] == static_cast<CoopSlotMode>(mode);
+            const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
+            fill(rect, selected ? D2D1::ColorF(0.22f, 0.10f, 0.15f, 0.95f) : D2D1::ColorF(0.08f, 0.04f, 0.07f, 0.82f));
+            if (hover)
+            {
+                fill(rect, D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.12f));
+            }
+            stroke(rect, selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 0.95f) : D2D1::ColorF(0.42f, 0.25f, 0.34f, 0.9f), selected ? 2.0f : 1.0f);
+            draw(modes[mode], D2D1::RectF(x, y + 6.0f, x + modeW, y + rowH), selected ? D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f) : D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.9f));
+        }
+
+        const int loadoutIndex = std::max(0, std::min(coopLoadoutIndices_[playerIndex], static_cast<int>(Loadouts.size()) - 1));
+        const D2D1_RECT_F charRect = D2D1::RectF(charX, y, charX + charW, y + rowH);
+        const bool charHover = PointInRect(mouseX_, mouseY_, charRect.left, charRect.top, charRect.right, charRect.bottom);
+        fill(charRect, coopSlotModes_[playerIndex] == CoopSlotMode::Off ? D2D1::ColorF(0.06f, 0.035f, 0.055f, 0.72f) : D2D1::ColorF(0.12f, 0.055f, 0.09f, 0.92f));
+        if (charHover)
+        {
+            fill(charRect, D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.10f));
+        }
+        stroke(charRect, D2D1::ColorF(0.42f, 0.25f, 0.34f, 0.9f), 1.0f);
+        std::wstring charText = L"Character: ";
+        charText += Loadouts[loadoutIndex].name;
+        draw(charText, D2D1::RectF(charRect.left + 6.0f, charRect.top + 6.0f, charRect.right - 6.0f, charRect.bottom), D2D1::ColorF(0.92f, 0.82f, 0.86f, 0.95f));
+    }
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+}
+
 void SweetsApp::DrawMesh(const Mesh& mesh, const XMMATRIX& world, Color tint)
 {
     ObjectCB object{};
@@ -1762,6 +1846,65 @@ void SweetsApp::DrawSector(const Slash& s)
         XMMatrixRotationY(-s.angle) *
         XMMatrixTranslation(s.pos.x, 0.11f, s.pos.z),
         WithAlpha(s.color, alpha));
+}
+
+void SweetsApp::DrawUltimatePreview(const Player& p, int ownerIndex)
+{
+    if (!p.active || p.downed || p.ult < 100.0f)
+    {
+        return;
+    }
+
+    auto drawRing = [&](V2 center, float radius, Color color, float alpha, float y)
+    {
+        DrawMesh(ringMesh_, XMMatrixScaling(radius, 1.0f, radius) *
+            XMMatrixTranslation(center.x, y, center.z), WithAlpha(color, alpha));
+    };
+
+    const Color accent = Loadouts[static_cast<int>(p.character)].color;
+    bool comboReady = false;
+    for (const auto& other : players_)
+    {
+        if (!other.active || other.index == ownerIndex || other.downed || other.ult < 100.0f) continue;
+        comboReady = true;
+        break;
+    }
+    if (comboReady)
+    {
+        drawRing(p.pos, 2.4f, Gold, 0.35f, 0.19f);
+    }
+
+    switch (p.weapon)
+    {
+    case Weapon::Strawberry:
+    {
+        const V2 target = ownerIndex == 0 ? ScreenToWorld(mouseX_, mouseY_) : FindNearestEnemyOrBoss(p.pos);
+        drawRing(target, 3.4f, Berry, 0.62f, 0.18f);
+        drawRing(target, 1.7f, Cream, 0.32f, 0.19f);
+        DrawSphere(target, 0.18f, 0.11f, WithAlpha(Berry, 0.80f));
+        break;
+    }
+    case Weapon::Chocolate:
+        drawRing({ 0.0f, 0.0f }, ArenaRadius * 0.96f, Choco, 0.52f, 0.18f);
+        drawRing(p.pos, 3.2f, accent, 0.35f, 0.19f);
+        break;
+    case Weapon::Cheese:
+        drawRing(p.pos, 2.1f, Gold, 0.58f, 0.18f);
+        drawRing(p.pos, 3.0f, Cream, 0.28f, 0.19f);
+        for (int i = 0; i < 8; ++i)
+        {
+            const float a = TwoPi * i / 8.0f;
+            DrawSphere(p.pos + FromAngle(a) * 2.1f, 0.24f, 0.08f, WithAlpha(Gold, 0.70f));
+        }
+        break;
+    case Weapon::Roll:
+        drawRing({ 0.0f, 0.0f }, ArenaRadius * 0.96f, Cream, 0.48f, 0.18f);
+        drawRing(p.pos, 4.4f, accent, 0.34f, 0.19f);
+        break;
+    default:
+        drawRing(p.pos, 3.2f, accent, 0.45f, 0.18f);
+        break;
+    }
 }
 
 V2 SweetsApp::ScreenToWorld(float sx, float sy) const

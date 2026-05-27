@@ -23,6 +23,7 @@
     <ClCompile Include="src\AssetLoaders.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\ChargeAttack.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\CoopController.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\EffekseerSystem.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\EnemyController.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\GameLogic.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\ModelLibrary.cpp"><Filter>Source Files</Filter></ClCompile>
@@ -40,6 +41,7 @@
     <ClInclude Include="src\AudioSystem.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\AssetCatalog.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\AssetLoaders.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="src\EffekseerSystem.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\GameDefs.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\GameTypes.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\ModelLibrary.h"><Filter>Header Files</Filter></ClInclude>
@@ -66,9 +68,15 @@
     <None Include="assets\audio\333_BPM177.mp3"><Filter>Assets</Filter></None>
     <None Include="assets\audio\Lonery boy.wav"><Filter>Assets</Filter></None>
     <None Include="assets\audio\ruins.mp3"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\sword_slash.efkefc"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\ult_cheese.efkefc"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\ult_chocolate.efkefc"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\ult_roll.efkefc"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\ult_shortcake.efkefc"><Filter>Assets</Filter></None>
     <None Include="assets\README_assets.md"><Filter>Assets</Filter></None>
     <None Include="assets\video\README_video.md"><Filter>Assets</Filter></None>
     <None Include="docs\game_spec.md"><Filter>Docs</Filter></None>
+    <None Include="docs\effekseer_runtime.md"><Filter>Docs</Filter></None>
     <None Include="docs\implementation_notes.md"><Filter>Docs</Filter></None>
     <None Include="docs\technical_design.md"><Filter>Docs</Filter></None>
   </ItemGroup>

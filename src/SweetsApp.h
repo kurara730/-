@@ -20,6 +20,7 @@
 
 #include "AudioSystem.h"
 #include "AssetCatalog.h"
+#include "EffekseerSystem.h"
 #include "GameTypes.h"
 #include "ModelLibrary.h"
 #include "SpriteLibrary.h"
@@ -122,6 +123,7 @@ private:
     void DrawBitmapCover(ID2D1Bitmap1* bitmap, const D2D1_RECT_F& rect, float opacity);
     void LoadTitleImageBitmap();
     void DrawLoadoutSelection();
+    void DrawCoopSlotSelection();
     void DrawDifficultySelection();
     void DrawClearScreen();
     void DrawHiddenBossIntro();
@@ -130,6 +132,7 @@ private:
     void DrawSphere(V2 p, float y, float r, Color c);
     void DrawCylinder(V2 p, float radius, float height, Color c);
     void DrawSector(const Slash& s);
+    void DrawUltimatePreview(const Player& p, int ownerIndex);
     V2 ScreenToWorld(float sx, float sy) const;
 
     void OnKeyDown(WPARAM key);
@@ -148,6 +151,7 @@ private:
     void SaveSettings();
     void PlayVideo(const std::wstring& relativePath, Screen nextScreen, bool skippable);
     bool SelectLoadoutAt(float sx, float sy);
+    bool SelectCoopSlotAt(float sx, float sy);
     bool SelectTitleMenuAt(float sx, float sy);
     bool SelectDifficultyAt(float sx, float sy);
     bool KeyDown(int key) const;
@@ -238,6 +242,7 @@ private:
     std::vector<Obstacle> obstacles_;
     std::vector<Particle> particles_;
     AssetCatalog assetCatalog_;
+    EffekseerSystem effekseer_;
     AudioSystem audio_;
     VideoSystem titleVideo_;
     VideoSystem eventVideo_;
@@ -251,6 +256,8 @@ private:
     int reflectKills_ = 0;
     int remainingToSpawn_ = 0;
     int loadoutIndex_ = 0;
+    std::array<int, MaxPlayers> coopLoadoutIndices_{ 0, 1, 2, 3 };
+    std::array<CoopSlotMode, MaxPlayers> coopSlotModes_{ CoopSlotMode::Pad, CoopSlotMode::Off, CoopSlotMode::Off, CoopSlotMode::Off };
     int titleMenuIndex_ = 0;
     int difficultyIndex_ = 1;
     int pauseMenuIndex_ = 0;

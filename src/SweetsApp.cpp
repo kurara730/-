@@ -35,6 +35,16 @@ float ParseSaveFloat(const std::string& line, const char* key, float fallback)
         return fallback;
     }
 }
+
+CoopSlotMode CoopModeFromIndex(int index)
+{
+    switch (index)
+    {
+    case 1: return CoopSlotMode::AI;
+    case 2: return CoopSlotMode::Pad;
+    default: return CoopSlotMode::Off;
+    }
+}
 }
 
 bool SweetsApp::Initialize(HINSTANCE instance, int showCmd)
@@ -73,6 +83,7 @@ bool SweetsApp::Initialize(HINSTANCE instance, int showCmd)
     CreateShadersAndStates();
     CreateRenderTargets();
     CreateMeshes();
+    effekseer_.Initialize(device_.Get(), context_.Get());
     LoadAssets();
     titleVideo_.Open(L"assets/video/title.mp4", true);
     LoadProgress();
@@ -125,6 +136,7 @@ int SweetsApp::Run()
 #else
         Update(dt);
 #endif
+        effekseer_.Update(dt);
         Render();
     }
     return static_cast<int>(msg.wParam);
@@ -176,6 +188,10 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             return 0;
         }
         if (screen_ == Screen::Title && SelectTitleMenuAt(mouseX_, mouseY_))
+        {
+            return 0;
+        }
+        if (screen_ == Screen::CharacterSelect && SelectCoopSlotAt(mouseX_, mouseY_))
         {
             return 0;
         }
@@ -740,9 +756,47 @@ bool SweetsApp::SelectLoadoutAt(float sx, float sy)
             loadoutIndex_ = i;
             player_.weapon = Loadouts[loadoutIndex_].weapon;
             player_.character = Loadouts[loadoutIndex_].character;
+            screen_ = Screen::DifficultySelect;
             return true;
         }
     }
+    return false;
+}
+
+bool SweetsApp::SelectCoopSlotAt(float sx, float sy)
+{
+    const float cardH = 214.0f;
+    const float loadoutTop = static_cast<float>(height_) * 0.49f;
+    const float rowTop = loadoutTop + cardH + 46.0f;
+    const float rowH = 30.0f;
+    const float rowGap = 8.0f;
+    const float startX = std::max(42.0f, (static_cast<float>(width_) - 760.0f) * 0.5f);
+    const float labelW = 58.0f;
+    const float modeW = 72.0f;
+    const float modeGap = 8.0f;
+    const float charX = startX + labelW + (modeW + modeGap) * 3.0f + 24.0f;
+    const float charW = 230.0f;
+
+    for (int playerIndex = 1; playerIndex < MaxPlayers; ++playerIndex)
+    {
+        const float y = rowTop + (playerIndex - 1) * (rowH + rowGap);
+        for (int mode = 0; mode < 3; ++mode)
+        {
+            const float x = startX + labelW + mode * (modeW + modeGap);
+            if (PointInRect(sx, sy, x, y, x + modeW, y + rowH))
+            {
+                coopSlotModes_[playerIndex] = CoopModeFromIndex(mode);
+                return true;
+            }
+        }
+
+        if (PointInRect(sx, sy, charX, y, charX + charW, y + rowH))
+        {
+            coopLoadoutIndices_[playerIndex] = (coopLoadoutIndices_[playerIndex] + 1) % static_cast<int>(Loadouts.size());
+            return true;
+        }
+    }
+
     return false;
 }
 
@@ -785,6 +839,7 @@ bool SweetsApp::SelectDifficultyAt(float sx, float sy)
         if (sx >= x && sx <= x + cardW && sy >= y && sy <= y + cardH)
         {
             difficultyIndex_ = i;
+            StartGameWithDifficulty(hiddenBossUnlocked_ && difficultyIndex_ == 5);
             return true;
         }
     }

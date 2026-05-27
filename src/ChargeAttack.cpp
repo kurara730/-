@@ -29,6 +29,7 @@ void SweetsApp::FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint)
     }
     else if (p.character == CharacterType::Chocolate)
     {
+        effekseer_.Play(L"sword_slash", p.pos + FromAngle(aim) * 0.85f, 0.54f, aim, 1.05f);
         for (int i = -1; i <= 1; ++i)
         {
             const float a = aim + i * 0.10f;

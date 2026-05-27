@@ -57,17 +57,15 @@ void SweetsApp::UpdateCoopPlayers(float dt)
 
         if (p.downed) continue;
 
-        XINPUT_STATE state{};
-        const DWORD result = XInputGetState(static_cast<DWORD>(i - 1), &state);
-        if (result == ERROR_SUCCESS)
-        {
-            p.ai = false;
-            UpdateGamepadPlayer(p, i, dt);
-        }
-        else
+        if (coopSlotModes_[i] == CoopSlotMode::AI)
         {
             p.ai = true;
             UpdateAiPlayer(p, i, dt);
+        }
+        else if (coopSlotModes_[i] == CoopSlotMode::Pad)
+        {
+            p.ai = false;
+            UpdateGamepadPlayer(p, i, dt);
         }
     }
 

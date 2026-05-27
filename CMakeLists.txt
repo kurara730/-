@@ -4,12 +4,18 @@ project(SweetsActionDX11 LANGUAGES CXX)
 
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
+option(SWEETS_USE_EFFEKSEER "Enable Effekseer DX11 runtime effects" ON)
+set(EFFEKSEER_ROOT
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/effekseer/EffekseerForCpp1.80.3/EffekseerForCpp1.80.3"
+    CACHE PATH "Effekseer for C++ 1.80.3 root")
+
 add_executable(SweetsActionDX11 WIN32
     src/AudioSystem.cpp
     src/AssetLoaders.cpp
     src/AssetCatalog.cpp
     src/ChargeAttack.cpp
     src/CoopController.cpp
+    src/EffekseerSystem.cpp
     src/EnemyController.cpp
     src/GameLogic.cpp
     src/ModelLibrary.cpp
@@ -24,6 +30,7 @@ add_executable(SweetsActionDX11 WIN32
     src/AudioSystem.h
     src/AssetLoaders.h
     src/AssetCatalog.h
+    src/EffekseerSystem.h
     src/GameDefs.h
     src/GameTypes.h
     src/ModelLibrary.h
@@ -43,6 +50,11 @@ add_executable(SweetsActionDX11 WIN32
     assets/audio/333_BPM177.mp3
     assets/audio/ruins.mp3
     "assets/audio/Lonery boy.wav"
+    assets/effects/sword_slash.efkefc
+    assets/effects/ult_shortcake.efkefc
+    assets/effects/ult_chocolate.efkefc
+    assets/effects/ult_cheese.efkefc
+    assets/effects/ult_roll.efkefc
     assets/video/README_video.md
 )
 
@@ -62,6 +74,32 @@ set_target_properties(SweetsActionDX11 PROPERTIES
 
 if(MSVC)
     target_compile_options(SweetsActionDX11 PRIVATE /W4 /permissive- /EHsc /utf-8)
+endif()
+
+if(SWEETS_USE_EFFEKSEER AND EXISTS "${EFFEKSEER_ROOT}/CMakeLists.txt")
+    set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
+    set(BUILD_GL OFF CACHE BOOL "" FORCE)
+    set(BUILD_VULKAN OFF CACHE BOOL "" FORCE)
+    set(BUILD_DX9 OFF CACHE BOOL "" FORCE)
+    set(BUILD_DX11 ON CACHE BOOL "" FORCE)
+    set(BUILD_DX12 OFF CACHE BOOL "" FORCE)
+    set(BUILD_METAL OFF CACHE BOOL "" FORCE)
+    set(BUILD_TEST OFF CACHE BOOL "" FORCE)
+    set(BUILD_VIEWER OFF CACHE BOOL "" FORCE)
+    set(BUILD_EDITOR OFF CACHE BOOL "" FORCE)
+    set(USE_XAUDIO2 OFF CACHE BOOL "" FORCE)
+    set(USE_DSOUND OFF CACHE BOOL "" FORCE)
+    set(USE_OPENAL OFF CACHE BOOL "" FORCE)
+    set(USE_OSM OFF CACHE BOOL "" FORCE)
+    if(MSVC)
+        set(USE_MSVC_RUNTIME_LIBRARY_DLL ON CACHE BOOL "" FORCE)
+    endif()
+    add_subdirectory("${EFFEKSEER_ROOT}" "${CMAKE_BINARY_DIR}/effekseer" EXCLUDE_FROM_ALL)
+    target_compile_definitions(SweetsActionDX11 PRIVATE SWEETS_USE_EFFEKSEER=1)
+    target_link_libraries(SweetsActionDX11 PRIVATE Effekseer EffekseerRendererDX11)
+    target_include_directories(SweetsActionDX11 PRIVATE "${EFFEKSEER_ROOT}/src/include")
+else()
+    target_compile_definitions(SweetsActionDX11 PRIVATE SWEETS_USE_EFFEKSEER=0)
 endif()
 
 set_source_files_properties(assets/shaders/basic_lit.hlsl PROPERTIES VS_TOOL_OVERRIDE "None")

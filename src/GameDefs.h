@@ -61,6 +61,13 @@ enum class PickupType
     ScoreDouble
 };
 
+enum class CoopSlotMode
+{
+    Off = 0,
+    AI,
+    Pad
+};
+
 struct CharacterText
 {
     const wchar_t* jpName;

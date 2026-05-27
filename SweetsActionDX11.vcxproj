@@ -55,7 +55,7 @@
     <ClCompile>
       <WarningLevel>Level4</WarningLevel>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;_DEBUG;UNICODE;_UNICODE;NOMINMAX;WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;_DEBUG;UNICODE;_UNICODE;NOMINMAX;WIN32_LEAN_AND_MEAN;SWEETS_USE_EFFEKSEER=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <ExceptionHandling>Sync</ExceptionHandling>
@@ -77,7 +77,7 @@
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
       <SDLCheck>true</SDLCheck>
-      <PreprocessorDefinitions>WIN32;NDEBUG;UNICODE;_UNICODE;NOMINMAX;WIN32_LEAN_AND_MEAN;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>WIN32;NDEBUG;UNICODE;_UNICODE;NOMINMAX;WIN32_LEAN_AND_MEAN;SWEETS_USE_EFFEKSEER=0;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
       <LanguageStandard>stdcpp17</LanguageStandard>
       <ExceptionHandling>Sync</ExceptionHandling>
@@ -102,6 +102,7 @@
     <ClCompile Include="src\AssetLoaders.cpp" />
     <ClCompile Include="src\ChargeAttack.cpp" />
     <ClCompile Include="src\CoopController.cpp" />
+    <ClCompile Include="src\EffekseerSystem.cpp" />
     <ClCompile Include="src\EnemyController.cpp" />
     <ClCompile Include="src\GameLogic.cpp" />
     <ClCompile Include="src\ModelLibrary.cpp" />
@@ -119,6 +120,7 @@
     <ClInclude Include="src\AudioSystem.h" />
     <ClInclude Include="src\AssetCatalog.h" />
     <ClInclude Include="src\AssetLoaders.h" />
+    <ClInclude Include="src\EffekseerSystem.h" />
     <ClInclude Include="src\GameDefs.h" />
     <ClInclude Include="src\GameTypes.h" />
     <ClInclude Include="src\ModelLibrary.h" />
@@ -139,6 +141,11 @@
     <None Include="assets\audio\333_BPM177.mp3" />
     <None Include="assets\audio\Lonery boy.wav" />
     <None Include="assets\audio\ruins.mp3" />
+    <None Include="assets\effects\sword_slash.efkefc" />
+    <None Include="assets\effects\ult_cheese.efkefc" />
+    <None Include="assets\effects\ult_chocolate.efkefc" />
+    <None Include="assets\effects\ult_roll.efkefc" />
+    <None Include="assets\effects\ult_shortcake.efkefc" />
     <None Include="assets\shaders\basic_lit.hlsl" />
     <None Include="assets\shaders\effect_additive.hlsl" />
     <None Include="assets\shaders\postprocess.hlsl" />
@@ -152,6 +159,7 @@
     <None Include="assets\textures\title.jpg" />
     <None Include="assets\video\README_video.md" />
     <None Include="docs\game_spec.md" />
+    <None Include="docs\effekseer_runtime.md" />
     <None Include="docs\implementation_notes.md" />
     <None Include="docs\technical_design.md" />
   </ItemGroup>
