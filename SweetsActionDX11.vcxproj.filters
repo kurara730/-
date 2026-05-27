@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{3F3E427C-7B44-4D43-9B54-04C46D8D4FE8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{3EA8F7D2-44C4-4060-B0D3-55C5F8988752}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{74A0D0D2-8B30-4C01-A221-6CF1638679F6}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Assets">
+      <UniqueIdentifier>{0EA9F140-C8D4-4DE5-AF56-E76AB1F69EC4}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Docs">
+      <UniqueIdentifier>{16B82DE4-CC07-4F7E-AB4A-C3BD047F188F}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="src\AssetCatalog.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\AssetLoaders.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\ChargeAttack.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\CoopController.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\EnemyController.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\GameLogic.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\ModelLibrary.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\PlayerController.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\ReflectionSystem.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\Renderer.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\SpriteLibrary.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\StageFactory.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\SweetsApp.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\TextureLibrary.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\main.cpp"><Filter>Source Files</Filter></ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="src\AssetCatalog.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="src\AssetLoaders.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="src\GameDefs.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="src\GameTypes.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="src\ModelLibrary.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="src\ReflectionSystem.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="src\SpriteLibrary.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="src\StageFactory.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="src\SweetsApp.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="src\TextureLibrary.h"><Filter>Header Files</Filter></ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="assets\shaders\basic_lit.hlsl"><Filter>Shaders</Filter></None>
+    <None Include="assets\shaders\effect_additive.hlsl"><Filter>Shaders</Filter></None>
+    <None Include="assets\shaders\sprite_unlit.hlsl"><Filter>Shaders</Filter></None>
+    <None Include="assets\textures\cheese.png"><Filter>Assets</Filter></None>
+    <None Include="assets\textures\chocolate.png"><Filter>Assets</Filter></None>
+    <None Include="assets\textures\enemy.png"><Filter>Assets</Filter></None>
+    <None Include="assets\textures\pickup.png"><Filter>Assets</Filter></None>
+    <None Include="assets\textures\roll.png"><Filter>Assets</Filter></None>
+    <None Include="assets\textures\shortcake.png"><Filter>Assets</Filter></None>
+    <None Include="assets\README_assets.md"><Filter>Assets</Filter></None>
+    <None Include="docs\game_spec.md"><Filter>Docs</Filter></None>
+    <None Include="docs\implementation_notes.md"><Filter>Docs</Filter></None>
+    <None Include="docs\technical_design.md"><Filter>Docs</Filter></None>
+  </ItemGroup>
+</Project>

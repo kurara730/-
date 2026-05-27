@@ -155,9 +155,9 @@ void SweetsApp::CreateRenderTargets()
     ComPtr<IDXGISurface> surface;
     ThrowIfFailed(swapChain_->GetBuffer(0, IID_PPV_ARGS(&surface)), "Get DXGI surface");
 
-    FLOAT dpiX = 96.0f;
-    FLOAT dpiY = 96.0f;
-    d2dFactory_->GetDesktopDpi(&dpiX, &dpiY);
+    const UINT windowDpi = GetDpiForWindow(hwnd_);
+    const FLOAT dpiX = windowDpi > 0 ? static_cast<FLOAT>(windowDpi) : 96.0f;
+    const FLOAT dpiY = dpiX;
     const auto props = D2D1::BitmapProperties1(
         D2D1_BITMAP_OPTIONS_TARGET | D2D1_BITMAP_OPTIONS_CANNOT_DRAW,
         D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED),

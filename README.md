@@ -30,7 +30,7 @@ cmake --build build --config Release
 
 Visual Studio 2022以降、C++によるデスクトップ開発ワークロード、Windows SDKが必要です。
 
-Visual Studioでデバッグする場合は、プロジェクト直下の `SweetsActionDX11_Game.sln` を開いてください。ゲームプロジェクトだけを含むため、CMakeの `ALL_BUILD` を誤って起動しません。
+Visual Studioでデバッグする場合は、プロジェクト直下の `SweetsActionDX11_Game.sln` を開いてください。GitHubから取得した直後でも読み込める通常の `SweetsActionDX11.vcxproj` を参照しているため、CMake生成済みの `build/` フォルダは不要です。CMakeの `ALL_BUILD` を誤って起動することもありません。
 
 ## 操作
 
