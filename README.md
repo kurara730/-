@@ -1,8 +1,3 @@
-# Sweets Action DX11
-
-HTML Canvas版プロトタイプをDirect3D 11 / Win32向けに移植した、3Dトップダウンの「スイーツパニック」です。
-
-現在のDX11版は、反射で強くなるアクションに弾幕シューティング要素を合わせた構成です。
 
 - 透視カメラ付きのD3D11 3Dアリーナ
 - WASD / 矢印キー移動
@@ -17,20 +12,6 @@ HTML Canvas版プロトタイプをDirect3D 11 / Win32向けに移植した、3D
 - 日本語DirectWrite HUD
 - `assets/shaders` 配下の外部HLSLシェーダー
 - `assets/textures` 配下の差し替え可能な仮PNGテクスチャ
-
-## Build
-
-From a Visual Studio Developer PowerShell:
-
-```powershell
-cmake -S . -B build -G "Visual Studio 17 2022" -A x64
-cmake --build build --config Release
-.\build\bin\Release\SweetsActionDX11.exe
-```
-
-Visual Studio 2022以降、C++によるデスクトップ開発ワークロード、Windows SDKが必要です。
-
-Visual Studioでデバッグする場合は、プロジェクト直下の `SweetsActionDX11_Game.sln` を開いてください。GitHubから取得した直後でも読み込める通常の `SweetsActionDX11.vcxproj` を参照しているため、CMake生成済みの `build/` フォルダは不要です。CMakeの `ALL_BUILD` を誤って起動することもありません。
 
 ## 操作
 
@@ -82,7 +63,3 @@ Visual Studioでデバッグする場合は、プロジェクト直下の `Sweet
 ## アセット差し替え
 
 `AssetCatalog` が見た目の差し替え窓口です。各ビジュアル役割は `texturePath`、`spritePath`、`modelPath` を持てます。`TextureLibrary` はWICでPNG/JPEG/BMPを読み込み、`SpriteLibrary` はUVを管理します。現在の描画は内蔵メッシュへフォールバックするため、画像や将来のFBX/glTFが未設定でもゲームは起動します。
-
-## 移植メモ
-
-元HTMLには複数モードとDOM UIが含まれていました。DX11版はゲーム本編を中心にし、DOM、絵文字スプライト、localStorage、WebAudio相当の仕組みは、ネイティブD3D11描画とコンパクトなゲーム内HUDへ置き換えています。
