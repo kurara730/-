@@ -179,7 +179,7 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         {
             return 0;
         }
-        if (screen_ == Screen::Title && SelectLoadoutAt(mouseX_, mouseY_))
+        if (screen_ == Screen::CharacterSelect && SelectLoadoutAt(mouseX_, mouseY_))
         {
             return 0;
         }
@@ -270,13 +270,6 @@ void SweetsApp::OnKeyDown(WPARAM key)
         return;
     }
 
-    if (key >= '1' && key <= '4')
-    {
-        loadoutIndex_ = static_cast<int>(key - '1');
-        player_.weapon = Loadouts[loadoutIndex_].weapon;
-        player_.character = Loadouts[loadoutIndex_].character;
-    }
-
     if (screen_ == Screen::Title)
     {
         if (key == 'C')
@@ -296,6 +289,35 @@ void SweetsApp::OnKeyDown(WPARAM key)
         }
         if (key == VK_LEFT || key == 'A')
         {
+            return;
+        }
+        if (key == VK_RIGHT || key == 'D')
+        {
+            return;
+        }
+        if (key == VK_RETURN || key == VK_SPACE)
+        {
+            StartSelectedTitleItem();
+        }
+        return;
+    }
+
+    if (screen_ == Screen::CharacterSelect)
+    {
+        if (key == VK_ESCAPE || key == VK_BACK)
+        {
+            screen_ = Screen::Title;
+            return;
+        }
+        if (key >= '1' && key <= '4')
+        {
+            loadoutIndex_ = static_cast<int>(key - '1');
+            player_.weapon = Loadouts[loadoutIndex_].weapon;
+            player_.character = Loadouts[loadoutIndex_].character;
+            return;
+        }
+        if (key == VK_LEFT || key == 'A')
+        {
             loadoutIndex_ = (loadoutIndex_ + static_cast<int>(Loadouts.size()) - 1) % static_cast<int>(Loadouts.size());
             player_.weapon = Loadouts[loadoutIndex_].weapon;
             player_.character = Loadouts[loadoutIndex_].character;
@@ -310,7 +332,8 @@ void SweetsApp::OnKeyDown(WPARAM key)
         }
         if (key == VK_RETURN || key == VK_SPACE)
         {
-            StartSelectedTitleItem();
+            screen_ = Screen::DifficultySelect;
+            return;
         }
         return;
     }
@@ -320,7 +343,7 @@ void SweetsApp::OnKeyDown(WPARAM key)
         const int optionCount = DifficultyOptionCount();
         if (key == VK_ESCAPE || key == VK_BACK)
         {
-            screen_ = Screen::Title;
+            screen_ = Screen::CharacterSelect;
             return;
         }
         if (key == VK_LEFT || key == 'A')
@@ -484,7 +507,7 @@ void SweetsApp::ExecuteDebugAction(int action)
         break;
     case 3:
         debug_.invincible = !debug_.invincible;
-        message_ = debug_.invincible ? L"DEBUG: Invincible ON" : L"DEBUG: Invincible OFF";
+        message_ = debug_.invincible ? L"DEBUG: 無敵 ON" : L"DEBUG: 無敵 OFF";
         messageT_ = 1.4f;
         break;
     case 4:
@@ -497,7 +520,7 @@ void SweetsApp::ExecuteDebugAction(int action)
             p.downed = false;
             p.alive = true;
         }
-        message_ = L"DEBUG: Refilled";
+        message_ = L"DEBUG: 全回復";
         messageT_ = 1.4f;
         break;
     case 5:
@@ -507,7 +530,7 @@ void SweetsApp::ExecuteDebugAction(int action)
             enemies_.clear();
             remainingToSpawn_ = 0;
             ClearWave();
-            message_ = L"DEBUG: Wave Skip";
+            message_ = L"DEBUG: ウェーブ進行";
             messageT_ = 1.4f;
         }
         else if (screen_ == Screen::HiddenBoss)
@@ -524,13 +547,13 @@ void SweetsApp::ExecuteDebugAction(int action)
             remainingToSpawn_ = 0;
             boss_ = {};
             SpawnBoss();
-            message_ = L"DEBUG: Boss Spawn";
+            message_ = L"DEBUG: ボス召喚";
             messageT_ = 1.4f;
         }
         break;
     case 7:
         SaveProgress();
-        message_ = L"DEBUG: Hidden practice unlocked";
+        message_ = L"DEBUG: EX解禁";
         messageT_ = 1.4f;
         break;
     case 8:
@@ -538,12 +561,12 @@ void SweetsApp::ExecuteDebugAction(int action)
         {
             if (s.enemy) s.dead = true;
         }
-        message_ = L"DEBUG: Enemy bullets cleared";
+        message_ = L"DEBUG: 敵弾消去";
         messageT_ = 1.4f;
         break;
     case 9:
         CreateShadersAndStates();
-        message_ = L"DEBUG: Shader Reload";
+        message_ = L"DEBUG: シェーダー再読込";
         messageT_ = 1.4f;
         break;
     case 10:
@@ -698,7 +721,7 @@ void SweetsApp::StartSelectedTitleItem()
     }
 
     pendingGameMode_ = item == TitleMenuItem::Endless ? GameMode::Endless : GameMode::Story;
-    screen_ = Screen::DifficultySelect;
+    screen_ = Screen::CharacterSelect;
 }
 
 bool SweetsApp::SelectLoadoutAt(float sx, float sy)

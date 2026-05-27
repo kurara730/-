@@ -651,7 +651,7 @@ void SweetsApp::DrawScene()
         const Color playerColor = Loadouts[static_cast<int>(p.character)].color;
         DrawSphere(p.pos, p.radius, p.radius, p.downed ? WithAlpha(Red, 0.65f) : (p.inv > 0.0f ? Cream : playerColor));
         DrawCylinder(p.pos + FromAngle(p.face) * 0.43f, 0.08f, 0.28f, Cream);
-        if (p.focus && !p.downed)
+        if ((p.focus || screen_ == Screen::HiddenBoss) && !p.downed)
         {
             DrawSphere(p.pos, 0.50f, p.hitboxRadius, Red);
             DrawMesh(ringMesh_, XMMatrixScaling(p.grazeRadius, 1.0f, p.grazeRadius) *
@@ -824,11 +824,12 @@ void SweetsApp::DrawHud()
         const Player& p = players_[i];
         if (!p.active) continue;
         const float top = 48.0f + i * 24.0f;
+        const int displayHp = p.hp > 0.0f ? std::max(1, static_cast<int>(std::ceil(p.hp))) : 0;
         std::wostringstream line;
         line << L"P" << (i + 1)
             << (i == 0 ? L" 1P " : (p.ai ? L" AI " : L" PAD "))
             << CharacterTexts[static_cast<int>(p.character)].jpName
-            << L" HP " << static_cast<int>(std::max(0.0f, p.hp)) << L"/" << static_cast<int>(p.maxHp)
+            << L" HP " << displayHp << L"/" << static_cast<int>(p.maxHp)
             << L" 必殺 " << static_cast<int>(p.ult) << L"%"
             << L" ボム" << p.bombs
             << L" グレイズ" << p.graze
@@ -918,11 +919,10 @@ void SweetsApp::DrawHud()
         DrawTitleMediaFrame(D2D1::RectF(mediaLeft, mediaTop, mediaRight, mediaBottom));
 
         textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.90f));
-        const wchar_t* hint = L"Click a menu item. Left/Right or 1-4 selects character.";
+        const wchar_t* hint = L"Story / Endless / Credits を選択";
         d2dContext_->DrawTextW(hint, static_cast<UINT32>(wcslen(hint)), smallFormat_.Get(),
             D2D1::RectF(40.0f, menuTop + itemH * 3.0f + gap * 3.0f + 8.0f, dividerX - 18.0f, static_cast<float>(height_) - 24.0f), textBrush_.Get());
 
-        DrawLoadoutSelection();
         DrawDebugHud();
 
         const HRESULT hr = d2dContext_->EndDraw();
@@ -972,6 +972,10 @@ void SweetsApp::DrawHud()
         titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
         hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
         smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    }
+    else if (screen_ == Screen::CharacterSelect)
+    {
+        DrawCharacterSelect();
     }
     else if (screen_ == Screen::Credits)
     {
@@ -1079,6 +1083,32 @@ void SweetsApp::DrawCredits()
     const wchar_t* back = L"Esc / Enter / Backspace / C でタイトルへ戻る";
     d2dContext_->DrawTextW(back, static_cast<UINT32>(wcslen(back)), smallFormat_.Get(),
         D2D1::RectF(0.0f, static_cast<float>(height_) * 0.68f, static_cast<float>(width_), static_cast<float>(height_) * 0.74f), textBrush_.Get());
+
+    titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+}
+
+void SweetsApp::DrawCharacterSelect()
+{
+    textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.78f));
+    d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
+
+    titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.86f, 0.36f, 1.0f));
+    const wchar_t* title = L"キャラクター選択";
+    d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), titleFormat_.Get(),
+        D2D1::RectF(0.0f, static_cast<float>(height_) * 0.16f, static_cast<float>(width_), static_cast<float>(height_) * 0.25f), textBrush_.Get());
+
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.94f));
+    const wchar_t* guide = L"カードクリック / 左右キー / 1-4 で選択。Enter で難易度選択、Esc でタイトルへ戻る";
+    d2dContext_->DrawTextW(guide, static_cast<UINT32>(wcslen(guide)), hudFormat_.Get(),
+        D2D1::RectF(0.0f, static_cast<float>(height_) * 0.28f, static_cast<float>(width_), static_cast<float>(height_) * 0.34f), textBrush_.Get());
+
+    DrawLoadoutSelection();
 
     titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
@@ -1253,15 +1283,15 @@ void SweetsApp::DrawDebugHud()
     const int playerShots = static_cast<int>(std::count_if(shots_.begin(), shots_.end(), [](const Shot& s) { return !s.enemy && !s.dead; }));
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     std::wostringstream ss;
-    ss << L"DEBUG PANEL\n"
+    ss << L"デバッグパネル\n"
         << L"FPS " << static_cast<int>(debug_.fps) << L"  " << static_cast<int>(debug_.frameMs * 10.0f) / 10.0f << L" ms\n"
-        << L"Screen " << static_cast<int>(screen_) << L"  Mode " << static_cast<int>(gameMode_) << L"\n"
-        << L"Difficulty " << CurrentDifficulty().name << L"\n"
-        << L"Wave " << wave_ << L"  Enemies " << enemies_.size() << L"\n"
-        << L"Shots P/E " << playerShots << L"/" << enemyBullets << L"\n"
-        << L"BGM " << static_cast<int>(audio_.CurrentTrack()) << L"  Volume " << static_cast<int>(audio_.Volume() * 100.0f) << L"%\n"
-        << L"TAA " << (debug_.taa ? L"ON" : L"OFF") << L"  AddRT " << (debug_.additiveView ? L"VIEW" : L"MIX") << L"\n"
-        << L"F1 closes this panel.";
+        << L"画面 " << static_cast<int>(screen_) << L"  モード " << static_cast<int>(gameMode_) << L"\n"
+        << L"難易度 " << CurrentDifficulty().name << L"\n"
+        << L"ウェーブ " << wave_ << L"  敵 " << enemies_.size() << L"\n"
+        << L"弾 自機/敵 " << playerShots << L"/" << enemyBullets << L"\n"
+        << L"BGM " << static_cast<int>(audio_.CurrentTrack()) << L"  音量 " << static_cast<int>(audio_.Volume() * 100.0f) << L"%\n"
+        << L"TAA " << (debug_.taa ? L"ON" : L"OFF") << L"  加算RT " << (debug_.additiveView ? L"表示" : L"合成") << L"\n"
+        << L"F1で閉じる";
     const std::wstring text = ss.str();
     textBrush_->SetColor(D2D1::ColorF(0.82f, 1.0f, 0.90f, 0.96f));
     d2dContext_->DrawTextW(text.c_str(), static_cast<UINT32>(text.size()), smallFormat_.Get(),
@@ -1269,16 +1299,16 @@ void SweetsApp::DrawDebugHud()
 
     const std::array<const wchar_t*, 11> labels{
         L"TAA",
-        L"Additive RT",
-        L"Hitboxes",
-        L"Invincible",
-        L"Refill",
-        L"Wave Skip",
-        L"Boss Spawn",
-        L"Unlock EX",
-        L"Clear Bullets",
-        L"Reload Shaders",
-        L"Step 1F"
+        L"加算RT",
+        L"当たり判定",
+        L"無敵",
+        L"全回復",
+        L"ウェーブ進行",
+        L"ボス召喚",
+        L"EX解禁",
+        L"敵弾消去",
+        L"シェーダー再読込",
+        L"1F進行"
     };
     const float left = static_cast<float>(width_) - 342.0f;
     const float buttonW = 148.0f;

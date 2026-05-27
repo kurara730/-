@@ -34,6 +34,7 @@ void SweetsApp::ResetGame()
     hiddenBossT_ = 0.0f;
     hiddenPatternCd_ = 0.0f;
     hiddenPatternStep_ = 0;
+    hiddenBossPhase_ = -1;
     pendingHiddenBoss_ = false;
     message_ = L"";
     messageT_ = 0.0f;
@@ -66,6 +67,7 @@ void SweetsApp::StartGameWithDifficulty(bool hiddenBossPractice)
 
 void SweetsApp::StartHiddenBoss()
 {
+    PrepareHiddenBossResources();
     enemies_.clear();
     shots_.clear();
     slashes_.clear();
@@ -90,9 +92,25 @@ void SweetsApp::StartHiddenBoss()
     hiddenBossT_ = 0.0f;
     hiddenPatternCd_ = 0.0f;
     hiddenPatternStep_ = 0;
+    hiddenBossPhase_ = -1;
     screen_ = Screen::HiddenBoss;
     message_ = L"隠しボス: 曲が終わるまで耐えろ";
     messageT_ = 3.0f;
+}
+
+void SweetsApp::PrepareHiddenBossResources()
+{
+    for (auto& p : players_)
+    {
+        if (!p.active) continue;
+        p.hp = p.maxHp;
+        p.bombs = 5;
+        p.ult = 100.0f;
+        p.downed = false;
+        p.alive = true;
+        p.reviveT = 0.0f;
+        p.inv = std::max(p.inv, 1.4f);
+    }
 }
 
 void SweetsApp::ApplyLoadout()
@@ -251,6 +269,7 @@ void SweetsApp::UpdateAudioForScreen()
     switch (screen_)
     {
     case Screen::Title:
+    case Screen::CharacterSelect:
     case Screen::DifficultySelect:
     case Screen::Credits:
         audio_.PlayLoop(MusicTrack::Title, L"assets/audio/333_BPM177.mp3");
@@ -274,6 +293,21 @@ void SweetsApp::UpdateAudioForScreen()
 void SweetsApp::ApplyAudioVolume()
 {
     audio_.SetVolume(ClampFloat(masterVolume_, 0.0f, 1.0f) * ClampFloat(bgmVolume_, 0.0f, 1.0f));
+}
+
+void SweetsApp::NormalizePlayerLifeStates()
+{
+    for (auto& p : players_)
+    {
+        if (!p.active) continue;
+        if (p.hp <= 0.0f)
+        {
+            p.hp = 0.0f;
+            p.downed = true;
+            p.alive = false;
+            p.reviveT = 0.0f;
+        }
+    }
 }
 
 void SweetsApp::UpdateClear(float dt)
@@ -358,6 +392,7 @@ void SweetsApp::UpdatePlaying(float dt)
         ClearWave();
     }
 
+    NormalizePlayerLifeStates();
     if (AllPlayersDown())
     {
         screen_ = Screen::GameOver;
@@ -394,6 +429,20 @@ void SweetsApp::UpdateHiddenBoss(float dt)
     UpdatePlayer(dt);
     UpdateCoopPlayers(dt);
 
+    const int activeHiddenPhase = std::min(2, static_cast<int>(hiddenBossT_ / 60.0f));
+    if (activeHiddenPhase != hiddenBossPhase_)
+    {
+        hiddenBossPhase_ = activeHiddenPhase;
+        hiddenPatternStep_ = 0;
+        hiddenPatternCd_ = 0.22f;
+        for (auto& s : shots_)
+        {
+            if (s.enemy) s.dead = true;
+        }
+        message_ = hiddenBossPhase_ == 0 ? L"第1波: 誘導と放射" : (hiddenBossPhase_ == 1 ? L"第2波: 回転弾幕" : L"最終波: 隙間を読め");
+        messageT_ = 1.6f;
+    }
+
     hiddenPatternCd_ -= dt;
     if (hiddenPatternCd_ <= 0.0f)
     {
@@ -406,13 +455,13 @@ void SweetsApp::UpdateHiddenBoss(float dt)
             --remaining;
         };
 
-        const int phase = std::min(4, static_cast<int>(hiddenBossT_ / 27.0f));
+        const int phase = hiddenBossPhase_;
         const float aimed = AngleOf(player_.pos - boss_.pos);
         if (phase == 0)
         {
-            for (int i = -2; i <= 2; ++i) spawn(aimed + i * 0.13f, 3.6f + 0.12f * i, 0.075f, Sky, 5.8f);
-            for (int i = 0; i < 12; ++i) spawn(boss_.spin + TwoPi * i / 12.0f, 2.25f, 0.070f, Grape, 6.2f, 0.05f);
-            hiddenPatternCd_ = 0.58f;
+            for (int i = -2; i <= 2; ++i) spawn(aimed + i * 0.13f, 3.45f + 0.10f * std::abs(i), 0.075f, Sky, 5.8f);
+            for (int i = 0; i < 14; ++i) spawn(boss_.spin + TwoPi * i / 14.0f, 2.20f, 0.070f, Grape, 6.2f, 0.05f);
+            hiddenPatternCd_ = 0.56f;
         }
         else if (phase == 1)
         {
@@ -422,44 +471,28 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                 spawn(a, 2.8f + 0.08f * (hiddenPatternStep_ % 5), 0.072f, Gold, 6.4f, (arm & 1) ? -0.16f : 0.16f, 0.03f);
                 spawn(a + 0.18f, 3.25f, 0.070f, Mint, 5.4f, (arm & 1) ? -0.10f : 0.10f);
             }
-            if ((hiddenPatternStep_ % 4) == 0)
+            if ((hiddenPatternStep_ % 3) == 0)
             {
                 for (int i = -3; i <= 3; ++i) spawn(aimed + i * 0.09f, 4.2f, 0.068f, Red, 4.6f, 0.0f, -0.04f);
             }
             hiddenPatternCd_ = 0.32f;
         }
-        else if (phase == 2)
-        {
-            const float gap = std::sin(hiddenBossT_ * 1.2f) * 0.9f;
-            for (int i = 0; i < 20; ++i)
-            {
-                const float a = -Pi * 0.92f + i * (Pi * 1.84f / 19.0f);
-                if (std::fabs(a - gap) < 0.20f) continue;
-                spawn(a, 2.55f + (i % 3) * 0.18f, 0.066f, Cream, 6.8f, 0.03f * std::sin(i * 1.7f));
-            }
-            for (int i = -1; i <= 1; ++i) spawn(aimed + i * 0.16f, 4.55f, 0.072f, Red, 4.2f);
-            hiddenPatternCd_ = 0.72f;
-        }
-        else if (phase == 3)
-        {
-            for (int i = 0; i < 28; ++i)
-            {
-                const float a = boss_.spin * 0.7f + TwoPi * i / 28.0f;
-                if ((i + hiddenPatternStep_) % 7 == 0) continue;
-                spawn(a, 2.45f + (i % 4) * 0.17f, 0.067f, Grape, 6.5f, (i & 1) ? 0.09f : -0.09f);
-            }
-            for (int i = -2; i <= 2; ++i) spawn(aimed + i * 0.11f, 4.15f, 0.070f, Sky, 4.8f);
-            hiddenPatternCd_ = 0.82f;
-        }
         else
         {
-            for (int i = 0; i < 10; ++i)
+            const float gap = std::sin(hiddenBossT_ * 1.2f) * 0.9f;
+            for (int i = 0; i < 22; ++i)
             {
-                const float a = boss_.spin * 2.0f + i * 0.63f;
-                spawn(a, 3.0f + 0.12f * i, 0.066f, (i & 1) ? Gold : Grape, 5.4f, (i & 1) ? 0.18f : -0.18f, 0.04f);
+                const float a = -Pi * 0.94f + i * (Pi * 1.88f / 21.0f);
+                if (std::fabs(a - gap) < 0.22f) continue;
+                spawn(a, 2.55f + (i % 3) * 0.18f, 0.066f, Cream, 6.8f, 0.03f * std::sin(i * 1.7f));
+            }
+            for (int i = 0; i < 16; ++i)
+            {
+                const float a = boss_.spin * 1.8f + i * (TwoPi / 16.0f);
+                spawn(a, 3.05f + 0.08f * (i % 4), 0.066f, (i & 1) ? Gold : Grape, 5.2f, (i & 1) ? 0.17f : -0.17f, 0.04f);
             }
             for (int i = -3; i <= 3; ++i) spawn(aimed + i * 0.08f, 4.75f, 0.066f, Red, 4.0f, 0.0f, -0.03f);
-            hiddenPatternCd_ = 0.36f;
+            hiddenPatternCd_ = 0.58f;
         }
         ++hiddenPatternStep_;
     }
@@ -473,6 +506,7 @@ void SweetsApp::UpdateHiddenBoss(float dt)
     slashes_.erase(std::remove_if(slashes_.begin(), slashes_.end(), [](const Slash& s) { return s.ttl <= 0.0f; }), slashes_.end());
     particles_.erase(std::remove_if(particles_.begin(), particles_.end(), [](const Particle& p) { return p.ttl <= 0.0f || p.y < -0.1f; }), particles_.end());
 
+    NormalizePlayerLifeStates();
     if (hiddenBossT_ >= HiddenBossDurationSeconds)
     {
         SaveProgress();

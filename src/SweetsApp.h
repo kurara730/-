@@ -46,6 +46,7 @@ private:
     void ResetGame();
     void StartGameWithDifficulty(bool hiddenBossPractice);
     void StartHiddenBoss();
+    void PrepareHiddenBossResources();
     void StartWave();
     void ClearWave();
     void SpawnEnemy();
@@ -80,6 +81,7 @@ private:
     void UpdatePlaying(float dt);
     void UpdateAudioForScreen();
     void ApplyAudioVolume();
+    void NormalizePlayerLifeStates();
     void UpdatePlayer(float dt);
     void UpdateEnemies(float dt);
     void UpdateBoss(float dt);
@@ -112,6 +114,7 @@ private:
     void CompositeScene();
     void DrawHud();
     void DrawDebugHud();
+    void DrawCharacterSelect();
     void DrawPauseMenu();
     void DrawVideoScreen();
     void DrawTitleMediaFrame(const D2D1_RECT_F& rect);
@@ -270,6 +273,7 @@ private:
     float hiddenBossT_ = 0.0f;
     float hiddenPatternCd_ = 0.0f;
     int hiddenPatternStep_ = 0;
+    int hiddenBossPhase_ = -1;
     float messageT_ = 0.0f;
     float masterVolume_ = 1.0f;
     float bgmVolume_ = 1.0f;

@@ -138,6 +138,7 @@ struct ObjectCB
 enum class Screen
 {
     Title,
+    CharacterSelect,
     DifficultySelect,
     Playing,
     Paused,
