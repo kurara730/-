@@ -39,6 +39,9 @@ void SweetsApp::SpawnEnemy()
         e.radius = 0.38f; e.hp = 36.0f + wave_ * 7.0f; e.speed = 1.85f; e.atk = 8.0f; e.score = 460; e.color = Grape; e.shootCd = Rand(0.4f, 1.0f); e.teleportCd = Rand(1.2f, 2.2f);
         break;
     }
+    const DifficultyDef& diff = CurrentDifficulty();
+    e.hp *= diff.enemyHpMul;
+    e.atk *= diff.enemyAtkMul;
     e.maxHp = e.hp;
     enemies_.push_back(e);
 }
@@ -49,10 +52,11 @@ void SweetsApp::SpawnBoss()
     boss_.active = true;
     boss_.pos = { 0.0f, -1.2f };
     boss_.radius = 1.15f + 0.06f * static_cast<float>(wave_ / 3);
-    boss_.maxHp = 720.0f + wave_ * 260.0f;
+    const DifficultyDef& diff = CurrentDifficulty();
+    boss_.maxHp = (720.0f + wave_ * 260.0f) * diff.bossHpMul;
     boss_.hp = boss_.maxHp;
     boss_.speed = 1.2f + wave_ * 0.035f;
-    boss_.atk = 13.0f + wave_ * 1.3f;
+    boss_.atk = (13.0f + wave_ * 1.3f) * diff.enemyAtkMul;
     boss_.attackCd = 1.7f;
     boss_.spin = Rand(0.0f, TwoPi);
     boss_.type = (wave_ / 3) % 6;
@@ -92,7 +96,7 @@ void SweetsApp::UpdateEnemies(float dt)
                     }
                 }
                 Burst(e.pos, Mint, 10);
-                e.shootCd = 2.0f;
+                e.shootCd = 2.0f * CurrentDifficulty().spawnIntervalMul;
             }
         }
         else if (e.type == EnemyType::Barrier)
@@ -108,12 +112,13 @@ void SweetsApp::UpdateEnemies(float dt)
             }
             if (e.shootCd <= 0.0f)
             {
-                for (int i = 0; i < 8; ++i)
+                const int bullets = ScaledBulletCount(8);
+                for (int i = 0; i < bullets; ++i)
                 {
-                    const float a = e.face + TwoPi * i / 8.0f;
+                    const float a = e.face + TwoPi * i / static_cast<float>(bullets);
                     SpawnEnemyShot(e.pos + FromAngle(a) * (e.radius + 0.15f), a, 3.1f + wave_ * 0.08f, e.atk * 0.70f, 0.085f, Sky, 5.0f);
                 }
-                e.shootCd = 1.8f;
+                e.shootCd = 1.8f * CurrentDifficulty().spawnIntervalMul;
             }
         }
         else if (e.type == EnemyType::Mirror || e.type == EnemyType::Teleport)
@@ -133,7 +138,7 @@ void SweetsApp::UpdateEnemies(float dt)
             }
             if (e.shootCd <= 0.0f)
             {
-                const int count = e.type == EnemyType::Teleport ? std::min(7, 3 + wave_ / 3) : std::min(5, 1 + wave_ / 4);
+                const int count = ScaledBulletCount(e.type == EnemyType::Teleport ? std::min(7, 3 + wave_ / 3) : std::min(5, 1 + wave_ / 4));
                 const float base = AngleOf(toP);
                 for (int i = 0; i < count; ++i)
                 {
@@ -142,7 +147,7 @@ void SweetsApp::UpdateEnemies(float dt)
                     const float curve = e.type == EnemyType::Teleport ? ((i % 2 == 0) ? 0.35f : -0.35f) : 0.0f;
                     SpawnEnemyShot(e.pos + FromAngle(a) * (e.radius + 0.2f), a, 4.8f + wave_ * 0.16f, e.atk, 0.105f, e.type == EnemyType::Teleport ? Grape : Cream, 5.2f, curve, 0.08f);
                 }
-                e.shootCd = e.type == EnemyType::Teleport ? 1.45f : 1.05f;
+                e.shootCd = (e.type == EnemyType::Teleport ? 1.45f : 1.05f) * CurrentDifficulty().spawnIntervalMul;
             }
         }
         else if (e.type == EnemyType::Mine)
@@ -248,7 +253,7 @@ void SweetsApp::UpdateBoss(float dt)
             mirror.pos = boss_.pos + FromAngle(Rand(0.0f, TwoPi)) * 2.2f;
             ClampInside(mirror.pos, 0.5f);
             mirror.radius = 0.38f;
-            mirror.hp = 35.0f + wave_ * 8.0f;
+            mirror.hp = (35.0f + wave_ * 8.0f) * CurrentDifficulty().enemyHpMul;
             mirror.maxHp = mirror.hp;
             mirror.speed = 1.5f;
             mirror.atk = boss_.atk * 0.5f;
@@ -270,7 +275,7 @@ void SweetsApp::UpdateBoss(float dt)
         }
         if (attack == 0)
         {
-            const int count = 12 + boss_.phase * 4;
+            const int count = ScaledBulletCount(12 + boss_.phase * 4);
             const float base = boss_.spin;
             for (int i = 0; i < count; ++i)
             {
@@ -282,7 +287,7 @@ void SweetsApp::UpdateBoss(float dt)
         else if (attack == 1)
         {
             const float base = AngleOf(toP);
-            const int lanes = 3 + boss_.phase * 2;
+            const int lanes = ScaledBulletCount(3 + boss_.phase * 2);
             for (int i = 0; i < lanes; ++i)
             {
                 const float a = base + (static_cast<float>(i) / (lanes - 1) - 0.5f) * 0.58f;
@@ -291,7 +296,7 @@ void SweetsApp::UpdateBoss(float dt)
         }
         else
         {
-            const int count = 10 + boss_.phase * 3;
+            const int count = ScaledBulletCount(10 + boss_.phase * 3);
             for (int i = 0; i < count; ++i)
             {
                 const float a = boss_.spin + i * 0.62f;
@@ -302,14 +307,14 @@ void SweetsApp::UpdateBoss(float dt)
         }
         if (boss_.phase >= 3)
         {
-            const int petals = 6 + boss_.phase * 2;
+            const int petals = ScaledBulletCount(6 + boss_.phase * 2);
             for (int i = 0; i < petals; ++i)
             {
                 const float a = -boss_.spin * 0.65f + TwoPi * i / petals;
                 SpawnEnemyShot(boss_.pos + FromAngle(a) * (boss_.radius + 0.2f), a, 2.0f + boss_.phase * 0.18f, boss_.atk * 0.45f, 0.072f, Mint, 5.5f, -0.10f, 0.06f);
             }
         }
-        boss_.attackCd = std::max(1.05f, 2.15f - boss_.phase * 0.12f - wave_ * 0.008f);
+        boss_.attackCd = std::max(0.75f, (2.15f - boss_.phase * 0.12f - wave_ * 0.008f) * CurrentDifficulty().spawnIntervalMul);
     }
 }
 
@@ -409,6 +414,12 @@ void SweetsApp::DamageBoss(float dmg)
 void SweetsApp::DamageBoss(float dmg, bool reflected, int ownerIndex)
 {
     if (!boss_.active) return;
+    if (boss_.bossType == BossType::HiddenBoss)
+    {
+        boss_.flash = 0.08f;
+        AddScore(reflected ? 18 : 9, &players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))]);
+        return;
+    }
     boss_.hp -= dmg;
     boss_.flash = 0.15f;
     const float hpPct = boss_.hp / boss_.maxHp;

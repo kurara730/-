@@ -31,7 +31,8 @@ enum class BossType
     MirrorMacaron,
     GravityPudding,
     TerritoryCake,
-    DemonParfait
+    DemonParfait,
+    HiddenBoss
 };
 
 enum class StageType
@@ -102,6 +103,7 @@ inline constexpr const wchar_t* BossName(BossType type)
     case BossType::GravityPudding: return L"グラビティプリン";
     case BossType::TerritoryCake: return L"テリトリーケーキ";
     case BossType::DemonParfait: return L"魔王パフェ";
+    case BossType::HiddenBoss: return L"隠しボス";
     default: return L"ボス";
     }
 }

@@ -1,6 +1,20 @@
 #include "SweetsApp.h"
 
+#include <filesystem>
+#include <fstream>
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
+
+namespace
+{
+std::filesystem::path SaveFilePath()
+{
+    wchar_t localAppData[MAX_PATH]{};
+    DWORD len = GetEnvironmentVariableW(L"LOCALAPPDATA", localAppData, MAX_PATH);
+    std::filesystem::path base = (len > 0 && len < MAX_PATH) ? std::filesystem::path(localAppData) : std::filesystem::current_path();
+    return base / L"SweetsPanicDX11" / L"save.dat";
+}
+}
 
 bool SweetsApp::Initialize(HINSTANCE instance, int showCmd)
 {
@@ -39,6 +53,7 @@ bool SweetsApp::Initialize(HINSTANCE instance, int showCmd)
     CreateRenderTargets();
     CreateMeshes();
     LoadAssets();
+    LoadProgress();
     ResetGame();
     screen_ = Screen::Title;
 
@@ -104,6 +119,10 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         {
             return 0;
         }
+        if (screen_ == Screen::DifficultySelect && SelectDifficultyAt(static_cast<float>(GET_X_LPARAM(lp)), static_cast<float>(GET_Y_LPARAM(lp))))
+        {
+            return 0;
+        }
         mouseLeft_ = true;
         SetCapture(hwnd);
         return 0;
@@ -112,7 +131,7 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         ReleaseCapture();
         return 0;
     case WM_RBUTTONDOWN:
-        if (screen_ == Screen::Playing)
+        if (screen_ == Screen::Playing || screen_ == Screen::HiddenBoss)
         {
             mouseRight_ = true;
         }
@@ -121,7 +140,7 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     {
         const bool wasRightDown = mouseRight_;
         mouseRight_ = false;
-        mouseRightReleased_ = wasRightDown && screen_ == Screen::Playing;
+        mouseRightReleased_ = wasRightDown && (screen_ == Screen::Playing || screen_ == Screen::HiddenBoss);
         return 0;
     }
     default:
@@ -161,8 +180,33 @@ void SweetsApp::OnKeyDown(WPARAM key)
         }
         if (key == VK_RETURN || key == VK_SPACE)
         {
-            ResetGame();
-            screen_ = Screen::Playing;
+            screen_ = Screen::DifficultySelect;
+        }
+        return;
+    }
+
+    if (screen_ == Screen::DifficultySelect)
+    {
+        const int optionCount = DifficultyOptionCount();
+        if (key == VK_ESCAPE || key == VK_BACK)
+        {
+            screen_ = Screen::Title;
+            return;
+        }
+        if (key == VK_LEFT || key == 'A')
+        {
+            difficultyIndex_ = (difficultyIndex_ + optionCount - 1) % optionCount;
+            return;
+        }
+        if (key == VK_RIGHT || key == 'D')
+        {
+            difficultyIndex_ = (difficultyIndex_ + 1) % optionCount;
+            return;
+        }
+        if (key == VK_RETURN || key == VK_SPACE)
+        {
+            StartGameWithDifficulty(hiddenBossUnlocked_ && difficultyIndex_ == 5);
+            return;
         }
         return;
     }
@@ -180,21 +224,29 @@ void SweetsApp::OnKeyDown(WPARAM key)
     {
         if (key == VK_RETURN || key == 'R')
         {
-            ResetGame();
-            screen_ = Screen::Playing;
+            StartGameWithDifficulty(hiddenBossPractice_);
         }
         return;
     }
 
-    if (key == 'P' || key == VK_ESCAPE)
+    if (screen_ == Screen::Clear || screen_ == Screen::CompleteClear)
+    {
+        if (key == VK_RETURN || key == 'R' || key == VK_ESCAPE || key == VK_BACK)
+        {
+            screen_ = Screen::Title;
+        }
+        return;
+    }
+
+    if ((key == 'P' || key == VK_ESCAPE) && (screen_ == Screen::Playing || screen_ == Screen::Paused))
     {
         screen_ = screen_ == Screen::Paused ? Screen::Playing : Screen::Paused;
     }
-    if (screen_ == Screen::Playing)
+    if (screen_ == Screen::Playing || screen_ == Screen::HiddenBoss)
     {
         if (key == 'Q') UseUltimate();
         if (key == 'X' || key == VK_CONTROL) UseBomb();
-        if (key == 'R') ResetGame();
+        if (key == 'R') StartGameWithDifficulty(hiddenBossPractice_);
     }
 }
 
@@ -218,6 +270,59 @@ bool SweetsApp::SelectLoadoutAt(float sx, float sy)
         }
     }
     return false;
+}
+
+bool SweetsApp::SelectDifficultyAt(float sx, float sy)
+{
+    const int optionCount = DifficultyOptionCount();
+    const float cardW = std::min(210.0f, (static_cast<float>(width_) - 100.0f) / 3.0f);
+    const float cardH = 92.0f;
+    const float gap = 16.0f;
+    const float totalW = cardW * 3.0f + gap * 2.0f;
+    const float startX = (static_cast<float>(width_) - totalW) * 0.5f;
+    const float top = static_cast<float>(height_) * 0.36f;
+
+    for (int i = 0; i < optionCount; ++i)
+    {
+        const int col = i % 3;
+        const int row = i / 3;
+        const float x = startX + col * (cardW + gap);
+        const float y = top + row * (cardH + gap);
+        if (sx >= x && sx <= x + cardW && sy >= y && sy <= y + cardH)
+        {
+            difficultyIndex_ = i;
+            return true;
+        }
+    }
+    return false;
+}
+
+void SweetsApp::LoadProgress()
+{
+    hiddenBossUnlocked_ = false;
+    const std::filesystem::path path = SaveFilePath();
+    std::ifstream in(path);
+    if (!in) return;
+
+    std::string line;
+    while (std::getline(in, line))
+    {
+        if (line == "hiddenBossUnlocked=1")
+        {
+            hiddenBossUnlocked_ = true;
+        }
+    }
+}
+
+void SweetsApp::SaveProgress()
+{
+    hiddenBossUnlocked_ = true;
+    const std::filesystem::path path = SaveFilePath();
+    std::error_code ec;
+    std::filesystem::create_directories(path.parent_path(), ec);
+    std::ofstream out(path, std::ios::trunc);
+    if (!out) return;
+    out << "hiddenBossUnlocked=1\n";
 }
 
 bool SweetsApp::KeyDown(int key) const

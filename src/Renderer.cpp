@@ -528,7 +528,7 @@ void SweetsApp::DrawScene()
     if (boss_.active)
     {
         const Color bossBase = assetCatalog_.Get(VisualRole::Boss).fallbackColor;
-        Color c = boss_.flash > 0.0f ? Cream : (boss_.bossType == BossType::DonutKing ? Sky : (boss_.bossType == BossType::MirrorMacaron ? Gold : bossBase));
+        Color c = boss_.flash > 0.0f ? Cream : (boss_.bossType == BossType::HiddenBoss ? Grape : (boss_.bossType == BossType::DonutKing ? Sky : (boss_.bossType == BossType::MirrorMacaron ? Gold : bossBase)));
         DrawSphere(boss_.pos, boss_.radius, boss_.radius, c);
         DrawMesh(ringMesh_, XMMatrixScaling(boss_.radius * 1.35f, 1.0f, boss_.radius * 1.35f) *
             XMMatrixTranslation(boss_.pos.x, 0.08f, boss_.pos.z), WithAlpha(Red, 0.45f));
@@ -580,8 +580,13 @@ void SweetsApp::DrawHud()
     hud << L"スコア " << score_
         << L"   ウェーブ " << wave_
         << L"   ステージ " << StageName(stage_)
+        << L"   " << CurrentDifficulty().name
         << L"   反射 " << reflectKills_
         << L"   フィーバー " << static_cast<int>(player_.fever) << L"%";
+    if (screen_ == Screen::HiddenBoss)
+    {
+        hud << L"   隠しボス 残り " << static_cast<int>(std::max(0.0f, HiddenBossDurationSeconds - hiddenBossT_)) << L"秒";
+    }
     d2dContext_->DrawTextW(hud.str().c_str(), static_cast<UINT32>(hud.str().size()), hudFormat_.Get(),
         D2D1::RectF(18.0f, 14.0f, static_cast<float>(width_) - 18.0f, 48.0f), textBrush_.Get());
 
@@ -609,7 +614,9 @@ void SweetsApp::DrawHud()
         const float left = 18.0f;
         const float top = 154.0f;
         const float bw = 360.0f;
-        const float pct = ClampFloat(boss_.hp / boss_.maxHp, 0.0f, 1.0f);
+        const float pct = boss_.bossType == BossType::HiddenBoss
+            ? ClampFloat(1.0f - hiddenBossT_ / HiddenBossDurationSeconds, 0.0f, 1.0f)
+            : ClampFloat(boss_.hp / boss_.maxHp, 0.0f, 1.0f);
         textBrush_->SetColor(D2D1::ColorF(0.28f, 0.08f, 0.14f, 0.85f));
         d2dContext_->FillRectangle(D2D1::RectF(left, top, left + bw, top + 14.0f), textBrush_.Get());
         textBrush_->SetColor(D2D1::ColorF(1.0f, 0.24f, 0.35f, 0.95f));
@@ -643,7 +650,7 @@ void SweetsApp::DrawHud()
         d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), titleFormat_.Get(),
             D2D1::RectF(0, static_cast<float>(height_) * 0.18f, static_cast<float>(width_), static_cast<float>(height_) * 0.29f), textBrush_.Get());
         textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f));
-        const wchar_t* start = L"1Pの性能を選択してください。Cキーでクレジットを表示します。";
+        const wchar_t* start = L"1Pの性能を選択してください。Enterで難易度選択、Cキーでクレジット。";
         d2dContext_->DrawTextW(start, static_cast<UINT32>(wcslen(start)), hudFormat_.Get(),
             D2D1::RectF(0, static_cast<float>(height_) * 0.31f, static_cast<float>(width_), static_cast<float>(height_) * 0.38f), textBrush_.Get());
         DrawLoadoutSelection();
@@ -654,6 +661,18 @@ void SweetsApp::DrawHud()
     else if (screen_ == Screen::Credits)
     {
         DrawCredits();
+    }
+    else if (screen_ == Screen::DifficultySelect)
+    {
+        DrawDifficultySelection();
+    }
+    else if (screen_ == Screen::Clear || screen_ == Screen::CompleteClear)
+    {
+        DrawClearScreen();
+    }
+    else if (screen_ == Screen::HiddenBossIntro)
+    {
+        DrawHiddenBossIntro();
     }
     else if (screen_ == Screen::Paused)
     {
@@ -732,6 +751,144 @@ void SweetsApp::DrawCredits()
     titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+}
+
+void SweetsApp::DrawDifficultySelection()
+{
+    textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.78f));
+    d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
+
+    titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.86f, 0.36f, 1.0f));
+    const wchar_t* title = L"難易度選択";
+    d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), titleFormat_.Get(),
+        D2D1::RectF(0.0f, static_cast<float>(height_) * 0.16f, static_cast<float>(width_), static_cast<float>(height_) * 0.25f), textBrush_.Get());
+
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.94f));
+    const wchar_t* guide = L"左右キー / A,D / クリックで選択、Enterで開始";
+    d2dContext_->DrawTextW(guide, static_cast<UINT32>(wcslen(guide)), hudFormat_.Get(),
+        D2D1::RectF(0.0f, static_cast<float>(height_) * 0.27f, static_cast<float>(width_), static_cast<float>(height_) * 0.33f), textBrush_.Get());
+
+    const int optionCount = DifficultyOptionCount();
+    const float cardW = std::min(210.0f, (static_cast<float>(width_) - 100.0f) / 3.0f);
+    const float cardH = 92.0f;
+    const float gap = 16.0f;
+    const float totalW = cardW * 3.0f + gap * 2.0f;
+    const float startX = (static_cast<float>(width_) - totalW) * 0.5f;
+    const float top = static_cast<float>(height_) * 0.36f;
+
+    for (int i = 0; i < optionCount; ++i)
+    {
+        const bool practice = i == 5;
+        const DifficultyDef& def = practice ? DifficultyDefs[static_cast<int>(Difficulty::Lunatic)] : DifficultyDefs[i];
+        const int col = i % 3;
+        const int row = i / 3;
+        const float x = startX + col * (cardW + gap);
+        const float y = top + row * (cardH + gap);
+        const bool selected = i == difficultyIndex_;
+        const D2D1_RECT_F rect = D2D1::RectF(x, y, x + cardW, y + cardH);
+
+        textBrush_->SetColor(selected ? D2D1::ColorF(0.20f, 0.08f, 0.14f, 0.98f) : D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.93f));
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get());
+        textBrush_->SetColor(selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(def.color.r, def.color.g, def.color.b, 0.75f));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), selected ? 3.0f : 1.0f);
+
+        std::wstring name = practice ? L"Hidden Boss Practice" : def.name;
+        textBrush_->SetColor(D2D1::ColorF(def.color.r, def.color.g, def.color.b, 1.0f));
+        d2dContext_->DrawTextW(name.c_str(), static_cast<UINT32>(name.size()), hudFormat_.Get(),
+            D2D1::RectF(x + 10.0f, y + 12.0f, x + cardW - 10.0f, y + 40.0f), textBrush_.Get());
+
+        const std::wstring summary = practice ? L"解禁済み: 隠しボス戦から開始" : def.summary;
+        textBrush_->SetColor(D2D1::ColorF(0.92f, 0.84f, 0.88f, 0.96f));
+        d2dContext_->DrawTextW(summary.c_str(), static_cast<UINT32>(summary.size()), smallFormat_.Get(),
+            D2D1::RectF(x + 12.0f, y + 44.0f, x + cardW - 12.0f, y + 66.0f), textBrush_.Get());
+
+        std::wostringstream stats;
+        stats << L"弾 " << static_cast<int>(def.bulletCountMul * 100.0f) << L"% / ボム " << def.initialBombs;
+        const std::wstring statLine = stats.str();
+        textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.90f));
+        d2dContext_->DrawTextW(statLine.c_str(), static_cast<UINT32>(statLine.size()), smallFormat_.Get(),
+            D2D1::RectF(x + 12.0f, y + 66.0f, x + cardW - 12.0f, y + 86.0f), textBrush_.Get());
+    }
+
+    titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+}
+
+void SweetsApp::DrawClearScreen()
+{
+    textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.72f));
+    d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
+
+    titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+
+    const bool complete = screen_ == Screen::CompleteClear;
+    const wchar_t* title = complete ? L"完全クリア" : (pendingHiddenBoss_ ? L"Lunatic Clear" : L"Clear");
+    textBrush_->SetColor(complete ? D2D1::ColorF(0.60f, 0.90f, 1.0f, 1.0f) : D2D1::ColorF(1.0f, 0.86f, 0.36f, 1.0f));
+    d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), titleFormat_.Get(),
+        D2D1::RectF(0, static_cast<float>(height_) * 0.30f, static_cast<float>(width_), static_cast<float>(height_) * 0.42f), textBrush_.Get());
+
+    std::wostringstream ss;
+    int totalKills = 0;
+    int totalGraze = 0;
+    for (const auto& p : players_)
+    {
+        totalKills += p.kills;
+        totalGraze += p.graze;
+    }
+    ss << L"スコア " << score_ << L"  撃破 " << totalKills << L"  グレイズ " << totalGraze;
+    if (pendingHiddenBoss_ && screen_ == Screen::Clear) ss << L"  - 何かが近づいてくる";
+    else ss << L"  - Enterでタイトルへ";
+    const std::wstring line = ss.str();
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f));
+    d2dContext_->DrawTextW(line.c_str(), static_cast<UINT32>(line.size()), hudFormat_.Get(),
+        D2D1::RectF(0, static_cast<float>(height_) * 0.47f, static_cast<float>(width_), static_cast<float>(height_) * 0.56f), textBrush_.Get());
+
+    titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+}
+
+void SweetsApp::DrawHiddenBossIntro()
+{
+    const float t = ClampFloat(hiddenIntroT_ / 2.2f, 0.0f, 1.0f);
+    const float split = t * static_cast<float>(width_) * 0.36f;
+
+    textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.80f));
+    d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
+    textBrush_->SetColor(D2D1::ColorF(0.92f, 0.84f, 0.88f, 0.92f));
+    d2dContext_->FillRectangle(D2D1::RectF(-split, 0, static_cast<float>(width_) * 0.5f - split, static_cast<float>(height_)), textBrush_.Get());
+    d2dContext_->FillRectangle(D2D1::RectF(static_cast<float>(width_) * 0.5f + split, 0, static_cast<float>(width_) + split, static_cast<float>(height_)), textBrush_.Get());
+
+    textBrush_->SetColor(D2D1::ColorF(0.40f, 0.08f, 0.28f, 1.0f));
+    const float cx = static_cast<float>(width_) * 0.5f;
+    const float cy = static_cast<float>(height_) * 0.5f;
+    std::array<D2D1_POINT_2F, 7> crack{ {
+        D2D1::Point2F(cx - 18.0f, cy - 220.0f),
+        D2D1::Point2F(cx + 12.0f, cy - 155.0f),
+        D2D1::Point2F(cx - 25.0f, cy - 80.0f),
+        D2D1::Point2F(cx + 18.0f, cy - 10.0f),
+        D2D1::Point2F(cx - 12.0f, cy + 70.0f),
+        D2D1::Point2F(cx + 25.0f, cy + 145.0f),
+        D2D1::Point2F(cx - 16.0f, cy + 220.0f),
+    } };
+    for (size_t i = 1; i < crack.size(); ++i)
+    {
+        d2dContext_->DrawLine(crack[i - 1], crack[i], textBrush_.Get(), 4.0f + t * 5.0f);
+    }
+
+    titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    textBrush_->SetColor(D2D1::ColorF(0.68f, 0.36f, 1.0f, 1.0f));
+    const wchar_t* title = L"隠しボス出現";
+    d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), titleFormat_.Get(),
+        D2D1::RectF(0, static_cast<float>(height_) * 0.68f, static_cast<float>(width_), static_cast<float>(height_) * 0.80f), textBrush_.Get());
+    titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 
 void SweetsApp::DrawLoadoutSelection()

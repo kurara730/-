@@ -221,7 +221,7 @@ void SweetsApp::UseBomb()
 
 void SweetsApp::UseBombFor(Player& p, int ownerIndex)
 {
-    if (screen_ != Screen::Playing || p.bombs <= 0 || p.bombT > 0.0f || p.downed) return;
+    if ((screen_ != Screen::Playing && screen_ != Screen::HiddenBoss) || p.bombs <= 0 || p.bombT > 0.0f || p.downed) return;
 
     --p.bombs;
     p.bombT = 1.8f;
@@ -264,7 +264,7 @@ void SweetsApp::UseUltimate()
 
 void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
 {
-    if (screen_ != Screen::Playing || p.ult < 100.0f || p.downed) return;
+    if ((screen_ != Screen::Playing && screen_ != Screen::HiddenBoss) || p.ult < 100.0f || p.downed) return;
     for (auto& other : players_)
     {
         if (!other.active || other.index == ownerIndex || other.downed || other.ult < 100.0f) continue;

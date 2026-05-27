@@ -38,6 +38,31 @@ constexpr Color Sky{ 0.30f, 0.60f, 1.0f, 1.0f };
 constexpr Color Grape{ 0.68f, 0.36f, 1.0f, 1.0f };
 constexpr Color Choco{ 0.55f, 0.32f, 0.18f, 1.0f };
 constexpr Color Red{ 1.0f, 0.24f, 0.22f, 1.0f };
+constexpr int FinalWave = 12;
+constexpr float HiddenBossDurationSeconds = 137.14f;
+constexpr int HiddenBossBulletCap = 420;
+
+struct DifficultyDef
+{
+    const wchar_t* name;
+    const wchar_t* summary;
+    float enemyHpMul;
+    float enemyAtkMul;
+    float bulletSpeedMul;
+    float bulletCountMul;
+    float spawnIntervalMul;
+    float bossHpMul;
+    int initialBombs;
+    Color color;
+};
+
+inline const std::array<DifficultyDef, 5> DifficultyDefs{ {
+    { L"Easy", L"弾幕を抑えた練習向け", 0.75f, 0.65f, 0.85f, 0.75f, 1.25f, 0.75f, 5, Mint },
+    { L"Normal", L"標準難易度", 1.00f, 1.00f, 1.00f, 1.00f, 1.00f, 1.00f, 3, Cream },
+    { L"Hard", L"敵の圧が強くなる", 1.15f, 1.20f, 1.10f, 1.15f, 0.90f, 1.15f, 3, Gold },
+    { L"Expert", L"弾速と出現頻度が高い", 1.35f, 1.45f, 1.25f, 1.30f, 0.78f, 1.35f, 2, Sky },
+    { L"Lunatic", L"最終Wave後に隠しボスが出現", 1.55f, 1.70f, 1.40f, 1.55f, 0.68f, 1.55f, 2, Grape },
+} };
 
 struct V2
 {
@@ -112,10 +137,24 @@ struct ObjectCB
 enum class Screen
 {
     Title,
+    DifficultySelect,
     Playing,
     Paused,
     Credits,
+    Clear,
+    HiddenBossIntro,
+    HiddenBoss,
+    CompleteClear,
     GameOver
+};
+
+enum class Difficulty
+{
+    Easy = 0,
+    Normal,
+    Hard,
+    Expert,
+    Lunatic
 };
 
 enum class Weapon

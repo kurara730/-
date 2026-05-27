@@ -1,28 +1,35 @@
 #pragma once
 
+#include <memory>
 #include <string>
 
 enum class MusicTrack
 {
     None,
     Gameplay,
-    GameOver
+    GameOver,
+    HiddenBoss
 };
 
 class AudioSystem
 {
 public:
+    AudioSystem();
     ~AudioSystem();
 
-    void PlayLoop(MusicTrack track, const std::wstring& relativePath);
+    AudioSystem(const AudioSystem&) = delete;
+    AudioSystem& operator=(const AudioSystem&) = delete;
+
+    bool Play(MusicTrack track, const std::wstring& relativePath, bool loop);
+    bool PlayLoop(MusicTrack track, const std::wstring& relativePath);
+    bool PlayOnce(MusicTrack track, const std::wstring& relativePath);
     void Stop();
 
-private:
-    std::wstring ResolveAssetPath(const std::wstring& relativePath) const;
-    bool Send(const std::wstring& command) const;
-    void CloseDevice();
+    MusicTrack CurrentTrack() const;
+    float CurrentDurationSeconds() const;
+    const std::wstring& LastError() const;
 
-    MusicTrack currentTrack_ = MusicTrack::None;
-    std::wstring alias_;
-    unsigned int serial_ = 0;
+private:
+    struct Impl;
+    std::unique_ptr<Impl> impl_;
 };

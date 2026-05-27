@@ -59,6 +59,7 @@
     <None Include="assets\textures\roll.png"><Filter>Assets</Filter></None>
     <None Include="assets\textures\shortcake.png"><Filter>Assets</Filter></None>
     <None Include="assets\audio\233_BPM163.mp3"><Filter>Assets</Filter></None>
+    <None Include="assets\audio\Lonery boy.wav"><Filter>Assets</Filter></None>
     <None Include="assets\audio\ruins.mp3"><Filter>Assets</Filter></None>
     <None Include="assets\README_assets.md"><Filter>Assets</Filter></None>
     <None Include="docs\game_spec.md"><Filter>Docs</Filter></None>

@@ -42,6 +42,8 @@ private:
     void Resize(UINT w, UINT h);
 
     void ResetGame();
+    void StartGameWithDifficulty(bool hiddenBossPractice);
+    void StartHiddenBoss();
     void StartWave();
     void ClearWave();
     void SpawnEnemy();
@@ -68,6 +70,9 @@ private:
 
     void Update(float dt);
     void UpdateTitle(float dt);
+    void UpdateClear(float dt);
+    void UpdateHiddenBossIntro(float dt);
+    void UpdateHiddenBoss(float dt);
     void UpdatePlaying(float dt);
     void UpdateAudioForScreen();
     void UpdatePlayer(float dt);
@@ -84,6 +89,11 @@ private:
     void DamageBoss(float dmg, bool reflected, int ownerIndex);
     void Burst(V2 p, Color c, int count);
     void SpawnEnemyShot(V2 pos, float angle, float speed, float damage, float radius, Color color, float ttl = 5.0f, float angularVel = 0.0f, float accel = 0.0f);
+    int ScaledBulletCount(int base) const;
+    const DifficultyDef& CurrentDifficulty() const;
+    void LoadProgress();
+    void SaveProgress();
+    int DifficultyOptionCount() const;
     void FirePrimary();
     void FirePrimaryFor(Player& p, int ownerIndex, float aim);
     void FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint);
@@ -95,6 +105,9 @@ private:
     void DrawScene();
     void DrawHud();
     void DrawLoadoutSelection();
+    void DrawDifficultySelection();
+    void DrawClearScreen();
+    void DrawHiddenBossIntro();
     void DrawCredits();
     void DrawMesh(const Mesh& mesh, const XMMATRIX& world, Color tint);
     void DrawSphere(V2 p, float y, float r, Color c);
@@ -104,6 +117,7 @@ private:
 
     void OnKeyDown(WPARAM key);
     bool SelectLoadoutAt(float sx, float sy);
+    bool SelectDifficultyAt(float sx, float sy);
     bool KeyDown(int key) const;
     float Rand(float a, float b);
     int RandInt(int a, int b);
@@ -181,6 +195,11 @@ private:
     int reflectKills_ = 0;
     int remainingToSpawn_ = 0;
     int loadoutIndex_ = 0;
+    int difficultyIndex_ = 1;
+    Difficulty difficulty_ = Difficulty::Normal;
+    bool hiddenBossUnlocked_ = false;
+    bool hiddenBossPractice_ = false;
+    bool pendingHiddenBoss_ = false;
     bool bossWave_ = false;
     bool waveStarted_ = false;
     StageType stage_ = StageType::Donut;
@@ -190,6 +209,11 @@ private:
     float pickupTimer_ = 5.0f;
     float slowT_ = 0.0f;
     float gameTime_ = 0.0f;
+    float clearTimer_ = 0.0f;
+    float hiddenIntroT_ = 0.0f;
+    float hiddenBossT_ = 0.0f;
+    float hiddenPatternCd_ = 0.0f;
+    int hiddenPatternStep_ = 0;
     float messageT_ = 0.0f;
     std::wstring message_;
 

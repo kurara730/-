@@ -37,6 +37,7 @@ add_executable(SweetsActionDX11 WIN32
     assets/shaders/sprite_unlit.hlsl
     assets/audio/233_BPM163.mp3
     assets/audio/ruins.mp3
+    "assets/audio/Lonery boy.wav"
 )
 
 target_compile_features(SweetsActionDX11 PRIVATE cxx_std_17)
@@ -73,7 +74,12 @@ target_link_libraries(SweetsActionDX11 PRIVATE
     d3dcompiler
     d2d1
     dwrite
-    winmm
+    xaudio2
+    mf
+    mfplat
+    mfreadwrite
+    mfuuid
+    ole32
     windowscodecs
     xinput9_1_0
 )
