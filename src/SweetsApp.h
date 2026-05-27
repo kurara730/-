@@ -6,6 +6,7 @@
 #include <d3dcompiler.h>
 #include <d2d1_1.h>
 #include <dwrite.h>
+#include <wincodec.h>
 #include <DirectXMath.h>
 
 #include <chrono>
@@ -118,6 +119,8 @@ private:
     void DrawPauseMenu();
     void DrawVideoScreen();
     void DrawTitleMediaFrame(const D2D1_RECT_F& rect);
+    void DrawBitmapCover(ID2D1Bitmap1* bitmap, const D2D1_RECT_F& rect, float opacity);
+    void LoadTitleImageBitmap();
     void DrawLoadoutSelection();
     void DrawDifficultySelection();
     void DrawClearScreen();
@@ -197,6 +200,7 @@ private:
     ComPtr<ID2D1DeviceContext> d2dContext_;
     ComPtr<ID2D1Bitmap1> d2dTarget_;
     ComPtr<ID2D1Bitmap1> titleVideoBitmap_;
+    ComPtr<ID2D1Bitmap1> titleImageBitmap_;
     ComPtr<ID2D1Bitmap1> eventVideoBitmap_;
     ComPtr<ID2D1SolidColorBrush> textBrush_;
     ComPtr<IDWriteFactory> writeFactory_;
@@ -240,6 +244,7 @@ private:
     TextureLibrary textureLibrary_;
     SpriteLibrary spriteLibrary_;
     ModelLibrary modelLibrary_;
+    ComPtr<IWICImagingFactory> wicFactory_;
 
     int wave_ = 1;
     int score_ = 0;

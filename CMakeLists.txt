@@ -38,6 +38,7 @@ add_executable(SweetsActionDX11 WIN32
     assets/shaders/effect_additive.hlsl
     assets/shaders/postprocess.hlsl
     assets/shaders/sprite_unlit.hlsl
+    assets/textures/title.jpg
     assets/audio/233_BPM163.mp3
     assets/audio/333_BPM177.mp3
     assets/audio/ruins.mp3

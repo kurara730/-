@@ -149,6 +149,7 @@
     <None Include="assets\textures\pickup.png" />
     <None Include="assets\textures\roll.png" />
     <None Include="assets\textures\shortcake.png" />
+    <None Include="assets\textures\title.jpg" />
     <None Include="assets\video\README_video.md" />
     <None Include="docs\game_spec.md" />
     <None Include="docs\implementation_notes.md" />

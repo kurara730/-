@@ -429,7 +429,16 @@ void SweetsApp::UpdateHiddenBoss(float dt)
     UpdatePlayer(dt);
     UpdateCoopPlayers(dt);
 
-    const int activeHiddenPhase = std::min(2, static_cast<int>(hiddenBossT_ / 60.0f));
+    const float hiddenFrenzyStart = HiddenBossDurationSeconds - 20.0f;
+    int activeHiddenPhase = 0;
+    if (hiddenBossT_ >= hiddenFrenzyStart)
+    {
+        activeHiddenPhase = 3;
+    }
+    else
+    {
+        activeHiddenPhase = std::min(2, static_cast<int>(hiddenBossT_ / 45.0f));
+    }
     if (activeHiddenPhase != hiddenBossPhase_)
     {
         hiddenBossPhase_ = activeHiddenPhase;
@@ -440,6 +449,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
             if (s.enemy) s.dead = true;
         }
         message_ = hiddenBossPhase_ == 0 ? L"第1波: 誘導と放射" : (hiddenBossPhase_ == 1 ? L"第2波: 回転弾幕" : L"最終波: 隙間を読め");
+        if (hiddenBossPhase_ == 2) message_ = L"第3波: 速度差を読む";
+        if (hiddenBossPhase_ == 3) message_ = L"発狂ゾーン: 最後まで避け切れ";
         messageT_ = 1.6f;
     }
 
@@ -477,7 +488,7 @@ void SweetsApp::UpdateHiddenBoss(float dt)
             }
             hiddenPatternCd_ = 0.32f;
         }
-        else
+        else if (phase == 2)
         {
             const float gap = std::sin(hiddenBossT_ * 1.2f) * 0.9f;
             for (int i = 0; i < 22; ++i)
@@ -493,6 +504,29 @@ void SweetsApp::UpdateHiddenBoss(float dt)
             }
             for (int i = -3; i <= 3; ++i) spawn(aimed + i * 0.08f, 4.75f, 0.066f, Red, 4.0f, 0.0f, -0.03f);
             hiddenPatternCd_ = 0.58f;
+        }
+        else
+        {
+            const float gap = std::sin(hiddenBossT_ * 1.75f) * 1.0f;
+            for (int i = 0; i < 30; ++i)
+            {
+                const float a = boss_.spin * 2.4f + i * (TwoPi / 30.0f);
+                if (std::fabs(std::sin(a - gap)) < 0.10f) continue;
+                spawn(a, 2.65f + (i % 4) * 0.16f, 0.066f, (i & 1) ? Grape : Gold, 6.2f, (i & 1) ? 0.20f : -0.20f, 0.045f);
+            }
+            for (int i = -4; i <= 4; ++i)
+            {
+                spawn(aimed + i * 0.065f, 4.45f + 0.08f * std::abs(i), 0.066f, Red, 4.2f, 0.0f, -0.035f);
+            }
+            if ((hiddenPatternStep_ % 2) == 0)
+            {
+                for (int i = 0; i < 18; ++i)
+                {
+                    const float a = -boss_.spin * 1.7f + i * (TwoPi / 18.0f);
+                    spawn(a, 3.35f, 0.064f, Mint, 4.8f, 0.14f * std::sin(hiddenBossT_ + i), 0.02f);
+                }
+            }
+            hiddenPatternCd_ = 0.24f;
         }
         ++hiddenPatternStep_;
     }

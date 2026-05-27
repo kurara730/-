@@ -118,6 +118,18 @@ void SweetsApp::CreateDevice()
 
     ThrowIfFailed(d2dFactory_->CreateDevice(dxgiDevice.Get(), &d2dDevice_), "Create D2D device");
     ThrowIfFailed(d2dDevice_->CreateDeviceContext(D2D1_DEVICE_CONTEXT_OPTIONS_NONE, &d2dContext_), "Create D2D context");
+    const HRESULT wicHr = CoCreateInstance(
+        CLSID_WICImagingFactory,
+        nullptr,
+        CLSCTX_INPROC_SERVER,
+        IID_PPV_ARGS(&wicFactory_));
+    if (FAILED(wicHr))
+    {
+        wicFactory_.Reset();
+#if defined(_DEBUG)
+        OutputDebugStringW(L"SweetsActionDX11: WIC factory creation failed. Title still image will use fallback.\n");
+#endif
+    }
 
     ThrowIfFailed(DWriteCreateFactory(
         DWRITE_FACTORY_TYPE_SHARED,
@@ -191,6 +203,7 @@ void SweetsApp::CreateRenderTargets()
     d2dContext_->SetTarget(d2dTarget_.Get());
 
     ThrowIfFailed(d2dContext_->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::White), &textBrush_), "Create text brush");
+    LoadTitleImageBitmap();
 }
 
 void SweetsApp::CreateOffscreenTarget(ComPtr<ID3D11Texture2D>& texture, ComPtr<ID3D11RenderTargetView>& rtv, ComPtr<ID3D11ShaderResourceView>& srv, DXGI_FORMAT format)
@@ -213,6 +226,7 @@ void SweetsApp::ReleaseRenderTargets()
 {
     if (d2dContext_) d2dContext_->SetTarget(nullptr);
     titleVideoBitmap_.Reset();
+    titleImageBitmap_.Reset();
     eventVideoBitmap_.Reset();
     textBrush_.Reset();
     d2dTarget_.Reset();
@@ -870,7 +884,7 @@ void SweetsApp::DrawHud()
 
     if (screen_ == Screen::Title)
     {
-        textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.72f));
+        textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 1.0f));
         d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
 
         const float dividerX = 322.0f;
@@ -1115,6 +1129,85 @@ void SweetsApp::DrawCharacterSelect()
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 
+void SweetsApp::LoadTitleImageBitmap()
+{
+    titleImageBitmap_.Reset();
+    if (!wicFactory_ || !d2dContext_)
+    {
+        return;
+    }
+
+    const std::wstring imagePath = FindAssetFile(L"assets/textures/title.jpg");
+    ComPtr<IWICBitmapDecoder> decoder;
+    HRESULT hr = wicFactory_->CreateDecoderFromFilename(
+        imagePath.c_str(),
+        nullptr,
+        GENERIC_READ,
+        WICDecodeMetadataCacheOnLoad,
+        &decoder);
+    if (FAILED(hr))
+    {
+#if defined(_DEBUG)
+        OutputDebugStringW(L"SweetsActionDX11: assets/textures/title.jpg could not be opened. Title media fallback is used.\n");
+#endif
+        return;
+    }
+
+    ComPtr<IWICBitmapFrameDecode> frame;
+    hr = decoder->GetFrame(0, &frame);
+    if (FAILED(hr)) return;
+
+    ComPtr<IWICFormatConverter> converter;
+    hr = wicFactory_->CreateFormatConverter(&converter);
+    if (FAILED(hr)) return;
+
+    hr = converter->Initialize(
+        frame.Get(),
+        GUID_WICPixelFormat32bppPBGRA,
+        WICBitmapDitherTypeNone,
+        nullptr,
+        0.0f,
+        WICBitmapPaletteTypeMedianCut);
+    if (FAILED(hr)) return;
+
+    const auto props = D2D1::BitmapProperties1(
+        D2D1_BITMAP_OPTIONS_NONE,
+        D2D1::PixelFormat(DXGI_FORMAT_B8G8R8A8_UNORM, D2D1_ALPHA_MODE_PREMULTIPLIED));
+    d2dContext_->CreateBitmapFromWicBitmap(converter.Get(), &props, &titleImageBitmap_);
+}
+
+void SweetsApp::DrawBitmapCover(ID2D1Bitmap1* bitmap, const D2D1_RECT_F& rect, float opacity)
+{
+    if (!bitmap)
+    {
+        return;
+    }
+
+    const D2D1_SIZE_F size = bitmap->GetSize();
+    const float dstW = std::max(1.0f, rect.right - rect.left);
+    const float dstH = std::max(1.0f, rect.bottom - rect.top);
+    const float srcW = std::max(1.0f, size.width);
+    const float srcH = std::max(1.0f, size.height);
+    const float srcAspect = srcW / srcH;
+    const float dstAspect = dstW / dstH;
+
+    D2D1_RECT_F src = D2D1::RectF(0.0f, 0.0f, srcW, srcH);
+    if (srcAspect > dstAspect)
+    {
+        const float cropW = srcH * dstAspect;
+        const float x = (srcW - cropW) * 0.5f;
+        src = D2D1::RectF(x, 0.0f, x + cropW, srcH);
+    }
+    else
+    {
+        const float cropH = srcW / dstAspect;
+        const float y = (srcH - cropH) * 0.5f;
+        src = D2D1::RectF(0.0f, y, srcW, y + cropH);
+    }
+
+    d2dContext_->DrawBitmap(bitmap, rect, ClampFloat(opacity, 0.0f, 1.0f), D2D1_BITMAP_INTERPOLATION_MODE_LINEAR, src);
+}
+
 void SweetsApp::DrawTitleMediaFrame(const D2D1_RECT_F& rect)
 {
     textBrush_->SetColor(D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.88f));
@@ -1141,9 +1234,19 @@ void SweetsApp::DrawTitleMediaFrame(const D2D1_RECT_F& rect)
         }
         if (titleVideoBitmap_)
         {
-            d2dContext_->DrawBitmap(titleVideoBitmap_.Get(), rect, 1.0f, D2D1_BITMAP_INTERPOLATION_MODE_LINEAR);
+            DrawBitmapCover(titleVideoBitmap_.Get(), rect, 1.0f);
             return;
         }
+    }
+
+    if (titleImageBitmap_)
+    {
+        DrawBitmapCover(titleImageBitmap_.Get(), rect, 1.0f);
+        textBrush_->SetColor(D2D1::ColorF(0.04f, 0.02f, 0.04f, 0.28f));
+        d2dContext_->FillRectangle(rect, textBrush_.Get());
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.88f));
+        d2dContext_->DrawRectangle(rect, textBrush_.Get(), 2.0f);
+        return;
     }
 
     textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.88f));
@@ -1444,38 +1547,110 @@ void SweetsApp::DrawClearScreen()
 
 void SweetsApp::DrawHiddenBossIntro()
 {
-    const float t = ClampFloat(hiddenIntroT_ / 2.2f, 0.0f, 1.0f);
-    const float split = t * static_cast<float>(width_) * 0.36f;
+    const float w = static_cast<float>(width_);
+    const float h = static_cast<float>(height_);
+    const float cx = w * 0.5f;
+    const float cy = h * 0.5f;
+    const float openT = ClampFloat((hiddenIntroT_ - 0.18f) / 1.55f, 0.0f, 1.0f);
+    const float ease = openT * openT * (3.0f - 2.0f * openT);
+    const float split = ease * w * 0.34f;
+    const float flash = ClampFloat(1.0f - std::fabs(hiddenIntroT_ - 0.36f) / 0.18f, 0.0f, 1.0f);
+    const bool mono = flash > 0.03f;
 
-    textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.80f));
-    d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
-    textBrush_->SetColor(D2D1::ColorF(0.92f, 0.84f, 0.88f, 0.92f));
-    d2dContext_->FillRectangle(D2D1::RectF(-split, 0, static_cast<float>(width_) * 0.5f - split, static_cast<float>(height_)), textBrush_.Get());
-    d2dContext_->FillRectangle(D2D1::RectF(static_cast<float>(width_) * 0.5f + split, 0, static_cast<float>(width_) + split, static_cast<float>(height_)), textBrush_.Get());
+    textBrush_->SetColor(mono ? D2D1::ColorF(0.02f, 0.02f, 0.02f, 1.0f) : D2D1::ColorF(0.05f, 0.02f, 0.04f, 1.0f));
+    d2dContext_->FillRectangle(D2D1::RectF(0, 0, w, h), textBrush_.Get());
 
-    textBrush_->SetColor(D2D1::ColorF(0.40f, 0.08f, 0.28f, 1.0f));
-    const float cx = static_cast<float>(width_) * 0.5f;
-    const float cy = static_cast<float>(height_) * 0.5f;
-    std::array<D2D1_POINT_2F, 7> crack{ {
-        D2D1::Point2F(cx - 18.0f, cy - 220.0f),
-        D2D1::Point2F(cx + 12.0f, cy - 155.0f),
-        D2D1::Point2F(cx - 25.0f, cy - 80.0f),
-        D2D1::Point2F(cx + 18.0f, cy - 10.0f),
-        D2D1::Point2F(cx - 12.0f, cy + 70.0f),
-        D2D1::Point2F(cx + 25.0f, cy + 145.0f),
-        D2D1::Point2F(cx - 16.0f, cy + 220.0f),
+    const D2D1_COLOR_F panelColor = mono
+        ? D2D1::ColorF(0.86f, 0.86f, 0.86f, 0.98f)
+        : D2D1::ColorF(0.94f, 0.88f, 0.92f, 0.98f);
+    const D2D1_COLOR_F lineColor = mono
+        ? D2D1::ColorF(0.05f, 0.05f, 0.05f, 1.0f)
+        : D2D1::ColorF(0.34f, 0.05f, 0.25f, 1.0f);
+
+    const D2D1_RECT_F leftPanel = D2D1::RectF(-split, 0.0f, cx + 14.0f - split, h);
+    const D2D1_RECT_F rightPanel = D2D1::RectF(cx - 14.0f + split, 0.0f, w + split, h);
+    textBrush_->SetColor(panelColor);
+    d2dContext_->FillRectangle(leftPanel, textBrush_.Get());
+    d2dContext_->FillRectangle(rightPanel, textBrush_.Get());
+
+    if (titleImageBitmap_)
+    {
+        const D2D1_RECT_F imageRect = D2D1::RectF(cx + 74.0f + split, 72.0f, w - 74.0f + split, h * 0.54f);
+        DrawBitmapCover(titleImageBitmap_.Get(), imageRect, mono ? 0.32f : 0.72f);
+        textBrush_->SetColor(mono ? D2D1::ColorF(0.82f, 0.82f, 0.82f, 0.42f) : D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.24f));
+        d2dContext_->FillRectangle(imageRect, textBrush_.Get());
+        textBrush_->SetColor(lineColor);
+        d2dContext_->DrawRectangle(imageRect, textBrush_.Get(), 2.0f);
+    }
+
+    std::array<D2D1_POINT_2F, 8> crack{ {
+        D2D1::Point2F(cx - 18.0f, -12.0f),
+        D2D1::Point2F(cx + 18.0f, h * 0.12f),
+        D2D1::Point2F(cx - 28.0f, h * 0.26f),
+        D2D1::Point2F(cx + 22.0f, h * 0.42f),
+        D2D1::Point2F(cx - 18.0f, h * 0.57f),
+        D2D1::Point2F(cx + 32.0f, h * 0.73f),
+        D2D1::Point2F(cx - 16.0f, h * 0.88f),
+        D2D1::Point2F(cx + 22.0f, h + 12.0f),
     } };
+    textBrush_->SetColor(lineColor);
     for (size_t i = 1; i < crack.size(); ++i)
     {
-        d2dContext_->DrawLine(crack[i - 1], crack[i], textBrush_.Get(), 4.0f + t * 5.0f);
+        D2D1_POINT_2F a = crack[i - 1];
+        D2D1_POINT_2F b = crack[i];
+        a.x += (i & 1) ? split * 0.08f : -split * 0.08f;
+        b.x += (i & 1) ? -split * 0.08f : split * 0.08f;
+        d2dContext_->DrawLine(a, b, textBrush_.Get(), 4.0f + ease * 6.0f);
+    }
+    for (size_t i = 1; i < crack.size(); ++i)
+    {
+        D2D1_POINT_2F a = crack[i - 1];
+        D2D1_POINT_2F b = crack[i];
+        a.x -= split;
+        b.x -= split;
+        d2dContext_->DrawLine(a, b, textBrush_.Get(), 2.0f);
+        a = crack[i - 1];
+        b = crack[i];
+        a.x += split;
+        b.x += split;
+        d2dContext_->DrawLine(a, b, textBrush_.Get(), 2.0f);
+    }
+
+    const float bossT = ClampFloat((hiddenIntroT_ - 0.62f) / 1.05f, 0.0f, 1.0f);
+    if (bossT > 0.0f)
+    {
+        textBrush_->SetColor(mono ? D2D1::ColorF(0.10f, 0.10f, 0.10f, 0.82f) : D2D1::ColorF(0.22f, 0.02f, 0.32f, 0.82f));
+        const float r = 64.0f + bossT * 48.0f;
+        d2dContext_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy - 18.0f), r * 0.72f, r), textBrush_.Get());
+        textBrush_->SetColor(mono ? D2D1::ColorF(0.92f, 0.92f, 0.92f, bossT) : D2D1::ColorF(0.68f, 0.36f, 1.0f, bossT));
+        d2dContext_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy - 18.0f), r * 0.76f, r * 1.02f), textBrush_.Get(), 3.0f);
     }
 
     titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-    textBrush_->SetColor(D2D1::ColorF(0.68f, 0.36f, 1.0f, 1.0f));
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    textBrush_->SetColor(mono ? D2D1::ColorF(0.04f, 0.04f, 0.04f, 1.0f) : D2D1::ColorF(0.28f, 0.06f, 0.18f, 1.0f));
+    const wchar_t* clear = L"クリア";
+    d2dContext_->DrawTextW(clear, static_cast<UINT32>(wcslen(clear)), titleFormat_.Get(),
+        D2D1::RectF(30.0f - split, h * 0.22f, cx - 28.0f - split, h * 0.34f), textBrush_.Get());
+    const wchar_t* media = L"???";
+    d2dContext_->DrawTextW(media, static_cast<UINT32>(wcslen(media)), titleFormat_.Get(),
+        D2D1::RectF(cx + 50.0f + split, h * 0.58f, w - 50.0f + split, h * 0.70f), textBrush_.Get());
+
+    textBrush_->SetColor(mono ? D2D1::ColorF(0.0f, 0.0f, 0.0f, 1.0f) : D2D1::ColorF(0.68f, 0.36f, 1.0f, 1.0f));
     const wchar_t* title = L"隠しボス出現";
     d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), titleFormat_.Get(),
-        D2D1::RectF(0, static_cast<float>(height_) * 0.68f, static_cast<float>(width_), static_cast<float>(height_) * 0.80f), textBrush_.Get());
+        D2D1::RectF(0, h * 0.72f, w, h * 0.84f), textBrush_.Get());
+
+    if (flash > 0.0f)
+    {
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 1.0f, 1.0f, flash * 0.55f));
+        d2dContext_->FillRectangle(D2D1::RectF(0, 0, w, h), textBrush_.Get());
+        textBrush_->SetColor(D2D1::ColorF(0.0f, 0.0f, 0.0f, flash * 0.22f));
+        d2dContext_->FillRectangle(D2D1::RectF(0, 0, w, h), textBrush_.Get());
+    }
+
     titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 
 void SweetsApp::DrawLoadoutSelection()
