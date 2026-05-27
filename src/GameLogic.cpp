@@ -842,6 +842,14 @@ void SweetsApp::Burst(V2 p, Color c, int count)
     }
 }
 
+void SweetsApp::PlayCombatEffect(const std::wstring& id, V2 position, float y, float rotationY, float scale, Color fallbackColor, int fallbackCount)
+{
+    if (!effekseer_.Play(id, position, y, rotationY, scale))
+    {
+        Burst(position, fallbackColor, fallbackCount);
+    }
+}
+
 const DifficultyDef& SweetsApp::CurrentDifficulty() const
 {
     if (hiddenBossPractice_) return DifficultyDefs[static_cast<int>(Difficulty::Lunatic)];

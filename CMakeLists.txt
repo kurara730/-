@@ -55,6 +55,16 @@ add_executable(SweetsActionDX11 WIN32
     assets/effects/ult_chocolate.efkefc
     assets/effects/ult_cheese.efkefc
     assets/effects/ult_roll.efkefc
+    assets/effects/Texture/SwordLine01.png
+    assets/effects/Texture/Particle01.png
+    assets/effects/Texture/Particle02.png
+    assets/effects/Texture/Cloud01.png
+    assets/effects/Texture/Flame01.png
+    assets/effects/Textures/Aura01_T.png
+    assets/effects/Textures/Aura02_T.png
+    assets/effects/Textures/Aura04_T.png
+    assets/effects/Textures/Aura06_T.png
+    assets/effects/Textures/Normal01.png
     assets/video/README_video.md
 )
 

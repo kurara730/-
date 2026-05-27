@@ -146,6 +146,16 @@
     <None Include="assets\effects\ult_chocolate.efkefc" />
     <None Include="assets\effects\ult_roll.efkefc" />
     <None Include="assets\effects\ult_shortcake.efkefc" />
+    <None Include="assets\effects\Texture\Cloud01.png" />
+    <None Include="assets\effects\Texture\Flame01.png" />
+    <None Include="assets\effects\Texture\Particle01.png" />
+    <None Include="assets\effects\Texture\Particle02.png" />
+    <None Include="assets\effects\Texture\SwordLine01.png" />
+    <None Include="assets\effects\Textures\Aura01_T.png" />
+    <None Include="assets\effects\Textures\Aura02_T.png" />
+    <None Include="assets\effects\Textures\Aura04_T.png" />
+    <None Include="assets\effects\Textures\Aura06_T.png" />
+    <None Include="assets\effects\Textures\Normal01.png" />
     <None Include="assets\shaders\basic_lit.hlsl" />
     <None Include="assets\shaders\effect_additive.hlsl" />
     <None Include="assets\shaders\postprocess.hlsl" />

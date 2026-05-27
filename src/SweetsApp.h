@@ -97,6 +97,7 @@ private:
     void DamageBoss(float dmg);
     void DamageBoss(float dmg, bool reflected, int ownerIndex);
     void Burst(V2 p, Color c, int count);
+    void PlayCombatEffect(const std::wstring& id, V2 position, float y, float rotationY, float scale, Color fallbackColor, int fallbackCount);
     void SpawnEnemyShot(V2 pos, float angle, float speed, float damage, float radius, Color color, float ttl = 5.0f, float angularVel = 0.0f, float accel = 0.0f);
     int ScaledBulletCount(int base) const;
     const DifficultyDef& CurrentDifficulty() const;

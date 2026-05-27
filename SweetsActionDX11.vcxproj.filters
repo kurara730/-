@@ -73,6 +73,16 @@
     <None Include="assets\effects\ult_chocolate.efkefc"><Filter>Assets</Filter></None>
     <None Include="assets\effects\ult_roll.efkefc"><Filter>Assets</Filter></None>
     <None Include="assets\effects\ult_shortcake.efkefc"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\Texture\Cloud01.png"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\Texture\Flame01.png"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\Texture\Particle01.png"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\Texture\Particle02.png"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\Texture\SwordLine01.png"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\Textures\Aura01_T.png"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\Textures\Aura02_T.png"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\Textures\Aura04_T.png"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\Textures\Aura06_T.png"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\Textures\Normal01.png"><Filter>Assets</Filter></None>
     <None Include="assets\README_assets.md"><Filter>Assets</Filter></None>
     <None Include="assets\video\README_video.md"><Filter>Assets</Filter></None>
     <None Include="docs\game_spec.md"><Filter>Docs</Filter></None>

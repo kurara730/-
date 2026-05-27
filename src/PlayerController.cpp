@@ -162,7 +162,7 @@ void SweetsApp::DoMeleeFor(Player& p, int ownerIndex, float aim)
     s.damage = 44.0f * dmgScale;
     s.color = Choco;
     slashes_.push_back(s);
-    effekseer_.Play(L"sword_slash", p.pos + FromAngle(aim) * 0.65f, 0.52f, aim, 0.75f);
+    PlayCombatEffect(L"sword_slash", p.pos + FromAngle(aim) * 0.65f, 0.52f, aim, 1.15f, Choco, 22);
 
     auto inCone = [&](V2 target, float r)
     {
@@ -286,7 +286,7 @@ void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
             }
             if (boss_.active) DamageBoss(540.0f + wave_ * 24.0f, true, ownerIndex);
             Burst((p.pos + other.pos) * 0.5f, Gold, 140);
-            effekseer_.Play(L"ult_chocolate", (p.pos + other.pos) * 0.5f, 0.55f, p.face, 1.75f);
+            PlayCombatEffect(L"ult_chocolate", (p.pos + other.pos) * 0.5f, 0.55f, p.face, 1.95f, Gold, 80);
             message_ = L"合体必殺";
             messageT_ = 2.0f;
             return;
@@ -303,7 +303,7 @@ void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
         }
         if (boss_.active && Len(boss_.pos - target) < 3.6f) DamageBoss(460.0f + wave_ * 22.0f, false, ownerIndex);
         Burst(target, Berry, 90);
-        effekseer_.Play(L"ult_shortcake", target, 0.50f, 0.0f, 1.35f);
+        PlayCombatEffect(L"ult_shortcake", target, 0.50f, 0.0f, 1.75f, Berry, 70);
         message_ = L"巨大メテオ";
     }
     else if (weapon == Weapon::Chocolate)
@@ -311,7 +311,7 @@ void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
         for (auto& e : enemies_) if (!e.dead) DamageEnemy(e, 160.0f + wave_ * 12.0f, p.pos, 2.0f, false, ownerIndex);
         if (boss_.active) DamageBoss(380.0f + wave_ * 18.0f, false, ownerIndex);
         Burst(p.pos, Choco, 80);
-        effekseer_.Play(L"ult_chocolate", p.pos, 0.55f, p.face, 1.55f);
+        PlayCombatEffect(L"ult_chocolate", p.pos, 0.55f, p.face, 1.85f, Choco, 70);
         message_ = L"時計斬り";
     }
     else if (weapon == Weapon::Cheese)
@@ -335,7 +335,7 @@ void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
             obstacles_.push_back(o);
         }
         Burst(p.pos, Gold, 70);
-        effekseer_.Play(L"ult_cheese", p.pos, 0.50f, 0.0f, 1.45f);
+        PlayCombatEffect(L"ult_cheese", p.pos, 0.50f, 0.0f, 1.85f, Gold, 70);
         message_ = L"無敵要塞";
     }
     else
@@ -356,7 +356,7 @@ void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
             shots_.push_back(s);
         }
         Burst(p.pos, Cream, 70);
-        effekseer_.Play(L"ult_roll", p.pos, 0.48f, p.face, 1.45f);
+        PlayCombatEffect(L"ult_roll", p.pos, 0.48f, p.face, 1.80f, Cream, 70);
         message_ = L"全画面叩きつけ";
     }
     messageT_ = 2.0f;
