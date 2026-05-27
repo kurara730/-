@@ -754,6 +754,18 @@ void SweetsApp::DrawAdditiveScene()
     {
         DrawSector(s);
     }
+    for (const auto& pulse : effectPulses_)
+    {
+        const float life = std::max(0.01f, pulse.life);
+        const float progress = ClampFloat(1.0f - pulse.ttl / life, 0.0f, 1.0f);
+        const float fade = ClampFloat(pulse.ttl / life, 0.0f, 1.0f);
+        const float radius = pulse.startRadius + (pulse.endRadius - pulse.startRadius) * progress;
+        const float lift = 0.02f * std::sin(progress * 3.14159265f);
+        DrawMesh(ringMesh_, XMMatrixScaling(radius, 1.0f, radius) *
+            XMMatrixTranslation(pulse.pos.x, pulse.y + lift, pulse.pos.z), WithAlpha(pulse.color, 0.88f * fade));
+        DrawMesh(ringMesh_, XMMatrixScaling(radius * 0.62f, 1.0f, radius * 0.62f) *
+            XMMatrixTranslation(pulse.pos.x, pulse.y + 0.03f + lift, pulse.pos.z), WithAlpha(Cream, 0.34f * fade));
+    }
     for (const auto& p : players_)
     {
         if (!p.active) continue;
@@ -949,6 +961,7 @@ void SweetsApp::DrawHud()
         d2dContext_->DrawTextW(hint, static_cast<UINT32>(wcslen(hint)), smallFormat_.Get(),
             D2D1::RectF(40.0f, menuTop + itemH * 3.0f + gap * 3.0f + 8.0f, dividerX - 18.0f, static_cast<float>(height_) - 24.0f), textBrush_.Get());
 
+        DrawScreenFlashOverlay();
         DrawDebugHud();
 
         const HRESULT hr = d2dContext_->EndDraw();
@@ -1072,6 +1085,7 @@ void SweetsApp::DrawHud()
         hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     }
 
+    DrawScreenFlashOverlay();
     DrawDebugHud();
 
     const HRESULT hr = d2dContext_->EndDraw();
@@ -1080,6 +1094,23 @@ void SweetsApp::DrawHud()
         ReleaseRenderTargets();
         CreateRenderTargets();
     }
+}
+
+void SweetsApp::DrawScreenFlashOverlay()
+{
+    if (screenFlashT_ <= 0.0f || screenFlashLife_ <= 0.0f)
+    {
+        return;
+    }
+
+    const float t = ClampFloat(screenFlashT_ / std::max(0.01f, screenFlashLife_), 0.0f, 1.0f);
+    const float alpha = 0.34f * t * t;
+    const D2D1_RECT_F full = D2D1::RectF(0.0f, 0.0f, static_cast<float>(width_), static_cast<float>(height_));
+
+    textBrush_->SetColor(D2D1::ColorF(screenFlashColor_.r, screenFlashColor_.g, screenFlashColor_.b, alpha));
+    d2dContext_->FillRectangle(full, textBrush_.Get());
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha * 0.28f));
+    d2dContext_->FillRectangle(full, textBrush_.Get());
 }
 
 void SweetsApp::DrawCredits()

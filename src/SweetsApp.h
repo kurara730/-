@@ -90,6 +90,7 @@ private:
     void UpdateShots(float dt);
     void UpdatePickups(float dt);
     void UpdateParticles(float dt);
+    void UpdateEffectVisuals(float dt);
     void ResolvePlayerHit(float dmg, float angle);
     void ResolvePlayerHit(Player& p, float dmg, float angle);
     void DamageEnemy(Enemy& e, float dmg, V2 from, float knock);
@@ -117,6 +118,7 @@ private:
     void CompositeScene();
     void DrawHud();
     void DrawDebugHud();
+    void DrawScreenFlashOverlay();
     void DrawCharacterSelect();
     void DrawPauseMenu();
     void DrawVideoScreen();
@@ -243,6 +245,7 @@ private:
     std::vector<Pickup> pickups_;
     std::vector<Obstacle> obstacles_;
     std::vector<Particle> particles_;
+    std::vector<EffectPulse> effectPulses_;
     AssetCatalog assetCatalog_;
     EffekseerSystem effekseer_;
     AudioSystem audio_;
@@ -289,6 +292,9 @@ private:
     int hiddenPatternStep_ = 0;
     int hiddenBossPhase_ = -1;
     float messageT_ = 0.0f;
+    float screenFlashT_ = 0.0f;
+    float screenFlashLife_ = 0.01f;
+    Color screenFlashColor_ = Cream;
     float masterVolume_ = 1.0f;
     float bgmVolume_ = 1.0f;
     float seVolume_ = 1.0f;

@@ -53,9 +53,9 @@ void SweetsApp::LoadAssets()
     assetCatalog_.ReplaceTexture(VisualRole::EnemyRunner, AssetPath(L"assets/textures/enemy.png"));
     assetCatalog_.ReplaceTexture(VisualRole::Pickup, AssetPath(L"assets/textures/pickup.png"));
 
-    effekseer_.LoadEffect(L"sword_slash", L"assets/effects/sword_slash.efkefc", 1.0f);
-    effekseer_.LoadEffect(L"ult_shortcake", L"assets/effects/ult_shortcake.efkefc", 1.35f);
-    effekseer_.LoadEffect(L"ult_chocolate", L"assets/effects/ult_chocolate.efkefc", 1.35f);
-    effekseer_.LoadEffect(L"ult_cheese", L"assets/effects/ult_cheese.efkefc", 1.35f);
-    effekseer_.LoadEffect(L"ult_roll", L"assets/effects/ult_roll.efkefc", 1.35f);
+    effekseer_.LoadEffect(L"sword_slash", L"assets/effects/sword_slash.efkefc", 3.0f);
+    effekseer_.LoadEffect(L"ult_shortcake", L"assets/effects/ult_shortcake.efkefc", 4.0f);
+    effekseer_.LoadEffect(L"ult_chocolate", L"assets/effects/ult_chocolate.efkefc", 4.0f);
+    effekseer_.LoadEffect(L"ult_cheese", L"assets/effects/ult_cheese.efkefc", 4.0f);
+    effekseer_.LoadEffect(L"ult_roll", L"assets/effects/ult_roll.efkefc", 4.0f);
 }

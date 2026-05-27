@@ -417,3 +417,14 @@ struct Particle
     float ttl = 0.4f;
     Color color = Cream;
 };
+
+struct EffectPulse
+{
+    V2 pos{};
+    float startRadius = 0.6f;
+    float endRadius = 2.0f;
+    float ttl = 0.32f;
+    float life = 0.32f;
+    float y = 0.22f;
+    Color color = Cream;
+};
