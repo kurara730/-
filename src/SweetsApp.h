@@ -132,6 +132,7 @@ private:
     void DrawMesh(const Mesh& mesh, const XMMATRIX& world, Color tint);
     void DrawSphere(V2 p, float y, float r, Color c);
     void DrawCylinder(V2 p, float radius, float height, Color c);
+    void DrawPickupShape(const Pickup& p);
     void DrawSector(const Slash& s);
     void DrawUltimatePreview(const Player& p, int ownerIndex);
     V2 ScreenToWorld(float sx, float sy) const;

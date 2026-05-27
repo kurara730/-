@@ -609,8 +609,7 @@ void SweetsApp::DrawScene()
     }
     for (const auto& p : pickups_)
     {
-        const float bob = 0.22f + 0.12f * std::sin(gameTime_ * 5.0f + p.pos.x);
-        DrawSphere(p.pos, bob, p.radius, p.color);
+        DrawPickupShape(p);
     }
     for (const auto& s : shots_)
     {
@@ -1836,6 +1835,138 @@ void SweetsApp::DrawSphere(V2 p, float y, float r, Color c)
 void SweetsApp::DrawCylinder(V2 p, float radius, float height, Color c)
 {
     DrawMesh(cylinderMesh_, XMMatrixScaling(radius, height, radius) * XMMatrixTranslation(p.x, 0.0f, p.z), c);
+}
+
+void SweetsApp::DrawPickupShape(const Pickup& p)
+{
+    const float bob = 0.34f + 0.10f * std::sin(gameTime_ * 5.0f + p.pos.x * 1.7f);
+    const float spin = gameTime_ * 1.65f + p.pos.x * 0.41f + p.pos.z * 0.19f;
+    const float r = p.radius;
+    const Color body = p.color;
+    const Color glow = WithAlpha(body, 0.50f);
+    const Color pale = WithAlpha(Cream, 0.82f);
+
+    DrawMesh(ringMesh_,
+        XMMatrixScaling(r * 1.95f, 1.0f, r * 1.95f) *
+        XMMatrixTranslation(p.pos.x, 0.075f, p.pos.z),
+        glow);
+    DrawMesh(ringMesh_,
+        XMMatrixScaling(r * 1.22f, 1.0f, r * 1.22f) *
+        XMMatrixRotationY(-spin) *
+        XMMatrixTranslation(p.pos.x, 0.105f, p.pos.z),
+        WithAlpha(Cream, 0.32f));
+
+    auto cube = [&](float sx, float sy, float sz, V2 offset, float yOffset, float yaw, Color c)
+    {
+        DrawMesh(cubeMesh_,
+            XMMatrixScaling(sx, sy, sz) *
+            XMMatrixRotationY(yaw) *
+            XMMatrixTranslation(p.pos.x + offset.x, bob + yOffset, p.pos.z + offset.z),
+            c);
+    };
+
+    auto sphere = [&](V2 offset, float yOffset, float radius, Color c)
+    {
+        DrawSphere(p.pos + offset, bob + yOffset, radius, c);
+    };
+
+    auto wedge = [&](float scale, float yaw, Color c, float alpha = 0.68f)
+    {
+        DrawMesh(wedgeMesh_,
+            XMMatrixScaling(scale, 1.0f, scale) *
+            XMMatrixRotationY(yaw) *
+            XMMatrixTranslation(p.pos.x, bob + 0.01f, p.pos.z),
+            WithAlpha(c, alpha));
+    };
+
+    switch (p.pickupType)
+    {
+    case PickupType::Attack:
+        for (int i = 0; i < 5; ++i)
+        {
+            wedge(r * 1.16f, spin + TwoPi * i / 5.0f, Gold, 0.72f);
+        }
+        sphere({ 0.0f, 0.0f }, 0.02f, r * 0.46f, Berry);
+        break;
+    case PickupType::Slow:
+        for (int i = 0; i < 3; ++i)
+        {
+            cube(r * 1.85f, r * 0.18f, r * 0.16f, { 0.0f, 0.0f }, 0.0f, spin + TwoPi * i / 3.0f, Sky);
+        }
+        sphere({ 0.0f, 0.0f }, 0.03f, r * 0.26f, pale);
+        break;
+    case PickupType::Invincible:
+        cube(r * 0.82f, r * 0.22f, r * 1.16f, { 0.0f, 0.0f }, 0.0f, spin + Pi * 0.25f, Gold);
+        cube(r * 0.56f, r * 0.20f, r * 0.76f, FromAngle(spin + Pi) * (r * 0.16f), -0.01f, spin + Pi * 0.25f, pale);
+        DrawMesh(ringMesh_,
+            XMMatrixScaling(r * 1.50f, 1.0f, r * 1.50f) *
+            XMMatrixRotationY(spin) *
+            XMMatrixTranslation(p.pos.x, bob + 0.03f, p.pos.z),
+            WithAlpha(Gold, 0.62f));
+        break;
+    case PickupType::Magnet:
+    {
+        const V2 side = FromAngle(spin + Pi * 0.5f);
+        const V2 forward = FromAngle(spin);
+        cube(r * 0.22f, r * 0.22f, r * 1.02f, side * (r * 0.50f), 0.0f, spin, Red);
+        cube(r * 0.22f, r * 0.22f, r * 1.02f, side * (-r * 0.50f), 0.0f, spin, Sky);
+        cube(r * 0.98f, r * 0.20f, r * 0.22f, FromAngle(spin + Pi) * (r * 0.46f), -0.02f, spin, pale);
+        sphere(side * (r * 0.50f) + forward * (r * 0.58f), 0.04f, r * 0.18f, Red);
+        sphere(side * (-r * 0.50f) + forward * (r * 0.58f), 0.04f, r * 0.18f, Sky);
+        break;
+    }
+    case PickupType::BombDamage:
+        cube(r * 0.92f, r * 0.22f, r * 0.92f, { 0.0f, 0.0f }, 0.0f, spin + Pi * 0.25f, Red);
+        for (int i = 0; i < 6; ++i)
+        {
+            wedge(r * 0.64f, spin + TwoPi * i / 6.0f, Gold, 0.58f);
+        }
+        sphere({ 0.0f, 0.0f }, 0.05f, r * 0.24f, Cream);
+        break;
+    case PickupType::Heal:
+        cube(r * 1.25f, r * 0.28f, r * 0.22f, { 0.0f, 0.0f }, 0.0f, spin, Mint);
+        cube(r * 1.25f, r * 0.28f, r * 0.22f, { 0.0f, 0.0f }, 0.0f, spin + Pi * 0.5f, Mint);
+        sphere({ 0.0f, 0.0f }, 0.04f, r * 0.20f, pale);
+        break;
+    case PickupType::UltFull:
+        cube(r * 0.92f, r * 0.24f, r * 0.92f, { 0.0f, 0.0f }, -0.02f, spin + Pi * 0.25f, Grape);
+        for (int i = -1; i <= 1; ++i)
+        {
+            const float a = spin + Pi * 0.5f + i * 0.42f;
+            sphere(FromAngle(a) * (r * 0.50f), 0.22f + 0.04f * (1 - std::abs(i)), r * 0.20f, Gold);
+        }
+        break;
+    case PickupType::Spread:
+        for (int i = -1; i <= 1; ++i)
+        {
+            wedge(r * 0.88f, spin + i * 0.45f, Sky, 0.56f);
+            sphere(FromAngle(spin + i * 0.45f) * (r * 0.88f), 0.06f, r * 0.16f, Gold);
+        }
+        sphere({ 0.0f, 0.0f }, 0.02f, r * 0.18f, pale);
+        break;
+    case PickupType::Speed:
+        wedge(r * 1.15f, spin, Mint, 0.76f);
+        cube(r * 0.92f, r * 0.22f, r * 0.18f, FromAngle(spin + Pi) * (r * 0.42f), -0.02f, spin, Mint);
+        cube(r * 0.52f, r * 0.14f, r * 0.14f, FromAngle(spin + Pi) * (r * 0.92f), -0.03f, spin, pale);
+        break;
+    case PickupType::ScoreDouble:
+        DrawMesh(ringMesh_,
+            XMMatrixScaling(r * 0.96f, 1.0f, r * 0.96f) *
+            XMMatrixRotationY(spin) *
+            XMMatrixTranslation(p.pos.x - r * 0.32f, bob + 0.02f, p.pos.z),
+            Gold);
+        DrawMesh(ringMesh_,
+            XMMatrixScaling(r * 0.96f, 1.0f, r * 0.96f) *
+            XMMatrixRotationY(spin) *
+            XMMatrixTranslation(p.pos.x + r * 0.32f, bob + 0.08f, p.pos.z),
+            pale);
+        sphere({ -r * 0.32f, 0.0f }, 0.02f, r * 0.18f, Gold);
+        sphere({ r * 0.32f, 0.0f }, 0.08f, r * 0.18f, pale);
+        break;
+    default:
+        sphere({ 0.0f, 0.0f }, 0.0f, r * 0.50f, body);
+        break;
+    }
 }
 
 void SweetsApp::DrawSector(const Slash& s)
