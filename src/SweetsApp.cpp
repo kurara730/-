@@ -79,7 +79,29 @@ int SweetsApp::Run()
         std::chrono::duration<float> diff = now - lastTick_;
         lastTick_ = now;
         const float dt = std::min(diff.count(), 1.0f / 20.0f);
+#if defined(_DEBUG)
+        UpdateDebugTiming(dt);
+        if (debug_.frameStep && screen_ == Screen::Paused)
+        {
+            if (debug_.stepOnce)
+            {
+                screen_ = Screen::Playing;
+                Update(dt);
+                screen_ = Screen::Paused;
+                debug_.stepOnce = false;
+            }
+            else
+            {
+                UpdateAudioForScreen();
+            }
+        }
+        else
+        {
+            Update(dt);
+        }
+#else
         Update(dt);
+#endif
         Render();
     }
     return static_cast<int>(msg.wParam);
@@ -115,6 +137,10 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         mouseY_ = static_cast<float>(GET_Y_LPARAM(lp));
         return 0;
     case WM_LBUTTONDOWN:
+        if (screen_ == Screen::Title && SelectTitleMenuAt(static_cast<float>(GET_X_LPARAM(lp)), static_cast<float>(GET_Y_LPARAM(lp))))
+        {
+            return 0;
+        }
         if (screen_ == Screen::Title && SelectLoadoutAt(static_cast<float>(GET_X_LPARAM(lp)), static_cast<float>(GET_Y_LPARAM(lp))))
         {
             return 0;
@@ -150,6 +176,11 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 void SweetsApp::OnKeyDown(WPARAM key)
 {
+    if (HandleDebugKey(key))
+    {
+        return;
+    }
+
     if (key >= '1' && key <= '4')
     {
         loadoutIndex_ = static_cast<int>(key - '1');
@@ -162,6 +193,16 @@ void SweetsApp::OnKeyDown(WPARAM key)
         if (key == 'C')
         {
             screen_ = Screen::Credits;
+            return;
+        }
+        if (key == VK_UP || key == 'W')
+        {
+            titleMenuIndex_ = (titleMenuIndex_ + 2) % 3;
+            return;
+        }
+        if (key == VK_DOWN || key == 'S')
+        {
+            titleMenuIndex_ = (titleMenuIndex_ + 1) % 3;
             return;
         }
         if (key == VK_LEFT || key == 'A')
@@ -180,7 +221,7 @@ void SweetsApp::OnKeyDown(WPARAM key)
         }
         if (key == VK_RETURN || key == VK_SPACE)
         {
-            screen_ = Screen::DifficultySelect;
+            StartSelectedTitleItem();
         }
         return;
     }
@@ -222,9 +263,25 @@ void SweetsApp::OnKeyDown(WPARAM key)
 
     if (screen_ == Screen::GameOver)
     {
+        if (key == VK_LEFT || key == VK_RIGHT || key == VK_UP || key == VK_DOWN || key == 'A' || key == 'D' || key == 'W' || key == 'S')
+        {
+            gameOverChoice_ = gameOverChoice_ == GameOverChoice::Retry ? GameOverChoice::Title : GameOverChoice::Retry;
+            return;
+        }
         if (key == VK_RETURN || key == 'R')
         {
-            StartGameWithDifficulty(hiddenBossPractice_);
+            if (gameOverChoice_ == GameOverChoice::Retry || key == 'R')
+            {
+                RestartCurrentRun();
+            }
+            else
+            {
+                screen_ = Screen::Title;
+            }
+        }
+        if (key == VK_ESCAPE || key == VK_BACK)
+        {
+            screen_ = Screen::Title;
         }
         return;
     }
@@ -246,8 +303,122 @@ void SweetsApp::OnKeyDown(WPARAM key)
     {
         if (key == 'Q') UseUltimate();
         if (key == 'X' || key == VK_CONTROL) UseBomb();
-        if (key == 'R') StartGameWithDifficulty(hiddenBossPractice_);
+        if (key == 'R') RestartCurrentRun();
     }
+}
+
+bool SweetsApp::HandleDebugKey(WPARAM key)
+{
+#if defined(_DEBUG)
+    switch (key)
+    {
+    case VK_F1:
+        debug_.hud = !debug_.hud;
+        return true;
+    case VK_F2:
+        debug_.overlays = !debug_.overlays;
+        return true;
+    case VK_F3:
+        debug_.taa = !debug_.taa;
+        debug_.taaFrame = 0;
+        return true;
+    case VK_F4:
+        debug_.additiveView = !debug_.additiveView;
+        return true;
+    case VK_F5:
+        debug_.invincible = !debug_.invincible;
+        message_ = debug_.invincible ? L"DEBUG: 無敵 ON" : L"DEBUG: 無敵 OFF";
+        messageT_ = 1.4f;
+        return true;
+    case VK_F6:
+        for (auto& p : players_)
+        {
+            if (!p.active) continue;
+            p.hp = p.maxHp;
+            p.bombs = 9;
+            p.ult = 100.0f;
+            p.downed = false;
+            p.alive = true;
+        }
+        message_ = L"DEBUG: HP/ボム/必殺 回復";
+        messageT_ = 1.4f;
+        return true;
+    case VK_F7:
+        if (screen_ == Screen::Playing)
+        {
+            boss_.active = false;
+            enemies_.clear();
+            remainingToSpawn_ = 0;
+            ClearWave();
+            message_ = L"DEBUG: Wave Skip";
+            messageT_ = 1.4f;
+        }
+        else if (screen_ == Screen::HiddenBoss)
+        {
+            hiddenBossT_ = HiddenBossDurationSeconds;
+        }
+        return true;
+    case VK_F8:
+        if (screen_ == Screen::Playing)
+        {
+            enemies_.clear();
+            shots_.clear();
+            bossWave_ = true;
+            remainingToSpawn_ = 0;
+            boss_ = {};
+            SpawnBoss();
+            message_ = L"DEBUG: Boss Spawn";
+            messageT_ = 1.4f;
+        }
+        return true;
+    case VK_F9:
+        SaveProgress();
+        message_ = L"DEBUG: 隠しボス解禁";
+        messageT_ = 1.4f;
+        return true;
+    case VK_F10:
+        for (auto& s : shots_)
+        {
+            if (s.enemy) s.dead = true;
+        }
+        message_ = L"DEBUG: 敵弾消去";
+        messageT_ = 1.4f;
+        return true;
+    case VK_F11:
+        CreateShadersAndStates();
+        message_ = L"DEBUG: Shader Reload";
+        messageT_ = 1.4f;
+        return true;
+    case VK_F12:
+        debug_.frameStep = true;
+        debug_.stepOnce = true;
+        return true;
+    default:
+        break;
+    }
+#else
+    (void)key;
+#endif
+    return false;
+}
+
+void SweetsApp::RestartCurrentRun()
+{
+    pendingGameMode_ = gameMode_ == GameMode::HiddenBossPractice ? GameMode::Story : gameMode_;
+    StartGameWithDifficulty(gameMode_ == GameMode::HiddenBossPractice);
+}
+
+void SweetsApp::StartSelectedTitleItem()
+{
+    const TitleMenuItem item = static_cast<TitleMenuItem>(titleMenuIndex_);
+    if (item == TitleMenuItem::Credits)
+    {
+        screen_ = Screen::Credits;
+        return;
+    }
+
+    pendingGameMode_ = item == TitleMenuItem::Endless ? GameMode::Endless : GameMode::Story;
+    screen_ = Screen::DifficultySelect;
 }
 
 bool SweetsApp::SelectLoadoutAt(float sx, float sy)
@@ -266,6 +437,27 @@ bool SweetsApp::SelectLoadoutAt(float sx, float sy)
             loadoutIndex_ = i;
             player_.weapon = Loadouts[loadoutIndex_].weapon;
             player_.character = Loadouts[loadoutIndex_].character;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool SweetsApp::SelectTitleMenuAt(float sx, float sy)
+{
+    const float itemW = 190.0f;
+    const float itemH = 42.0f;
+    const float gap = 14.0f;
+    const float totalW = itemW * 3.0f + gap * 2.0f;
+    const float startX = (static_cast<float>(width_) - totalW) * 0.5f;
+    const float top = static_cast<float>(height_) * 0.39f;
+    for (int i = 0; i < 3; ++i)
+    {
+        const float x = startX + i * (itemW + gap);
+        if (sx >= x && sx <= x + itemW && sy >= top && sy <= top + itemH)
+        {
+            titleMenuIndex_ = i;
+            StartSelectedTitleItem();
             return true;
         }
     }

@@ -194,6 +194,9 @@ void SweetsApp::ResolvePlayerHit(float dmg, float angle)
 
 void SweetsApp::ResolvePlayerHit(Player& p, float dmg, float angle)
 {
+#if defined(_DEBUG)
+    if (debug_.invincible) return;
+#endif
     if (p.inv > 0.0f || p.downed) return;
     if (p.shieldT > 0.0f) dmg *= 0.35f;
     p.hp -= dmg;

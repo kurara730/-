@@ -6,6 +6,7 @@
 enum class MusicTrack
 {
     None,
+    Title,
     Gameplay,
     GameOver,
     HiddenBoss

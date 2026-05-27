@@ -34,8 +34,10 @@ add_executable(SweetsActionDX11 WIN32
     src/main.cpp
     assets/shaders/basic_lit.hlsl
     assets/shaders/effect_additive.hlsl
+    assets/shaders/postprocess.hlsl
     assets/shaders/sprite_unlit.hlsl
     assets/audio/233_BPM163.mp3
+    assets/audio/333_BPM177.mp3
     assets/audio/ruins.mp3
     "assets/audio/Lonery boy.wav"
 )
@@ -60,6 +62,7 @@ endif()
 
 set_source_files_properties(assets/shaders/basic_lit.hlsl PROPERTIES VS_TOOL_OVERRIDE "None")
 set_source_files_properties(assets/shaders/effect_additive.hlsl PROPERTIES VS_TOOL_OVERRIDE "None")
+set_source_files_properties(assets/shaders/postprocess.hlsl PROPERTIES VS_TOOL_OVERRIDE "None")
 set_source_files_properties(assets/shaders/sprite_unlit.hlsl PROPERTIES VS_TOOL_OVERRIDE "None")
 
 add_custom_command(TARGET SweetsActionDX11 POST_BUILD

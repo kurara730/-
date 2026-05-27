@@ -4,6 +4,19 @@
 
 namespace
 {
+float Halton(int index, int base)
+{
+    float f = 1.0f;
+    float r = 0.0f;
+    while (index > 0)
+    {
+        f /= static_cast<float>(base);
+        r += f * static_cast<float>(index % base);
+        index /= base;
+    }
+    return r;
+}
+
 std::wstring FindAssetFile(const std::wstring& relativePath)
 {
     namespace fs = std::filesystem;
@@ -139,7 +152,13 @@ void SweetsApp::CreateRenderTargets()
 {
     ComPtr<ID3D11Texture2D> backBuffer;
     ThrowIfFailed(swapChain_->GetBuffer(0, IID_PPV_ARGS(&backBuffer)), "Get swapchain buffer");
-    ThrowIfFailed(device_->CreateRenderTargetView(backBuffer.Get(), nullptr, &rtv_), "Create RTV");
+    backBufferTex_ = backBuffer;
+    ThrowIfFailed(device_->CreateRenderTargetView(backBufferTex_.Get(), nullptr, &rtv_), "Create RTV");
+
+    CreateOffscreenTarget(sceneColorTex_, sceneColorRtv_, sceneColorSrv_, DXGI_FORMAT_B8G8R8A8_UNORM);
+    CreateOffscreenTarget(additiveTex_, additiveRtv_, additiveSrv_, DXGI_FORMAT_B8G8R8A8_UNORM);
+    CreateOffscreenTarget(historyTex_, historyRtv_, historySrv_, DXGI_FORMAT_B8G8R8A8_UNORM);
+    CreateOffscreenTarget(resolvedTex_, resolvedRtv_, resolvedSrv_, DXGI_FORMAT_B8G8R8A8_UNORM);
 
     D3D11_TEXTURE2D_DESC depthDesc{};
     depthDesc.Width = width_;
@@ -169,6 +188,22 @@ void SweetsApp::CreateRenderTargets()
     ThrowIfFailed(d2dContext_->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::White), &textBrush_), "Create text brush");
 }
 
+void SweetsApp::CreateOffscreenTarget(ComPtr<ID3D11Texture2D>& texture, ComPtr<ID3D11RenderTargetView>& rtv, ComPtr<ID3D11ShaderResourceView>& srv, DXGI_FORMAT format)
+{
+    D3D11_TEXTURE2D_DESC desc{};
+    desc.Width = width_;
+    desc.Height = height_;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = format;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+    ThrowIfFailed(device_->CreateTexture2D(&desc, nullptr, &texture), "Create offscreen texture");
+    ThrowIfFailed(device_->CreateRenderTargetView(texture.Get(), nullptr, &rtv), "Create offscreen RTV");
+    ThrowIfFailed(device_->CreateShaderResourceView(texture.Get(), nullptr, &srv), "Create offscreen SRV");
+}
+
 void SweetsApp::ReleaseRenderTargets()
 {
     if (d2dContext_) d2dContext_->SetTarget(nullptr);
@@ -176,7 +211,20 @@ void SweetsApp::ReleaseRenderTargets()
     d2dTarget_.Reset();
     dsv_.Reset();
     depthTex_.Reset();
+    resolvedSrv_.Reset();
+    resolvedRtv_.Reset();
+    resolvedTex_.Reset();
+    historySrv_.Reset();
+    historyRtv_.Reset();
+    historyTex_.Reset();
+    additiveSrv_.Reset();
+    additiveRtv_.Reset();
+    additiveTex_.Reset();
+    sceneColorSrv_.Reset();
+    sceneColorRtv_.Reset();
+    sceneColorTex_.Reset();
     rtv_.Reset();
+    backBufferTex_.Reset();
 }
 
 void SweetsApp::Resize(UINT w, UINT h)
@@ -193,6 +241,8 @@ void SweetsApp::CreateShadersAndStates()
 {
     ComPtr<ID3DBlob> vsBlob;
     ComPtr<ID3DBlob> psBlob;
+    ComPtr<ID3DBlob> postVsBlob;
+    ComPtr<ID3DBlob> postPsBlob;
     ComPtr<ID3DBlob> errors;
     UINT flags = D3DCOMPILE_ENABLE_STRICTNESS;
 #if defined(_DEBUG)
@@ -214,6 +264,22 @@ void SweetsApp::CreateShadersAndStates()
     ThrowIfFailed(device_->CreateVertexShader(vsBlob->GetBufferPointer(), vsBlob->GetBufferSize(), nullptr, &vs_), "Create VS");
     ThrowIfFailed(device_->CreatePixelShader(psBlob->GetBufferPointer(), psBlob->GetBufferSize(), nullptr, &ps_), "Create PS");
 
+    const std::wstring postPath = FindAssetFile(L"assets/shaders/postprocess.hlsl");
+    errors.Reset();
+    hr = D3DCompileFromFile(postPath.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "VSMain", "vs_5_0", flags, 0, &postVsBlob, &errors);
+    if (FAILED(hr))
+    {
+        throw std::runtime_error(errors ? static_cast<const char*>(errors->GetBufferPointer()) : "Post VS compile failed");
+    }
+    errors.Reset();
+    hr = D3DCompileFromFile(postPath.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "PSMain", "ps_5_0", flags, 0, &postPsBlob, &errors);
+    if (FAILED(hr))
+    {
+        throw std::runtime_error(errors ? static_cast<const char*>(errors->GetBufferPointer()) : "Post PS compile failed");
+    }
+    ThrowIfFailed(device_->CreateVertexShader(postVsBlob->GetBufferPointer(), postVsBlob->GetBufferSize(), nullptr, &postVs_), "Create post VS");
+    ThrowIfFailed(device_->CreatePixelShader(postPsBlob->GetBufferPointer(), postPsBlob->GetBufferSize(), nullptr, &postPs_), "Create post PS");
+
     D3D11_INPUT_ELEMENT_DESC layout[] = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
@@ -228,6 +294,8 @@ void SweetsApp::CreateShadersAndStates()
     ThrowIfFailed(device_->CreateBuffer(&cb, nullptr, &frameCB_), "Create frame CB");
     cb.ByteWidth = sizeof(ObjectCB);
     ThrowIfFailed(device_->CreateBuffer(&cb, nullptr, &objectCB_), "Create object CB");
+    cb.ByteWidth = sizeof(PostCB);
+    ThrowIfFailed(device_->CreateBuffer(&cb, nullptr, &postCB_), "Create post CB");
 
     D3D11_RASTERIZER_DESC rd{};
     rd.FillMode = D3D11_FILL_SOLID;
@@ -251,6 +319,25 @@ void SweetsApp::CreateShadersAndStates()
     bd.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
     bd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
     ThrowIfFailed(device_->CreateBlendState(&bd, &alphaBlend_), "Create blend state");
+
+    D3D11_BLEND_DESC abd{};
+    abd.RenderTarget[0].BlendEnable = TRUE;
+    abd.RenderTarget[0].SrcBlend = D3D11_BLEND_ONE;
+    abd.RenderTarget[0].DestBlend = D3D11_BLEND_ONE;
+    abd.RenderTarget[0].BlendOp = D3D11_BLEND_OP_ADD;
+    abd.RenderTarget[0].SrcBlendAlpha = D3D11_BLEND_ONE;
+    abd.RenderTarget[0].DestBlendAlpha = D3D11_BLEND_ONE;
+    abd.RenderTarget[0].BlendOpAlpha = D3D11_BLEND_OP_ADD;
+    abd.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+    ThrowIfFailed(device_->CreateBlendState(&abd, &additiveBlend_), "Create additive blend state");
+
+    D3D11_SAMPLER_DESC sd{};
+    sd.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+    sd.AddressU = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sd.AddressV = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
+    sd.MaxLOD = D3D11_FLOAT32_MAX;
+    ThrowIfFailed(device_->CreateSamplerState(&sd, &postSampler_), "Create post sampler");
 }
 
 Mesh SweetsApp::CreateMesh(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices)
@@ -425,6 +512,8 @@ void SweetsApp::CreateMeshes()
 void SweetsApp::Render()
 {
     DrawScene();
+    DrawAdditiveScene();
+    CompositeScene();
     DrawHud();
     swapChain_->Present(1, 0);
 }
@@ -432,7 +521,8 @@ void SweetsApp::Render()
 void SweetsApp::DrawScene()
 {
     const float clear[4] = { 0.12f, 0.045f, 0.085f, 1.0f };
-    context_->ClearRenderTargetView(rtv_.Get(), clear);
+    ID3D11RenderTargetView* sceneTarget = sceneColorRtv_ ? sceneColorRtv_.Get() : rtv_.Get();
+    context_->ClearRenderTargetView(sceneTarget, clear);
     context_->ClearDepthStencilView(dsv_.Get(), D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, 1.0f, 0);
 
     D3D11_VIEWPORT vp{};
@@ -447,6 +537,15 @@ void SweetsApp::DrawScene()
     XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
     view_ = XMMatrixLookAtLH(eye, at, up);
     proj_ = XMMatrixPerspectiveFovLH(XMConvertToRadians(45.0f), std::max(0.1f, static_cast<float>(width_) / height_), 0.1f, 100.0f);
+#if defined(_DEBUG)
+    if (debug_.taa)
+    {
+        const int frame = (debug_.taaFrame % 8) + 1;
+        const float jitterX = (Halton(frame, 2) - 0.5f) / std::max(1.0f, static_cast<float>(width_));
+        const float jitterY = (Halton(frame, 3) - 0.5f) / std::max(1.0f, static_cast<float>(height_));
+        proj_ = proj_ * XMMatrixTranslation(jitterX, jitterY, 0.0f);
+    }
+#endif
 
     FrameCB frame{};
     frame.viewProj = view_ * proj_;
@@ -454,7 +553,7 @@ void SweetsApp::DrawScene()
     frame.cameraPos = XMFLOAT4(cameraPos_.x, cameraPos_.y, cameraPos_.z, 1.0f);
     context_->UpdateSubresource(frameCB_.Get(), 0, nullptr, &frame, 0, 0);
 
-    ID3D11RenderTargetView* rtv = rtv_.Get();
+    ID3D11RenderTargetView* rtv = sceneTarget;
     context_->OMSetRenderTargets(1, &rtv, dsv_.Get());
     context_->OMSetDepthStencilState(depthState_.Get(), 0);
     float blendFactor[4]{ 0,0,0,0 };
@@ -568,6 +667,129 @@ void SweetsApp::DrawScene()
     {
         DrawSphere(p.pos, std::max(0.05f, p.y), 0.055f, WithAlpha(p.color, ClampFloat(p.ttl * 2.0f, 0.0f, 1.0f)));
     }
+
+#if defined(_DEBUG)
+    if (debug_.overlays)
+    {
+        for (const auto& p : players_)
+        {
+            if (!p.active) continue;
+            DrawMesh(ringMesh_, XMMatrixScaling(p.hitboxRadius, 1.0f, p.hitboxRadius) *
+                XMMatrixTranslation(p.pos.x, 0.17f, p.pos.z), WithAlpha(Red, 0.85f));
+            DrawMesh(ringMesh_, XMMatrixScaling(p.grazeRadius, 1.0f, p.grazeRadius) *
+                XMMatrixTranslation(p.pos.x, 0.16f, p.pos.z), WithAlpha(Sky, 0.55f));
+        }
+        for (const auto& e : enemies_)
+        {
+            if (e.dead) continue;
+            DrawMesh(ringMesh_, XMMatrixScaling(e.radius, 1.0f, e.radius) *
+                XMMatrixTranslation(e.pos.x, 0.18f, e.pos.z), WithAlpha(Cream, 0.45f));
+        }
+    }
+#endif
+}
+
+void SweetsApp::DrawAdditiveScene()
+{
+    if (!additiveRtv_) return;
+    const float clear[4] = { 0, 0, 0, 1 };
+    context_->ClearRenderTargetView(additiveRtv_.Get(), clear);
+
+    ID3D11RenderTargetView* rtv = additiveRtv_.Get();
+    context_->OMSetRenderTargets(1, &rtv, dsv_.Get());
+    context_->OMSetDepthStencilState(depthState_.Get(), 0);
+    float blendFactor[4]{ 0,0,0,0 };
+    context_->OMSetBlendState(additiveBlend_.Get(), blendFactor, 0xffffffff);
+    context_->IASetInputLayout(inputLayout_.Get());
+    context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    context_->VSSetShader(vs_.Get(), nullptr, 0);
+    context_->PSSetShader(ps_.Get(), nullptr, 0);
+    ID3D11Buffer* frameCb = frameCB_.Get();
+    ID3D11Buffer* objectCb = objectCB_.Get();
+    context_->VSSetConstantBuffers(0, 1, &frameCb);
+    context_->VSSetConstantBuffers(1, 1, &objectCb);
+    context_->PSSetConstantBuffers(0, 1, &frameCb);
+    context_->PSSetConstantBuffers(1, 1, &objectCb);
+    context_->RSSetState(rasterState_.Get());
+
+    for (const auto& s : shots_)
+    {
+        const float glow = s.enemy ? 2.1f : (s.reflected ? 2.8f : 1.7f);
+        DrawSphere(s.pos, s.enemy ? 0.25f : 0.30f, s.radius * glow, WithAlpha(s.color, s.enemy ? 0.42f : 0.55f));
+    }
+    for (const auto& s : slashes_)
+    {
+        DrawSector(s);
+    }
+    for (const auto& p : players_)
+    {
+        if (!p.active) continue;
+        if (p.bombT > 0.0f)
+        {
+            const float t = p.bombT / 1.8f;
+            DrawMesh(ringMesh_, XMMatrixScaling(1.5f + (1.0f - t) * 5.8f, 1.0f, 1.5f + (1.0f - t) * 5.8f) *
+                XMMatrixTranslation(p.pos.x, 0.20f, p.pos.z), WithAlpha(Sky, 0.9f * t));
+        }
+        if (p.grazeFlash > 0.0f)
+        {
+            DrawMesh(ringMesh_, XMMatrixScaling(p.grazeRadius, 1.0f, p.grazeRadius) *
+                XMMatrixTranslation(p.pos.x, 0.18f, p.pos.z), WithAlpha(Sky, 0.75f));
+        }
+    }
+    for (const auto& p : particles_)
+    {
+        DrawSphere(p.pos, std::max(0.05f, p.y), 0.10f, WithAlpha(p.color, ClampFloat(p.ttl * 2.5f, 0.0f, 1.0f)));
+    }
+}
+
+void SweetsApp::CompositeScene()
+{
+    if (!resolvedRtv_ || !postVs_ || !postPs_ || !sceneColorSrv_ || !additiveSrv_ || !historySrv_)
+    {
+        return;
+    }
+
+    const float clear[4] = { 0, 0, 0, 1 };
+    context_->ClearRenderTargetView(resolvedRtv_.Get(), clear);
+    ID3D11RenderTargetView* rtv = resolvedRtv_.Get();
+    context_->OMSetRenderTargets(1, &rtv, nullptr);
+    float blendFactor[4]{ 0,0,0,0 };
+    context_->OMSetBlendState(nullptr, blendFactor, 0xffffffff);
+    context_->IASetInputLayout(nullptr);
+    context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    context_->VSSetShader(postVs_.Get(), nullptr, 0);
+    context_->PSSetShader(postPs_.Get(), nullptr, 0);
+    context_->RSSetState(rasterState_.Get());
+
+    PostCB post{};
+#if defined(_DEBUG)
+    const bool useTaa = debug_.taa && debug_.taaFrame > 0 && !debug_.additiveView;
+    post.params = XMFLOAT4(useTaa ? 0.18f : 0.0f, 1.0f, debug_.additiveView ? 1.0f : 0.0f, 0.0f);
+#else
+    post.params = XMFLOAT4(0.0f, 1.0f, 0.0f, 0.0f);
+#endif
+    context_->UpdateSubresource(postCB_.Get(), 0, nullptr, &post, 0, 0);
+    ID3D11Buffer* pcb = postCB_.Get();
+    context_->PSSetConstantBuffers(0, 1, &pcb);
+    ID3D11ShaderResourceView* srvs[3] = { sceneColorSrv_.Get(), additiveSrv_.Get(), historySrv_.Get() };
+    context_->PSSetShaderResources(0, 3, srvs);
+    ID3D11SamplerState* sampler = postSampler_.Get();
+    context_->PSSetSamplers(0, 1, &sampler);
+    context_->Draw(3, 0);
+    ID3D11ShaderResourceView* nullSrvs[3] = { nullptr, nullptr, nullptr };
+    context_->PSSetShaderResources(0, 3, nullSrvs);
+
+    if (historyTex_ && resolvedTex_)
+    {
+        context_->CopyResource(historyTex_.Get(), resolvedTex_.Get());
+    }
+    if (backBufferTex_ && resolvedTex_)
+    {
+        context_->CopyResource(backBufferTex_.Get(), resolvedTex_.Get());
+    }
+#if defined(_DEBUG)
+    ++debug_.taaFrame;
+#endif
 }
 
 void SweetsApp::DrawHud()
@@ -650,9 +872,28 @@ void SweetsApp::DrawHud()
         d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), titleFormat_.Get(),
             D2D1::RectF(0, static_cast<float>(height_) * 0.18f, static_cast<float>(width_), static_cast<float>(height_) * 0.29f), textBrush_.Get());
         textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f));
-        const wchar_t* start = L"1Pの性能を選択してください。Enterで難易度選択、Cキーでクレジット。";
+        const wchar_t* start = L"1Pの性能とモードを選択してください。Enterで決定、Cキーでクレジット。";
         d2dContext_->DrawTextW(start, static_cast<UINT32>(wcslen(start)), hudFormat_.Get(),
             D2D1::RectF(0, static_cast<float>(height_) * 0.31f, static_cast<float>(width_), static_cast<float>(height_) * 0.38f), textBrush_.Get());
+
+        const std::array<const wchar_t*, 3> items{ L"Story", L"Endless", L"Credits" };
+        const float itemW = 190.0f;
+        const float itemH = 42.0f;
+        const float gap = 14.0f;
+        const float totalW = itemW * 3.0f + gap * 2.0f;
+        const float startX = (static_cast<float>(width_) - totalW) * 0.5f;
+        const float menuTop = static_cast<float>(height_) * 0.39f;
+        for (int i = 0; i < 3; ++i)
+        {
+            const float x = startX + i * (itemW + gap);
+            const bool selected = i == titleMenuIndex_;
+            textBrush_->SetColor(selected ? D2D1::ColorF(0.20f, 0.08f, 0.13f, 0.98f) : D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.92f));
+            d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(x, menuTop, x + itemW, menuTop + itemH), 8.0f, 8.0f), textBrush_.Get());
+            textBrush_->SetColor(selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f));
+            d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(x, menuTop, x + itemW, menuTop + itemH), 8.0f, 8.0f), textBrush_.Get(), selected ? 3.0f : 1.0f);
+            d2dContext_->DrawTextW(items[i], static_cast<UINT32>(wcslen(items[i])), hudFormat_.Get(),
+                D2D1::RectF(x, menuTop + 8.0f, x + itemW, menuTop + itemH), textBrush_.Get());
+        }
         DrawLoadoutSelection();
         titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
         hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
@@ -703,14 +944,34 @@ void SweetsApp::DrawHud()
             totalKills += p.kills;
             totalGraze += p.graze;
         }
-        ss << L"スコア " << score_ << L"  ウェーブ " << wave_ << L"  撃破 " << totalKills << L"  グレイズ " << totalGraze << L"  - Enterで再開";
+        ss << L"スコア " << score_ << L"  ウェーブ " << wave_ << L"  撃破 " << totalKills << L"  グレイズ " << totalGraze;
         const std::wstring line = ss.str();
         textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f));
         d2dContext_->DrawTextW(line.c_str(), static_cast<UINT32>(line.size()), hudFormat_.Get(),
             D2D1::RectF(0, static_cast<float>(height_) * 0.50f, static_cast<float>(width_), static_cast<float>(height_) * 0.58f), textBrush_.Get());
+        const std::array<const wchar_t*, 2> choices{ L"Retry", L"Title" };
+        const float choiceW = 180.0f;
+        const float choiceTop = static_cast<float>(height_) * 0.62f;
+        for (int i = 0; i < 2; ++i)
+        {
+            const bool selected = (i == 0 && gameOverChoice_ == GameOverChoice::Retry) || (i == 1 && gameOverChoice_ == GameOverChoice::Title);
+            const float x = static_cast<float>(width_) * 0.5f - choiceW - 10.0f + i * (choiceW + 20.0f);
+            textBrush_->SetColor(selected ? D2D1::ColorF(0.20f, 0.08f, 0.13f, 0.98f) : D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.92f));
+            d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(x, choiceTop, x + choiceW, choiceTop + 46.0f), 8.0f, 8.0f), textBrush_.Get());
+            textBrush_->SetColor(selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f));
+            d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(x, choiceTop, x + choiceW, choiceTop + 46.0f), 8.0f, 8.0f), textBrush_.Get(), selected ? 3.0f : 1.0f);
+            d2dContext_->DrawTextW(choices[i], static_cast<UINT32>(wcslen(choices[i])), hudFormat_.Get(),
+                D2D1::RectF(x, choiceTop + 10.0f, x + choiceW, choiceTop + 46.0f), textBrush_.Get());
+        }
+        const wchar_t* guide = L"左右 / 上下で選択、Enterで決定";
+        textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.90f));
+        d2dContext_->DrawTextW(guide, static_cast<UINT32>(wcslen(guide)), smallFormat_.Get(),
+            D2D1::RectF(0, choiceTop + 58.0f, static_cast<float>(width_), choiceTop + 86.0f), textBrush_.Get());
         titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
         hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     }
+
+    DrawDebugHud();
 
     const HRESULT hr = d2dContext_->EndDraw();
     if (hr == D2DERR_RECREATE_TARGET)
@@ -751,6 +1012,33 @@ void SweetsApp::DrawCredits()
     titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+}
+
+void SweetsApp::DrawDebugHud()
+{
+#if defined(_DEBUG)
+    if (!debug_.hud) return;
+
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    textBrush_->SetColor(D2D1::ColorF(0.02f, 0.02f, 0.025f, 0.76f));
+    d2dContext_->FillRectangle(D2D1::RectF(static_cast<float>(width_) - 332.0f, 12.0f, static_cast<float>(width_) - 12.0f, 210.0f), textBrush_.Get());
+
+    const int enemyBullets = static_cast<int>(std::count_if(shots_.begin(), shots_.end(), [](const Shot& s) { return s.enemy && !s.dead; }));
+    const int playerShots = static_cast<int>(std::count_if(shots_.begin(), shots_.end(), [](const Shot& s) { return !s.enemy && !s.dead; }));
+    std::wostringstream ss;
+    ss << L"DEBUG F1\n"
+        << L"FPS " << static_cast<int>(debug_.fps) << L"  " << debug_.frameMs << L" ms\n"
+        << L"Screen " << static_cast<int>(screen_) << L"  Mode " << static_cast<int>(gameMode_) << L"  Diff " << CurrentDifficulty().name << L"\n"
+        << L"Wave " << wave_ << L"  Enemies " << enemies_.size() << L"  Shots " << playerShots << L"/" << enemyBullets << L"\n"
+        << L"BGM " << static_cast<int>(audio_.CurrentTrack()) << L"  TAA " << (debug_.taa ? L"ON" : L"OFF") << L"  AddRT " << (debug_.additiveView ? L"VIEW" : L"MIX") << L"\n"
+        << L"F2 overlay F3 TAA F4 AddRT F5 Inv\n"
+        << L"F6 refill F7 wave F8 boss F9 unlock\n"
+        << L"F10 clear bullets F11 shaders F12 step";
+    const std::wstring text = ss.str();
+    textBrush_->SetColor(D2D1::ColorF(0.78f, 1.0f, 0.88f, 0.96f));
+    d2dContext_->DrawTextW(text.c_str(), static_cast<UINT32>(text.size()), smallFormat_.Get(),
+        D2D1::RectF(static_cast<float>(width_) - 318.0f, 22.0f, static_cast<float>(width_) - 20.0f, 206.0f), textBrush_.Get());
+#endif
 }
 
 void SweetsApp::DrawDifficultySelection()

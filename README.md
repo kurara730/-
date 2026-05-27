@@ -7,6 +7,8 @@
 - Shift低速移動、小さい当たり判定、グレイズ、X/Controlボム
 - XAudio2 + Media Foundationによるプレイ中/ゲームオーバー/隠しボスBGM
 - 5段階難易度とLunaticクリア後の隠しボス耐久戦
+- タイトルBGM、Story/Endless開始項目、ゲームオーバー時のRetry/Title選択
+- Debugビルド限定のFPS表示、RT/TAA確認、開発チート
 - 反射倍率、反射キル、鏡敵、チーズ壁による敵弾反射
 - 1Pキーボード/マウスだけで遊べるソロ優先
 - 直感的な4キャラカード式の性能選択
@@ -19,10 +21,12 @@
 
 | 入力 | 動作 |
 | --- | --- |
-| Enter | タイトルから難易度選択へ / 難易度選択で開始 / リザルト後に戻る |
+| Enter | タイトル項目を決定 / 難易度選択で開始 / リザルト後に戻る |
 | キャラカードをクリック | タイトル画面で性能を選択 |
-| Left / Right または A / D | タイトル/難易度画面で選択を移動 |
+| W / S または Up / Down | タイトル画面でStory/Endless/Creditsを選択 |
+| Left / Right または A / D | タイトルのキャラ選択 / 難易度画面 / ゲームオーバー選択 |
 | 難易度カードをクリック | 難易度を選択 |
+| F1-F12 | Debugビルド限定のデバッグ表示/チート/RT/TAA確認 |
 | WASD / 矢印キー | 移動 |
 | マウス | 照準 |
 | 左クリック / Space | 小さい通常弾を連射 |
@@ -64,6 +68,8 @@
 | `assets/shaders/basic_lit.hlsl` | 3Dプリミティブ/モデル用ライティングシェーダー |
 | `assets/shaders/sprite_unlit.hlsl` | スプライト/ビルボード用シェーダー |
 | `assets/shaders/effect_additive.hlsl` | 弾、反射、ボム用の加算エフェクトシェーダー |
+| `assets/shaders/postprocess.hlsl` | Scene/Additive/History RT合成とDebug TAA表示 |
+| `assets/audio/333_BPM177.mp3` | タイトル/メニューBGM |
 | `assets/audio/233_BPM163.mp3` | ゲームプレイ中BGM |
 | `assets/audio/ruins.mp3` | ゲームオーバーBGM |
 | `assets/audio/Lonery boy.wav` | 隠しボスBGM |

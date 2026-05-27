@@ -52,16 +52,17 @@ struct DifficultyDef
     float bulletCountMul;
     float spawnIntervalMul;
     float bossHpMul;
+    float enemyShotRadiusMul;
     int initialBombs;
     Color color;
 };
 
 inline const std::array<DifficultyDef, 5> DifficultyDefs{ {
-    { L"Easy", L"弾幕を抑えた練習向け", 0.75f, 0.65f, 0.85f, 0.75f, 1.25f, 0.75f, 5, Mint },
-    { L"Normal", L"標準難易度", 1.00f, 1.00f, 1.00f, 1.00f, 1.00f, 1.00f, 3, Cream },
-    { L"Hard", L"敵の圧が強くなる", 1.15f, 1.20f, 1.10f, 1.15f, 0.90f, 1.15f, 3, Gold },
-    { L"Expert", L"弾速と出現頻度が高い", 1.35f, 1.45f, 1.25f, 1.30f, 0.78f, 1.35f, 2, Sky },
-    { L"Lunatic", L"最終Wave後に隠しボスが出現", 1.55f, 1.70f, 1.40f, 1.55f, 0.68f, 1.55f, 2, Grape },
+    { L"Easy", L"弾幕を抑えた練習向け", 0.75f, 0.65f, 0.75f, 0.75f, 1.25f, 0.75f, 1.35f, 5, Mint },
+    { L"Normal", L"標準難易度", 1.00f, 1.00f, 0.88f, 1.00f, 1.00f, 1.00f, 1.25f, 3, Cream },
+    { L"Hard", L"敵の圧が強くなる", 1.15f, 1.20f, 1.10f, 1.15f, 0.90f, 1.15f, 1.12f, 3, Gold },
+    { L"Expert", L"弾速と出現頻度が高い", 1.35f, 1.45f, 1.25f, 1.30f, 0.78f, 1.35f, 1.08f, 2, Sky },
+    { L"Lunatic", L"最終Wave後に隠しボスが出現", 1.55f, 1.70f, 1.40f, 1.55f, 0.68f, 1.55f, 1.05f, 2, Grape },
 } };
 
 struct V2
@@ -148,6 +149,26 @@ enum class Screen
     GameOver
 };
 
+enum class GameMode
+{
+    Story,
+    Endless,
+    HiddenBossPractice
+};
+
+enum class TitleMenuItem
+{
+    Story,
+    Endless,
+    Credits
+};
+
+enum class GameOverChoice
+{
+    Retry,
+    Title
+};
+
 enum class Difficulty
 {
     Easy = 0,
@@ -155,6 +176,27 @@ enum class Difficulty
     Hard,
     Expert,
     Lunatic
+};
+
+struct DebugState
+{
+    bool hud = false;
+    bool overlays = false;
+    bool taa = false;
+    bool additiveView = false;
+    bool invincible = false;
+    bool frameStep = false;
+    bool stepOnce = false;
+    float fps = 0.0f;
+    float frameMs = 0.0f;
+    float fpsAccum = 0.0f;
+    int fpsFrames = 0;
+    int taaFrame = 0;
+};
+
+struct PostCB
+{
+    XMFLOAT4 params;
 };
 
 enum class Weapon

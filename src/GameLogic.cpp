@@ -42,7 +42,8 @@ void SweetsApp::ResetGame()
 
 void SweetsApp::StartGameWithDifficulty(bool hiddenBossPractice)
 {
-    hiddenBossPractice_ = hiddenBossPractice;
+    gameMode_ = hiddenBossPractice ? GameMode::HiddenBossPractice : pendingGameMode_;
+    hiddenBossPractice_ = gameMode_ == GameMode::HiddenBossPractice;
     if (!hiddenBossPractice_)
     {
         difficulty_ = static_cast<Difficulty>(std::max(0, std::min(difficultyIndex_, 4)));
@@ -53,7 +54,7 @@ void SweetsApp::StartGameWithDifficulty(bool hiddenBossPractice)
     }
 
     ResetGame();
-    if (hiddenBossPractice_)
+    if (gameMode_ == GameMode::HiddenBossPractice)
     {
         StartHiddenBoss();
     }
@@ -139,7 +140,7 @@ void SweetsApp::ClearWave()
             p.ult = std::min(100.0f, p.ult + (bossWave_ ? 30.0f : 12.0f));
         }
     }
-    if (wave_ >= FinalWave)
+    if (wave_ >= FinalWave && gameMode_ == GameMode::Story)
     {
         pendingHiddenBoss_ = difficulty_ == Difficulty::Lunatic && !hiddenBossPractice_;
         if (pendingHiddenBoss_)
@@ -211,10 +212,32 @@ void SweetsApp::UpdateTitle(float)
 {
 }
 
+void SweetsApp::UpdateDebugTiming(float dt)
+{
+#if defined(_DEBUG)
+    debug_.frameMs = dt * 1000.0f;
+    debug_.fpsAccum += dt;
+    ++debug_.fpsFrames;
+    if (debug_.fpsAccum >= 0.5f)
+    {
+        debug_.fps = static_cast<float>(debug_.fpsFrames) / debug_.fpsAccum;
+        debug_.fpsAccum = 0.0f;
+        debug_.fpsFrames = 0;
+    }
+#else
+    (void)dt;
+#endif
+}
+
 void SweetsApp::UpdateAudioForScreen()
 {
     switch (screen_)
     {
+    case Screen::Title:
+    case Screen::DifficultySelect:
+    case Screen::Credits:
+        audio_.PlayLoop(MusicTrack::Title, L"assets/audio/333_BPM177.mp3");
+        break;
     case Screen::Playing:
     case Screen::Paused:
         audio_.PlayLoop(MusicTrack::Gameplay, L"assets/audio/233_BPM163.mp3");
@@ -316,6 +339,7 @@ void SweetsApp::UpdatePlaying(float dt)
     if (AllPlayersDown())
     {
         screen_ = Screen::GameOver;
+        gameOverChoice_ = GameOverChoice::Retry;
         message_ = L"ゲームオーバー";
         messageT_ = 999.0f;
     }
@@ -440,6 +464,7 @@ void SweetsApp::UpdateHiddenBoss(float dt)
     else if (AllPlayersDown())
     {
         screen_ = Screen::GameOver;
+        gameOverChoice_ = GameOverChoice::Retry;
         message_ = L"ゲームオーバー";
         messageT_ = 999.0f;
     }
@@ -682,11 +707,13 @@ void SweetsApp::SpawnEnemyShot(V2 pos, float angle, float speed, float damage, f
     {
         const int enemyBullets = static_cast<int>(std::count_if(shots_.begin(), shots_.end(), [](const Shot& s) { return s.enemy && !s.dead; }));
         if (enemyBullets >= HiddenBossBulletCap) return;
+        radius *= 1.14f;
     }
     else
     {
         const DifficultyDef& diff = CurrentDifficulty();
         speed *= diff.bulletSpeedMul;
+        radius *= diff.enemyShotRadiusMul;
     }
 
     Shot s{};

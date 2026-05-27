@@ -36,6 +36,7 @@ private:
     void CreateRenderTargets();
     void ReleaseRenderTargets();
     void CreateShadersAndStates();
+    void CreateOffscreenTarget(ComPtr<ID3D11Texture2D>& texture, ComPtr<ID3D11RenderTargetView>& rtv, ComPtr<ID3D11ShaderResourceView>& srv, DXGI_FORMAT format);
     void CreateMeshes();
     void LoadAssets();
     Mesh CreateMesh(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices);
@@ -70,6 +71,7 @@ private:
 
     void Update(float dt);
     void UpdateTitle(float dt);
+    void UpdateDebugTiming(float dt);
     void UpdateClear(float dt);
     void UpdateHiddenBossIntro(float dt);
     void UpdateHiddenBoss(float dt);
@@ -103,7 +105,10 @@ private:
 
     void Render();
     void DrawScene();
+    void DrawAdditiveScene();
+    void CompositeScene();
     void DrawHud();
+    void DrawDebugHud();
     void DrawLoadoutSelection();
     void DrawDifficultySelection();
     void DrawClearScreen();
@@ -116,7 +121,11 @@ private:
     V2 ScreenToWorld(float sx, float sy) const;
 
     void OnKeyDown(WPARAM key);
+    bool HandleDebugKey(WPARAM key);
+    void RestartCurrentRun();
+    void StartSelectedTitleItem();
     bool SelectLoadoutAt(float sx, float sy);
+    bool SelectTitleMenuAt(float sx, float sy);
     bool SelectDifficultyAt(float sx, float sy);
     bool KeyDown(int key) const;
     float Rand(float a, float b);
@@ -133,17 +142,35 @@ private:
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> context_;
     ComPtr<IDXGISwapChain> swapChain_;
+    ComPtr<ID3D11Texture2D> backBufferTex_;
     ComPtr<ID3D11RenderTargetView> rtv_;
+    ComPtr<ID3D11Texture2D> sceneColorTex_;
+    ComPtr<ID3D11RenderTargetView> sceneColorRtv_;
+    ComPtr<ID3D11ShaderResourceView> sceneColorSrv_;
+    ComPtr<ID3D11Texture2D> additiveTex_;
+    ComPtr<ID3D11RenderTargetView> additiveRtv_;
+    ComPtr<ID3D11ShaderResourceView> additiveSrv_;
+    ComPtr<ID3D11Texture2D> historyTex_;
+    ComPtr<ID3D11RenderTargetView> historyRtv_;
+    ComPtr<ID3D11ShaderResourceView> historySrv_;
+    ComPtr<ID3D11Texture2D> resolvedTex_;
+    ComPtr<ID3D11RenderTargetView> resolvedRtv_;
+    ComPtr<ID3D11ShaderResourceView> resolvedSrv_;
     ComPtr<ID3D11Texture2D> depthTex_;
     ComPtr<ID3D11DepthStencilView> dsv_;
     ComPtr<ID3D11VertexShader> vs_;
     ComPtr<ID3D11PixelShader> ps_;
+    ComPtr<ID3D11VertexShader> postVs_;
+    ComPtr<ID3D11PixelShader> postPs_;
     ComPtr<ID3D11InputLayout> inputLayout_;
     ComPtr<ID3D11Buffer> frameCB_;
     ComPtr<ID3D11Buffer> objectCB_;
+    ComPtr<ID3D11Buffer> postCB_;
     ComPtr<ID3D11RasterizerState> rasterState_;
     ComPtr<ID3D11DepthStencilState> depthState_;
     ComPtr<ID3D11BlendState> alphaBlend_;
+    ComPtr<ID3D11BlendState> additiveBlend_;
+    ComPtr<ID3D11SamplerState> postSampler_;
 
     ComPtr<ID2D1Factory1> d2dFactory_;
     ComPtr<ID2D1Device> d2dDevice_;
@@ -195,8 +222,13 @@ private:
     int reflectKills_ = 0;
     int remainingToSpawn_ = 0;
     int loadoutIndex_ = 0;
+    int titleMenuIndex_ = 0;
     int difficultyIndex_ = 1;
     Difficulty difficulty_ = Difficulty::Normal;
+    GameMode gameMode_ = GameMode::Story;
+    GameMode pendingGameMode_ = GameMode::Story;
+    GameOverChoice gameOverChoice_ = GameOverChoice::Retry;
+    DebugState debug_;
     bool hiddenBossUnlocked_ = false;
     bool hiddenBossPractice_ = false;
     bool pendingHiddenBoss_ = false;
