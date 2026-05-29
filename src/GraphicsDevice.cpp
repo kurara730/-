@@ -238,9 +238,16 @@ void SweetsApp::CreateFrameTargets()
     ThrowIfFailed(device_->CreateRenderTargetView(backBufferTex_.Get(), nullptr, &rtv_), "Create RTV");
 
     CreateOffscreenTarget(sceneColorTex_, sceneColorRtv_, sceneColorSrv_, DXGI_FORMAT_B8G8R8A8_UNORM);
-    CreateOffscreenTarget(additiveTex_, additiveRtv_, additiveSrv_, DXGI_FORMAT_B8G8R8A8_UNORM);
+    // 加算エフェクトは HDR(float)。明るい芯が 1.0 を超えてブルームに反映される。
+    CreateOffscreenTarget(additiveTex_, additiveRtv_, additiveSrv_, DXGI_FORMAT_R16G16B16A16_FLOAT);
     CreateOffscreenTarget(historyTex_, historyRtv_, historySrv_, DXGI_FORMAT_B8G8R8A8_UNORM);
     CreateOffscreenTarget(resolvedTex_, resolvedRtv_, resolvedSrv_, DXGI_FORMAT_B8G8R8A8_UNORM);
+
+    // ブルーム用の半解像度 HDR ターゲット(A/B でピンポン)。
+    bloomWidth_ = (width_ + 1) / 2;
+    bloomHeight_ = (height_ + 1) / 2;
+    CreateOffscreenTargetSized(bloomTexA_, bloomRtvA_, bloomSrvA_, DXGI_FORMAT_R16G16B16A16_FLOAT, bloomWidth_, bloomHeight_);
+    CreateOffscreenTargetSized(bloomTexB_, bloomRtvB_, bloomSrvB_, DXGI_FORMAT_R16G16B16A16_FLOAT, bloomWidth_, bloomHeight_);
 
     D3D11_TEXTURE2D_DESC depthDesc{};
     depthDesc.Width = width_;
@@ -290,6 +297,22 @@ void SweetsApp::CreateOffscreenTarget(ComPtr<ID3D11Texture2D>& texture, ComPtr<I
     ThrowIfFailed(device_->CreateShaderResourceView(texture.Get(), nullptr, &srv), "Create offscreen SRV");
 }
 
+void SweetsApp::CreateOffscreenTargetSized(ComPtr<ID3D11Texture2D>& texture, ComPtr<ID3D11RenderTargetView>& rtv, ComPtr<ID3D11ShaderResourceView>& srv, DXGI_FORMAT format, UINT w, UINT h)
+{
+    D3D11_TEXTURE2D_DESC desc{};
+    desc.Width = (w < 1u) ? 1u : w;
+    desc.Height = (h < 1u) ? 1u : h;
+    desc.MipLevels = 1;
+    desc.ArraySize = 1;
+    desc.Format = format;
+    desc.SampleDesc.Count = 1;
+    desc.Usage = D3D11_USAGE_DEFAULT;
+    desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+    ThrowIfFailed(device_->CreateTexture2D(&desc, nullptr, &texture), "Create sized offscreen texture");
+    ThrowIfFailed(device_->CreateRenderTargetView(texture.Get(), nullptr, &rtv), "Create sized offscreen RTV");
+    ThrowIfFailed(device_->CreateShaderResourceView(texture.Get(), nullptr, &srv), "Create sized offscreen SRV");
+}
+
 void SweetsApp::ReleaseFrameTargets()
 {
     if (d2dContext_) d2dContext_->SetTarget(nullptr);
@@ -303,6 +326,12 @@ void SweetsApp::ReleaseFrameTargets()
     resolvedSrv_.Reset();
     resolvedRtv_.Reset();
     resolvedTex_.Reset();
+    bloomSrvA_.Reset();
+    bloomRtvA_.Reset();
+    bloomTexA_.Reset();
+    bloomSrvB_.Reset();
+    bloomRtvB_.Reset();
+    bloomTexB_.Reset();
     historySrv_.Reset();
     historyRtv_.Reset();
     historyTex_.Reset();
@@ -369,6 +398,33 @@ void SweetsApp::CreateShadersAndStates()
     ThrowIfFailed(device_->CreateVertexShader(postVsBlob->GetBufferPointer(), postVsBlob->GetBufferSize(), nullptr, &postVs_), "Create post VS");
     ThrowIfFailed(device_->CreatePixelShader(postPsBlob->GetBufferPointer(), postPsBlob->GetBufferSize(), nullptr, &postPs_), "Create post PS");
 
+    // ブルーム用シェーダ(VSMain / PrefilterPS / BlurPS)
+    const std::wstring bloomPath = FindAssetFile(L"assets/shaders/bloom.hlsl");
+    ComPtr<ID3DBlob> bloomVsBlob;
+    ComPtr<ID3DBlob> bloomPreBlob;
+    ComPtr<ID3DBlob> bloomBlurBlob;
+    errors.Reset();
+    hr = D3DCompileFromFile(bloomPath.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "VSMain", "vs_5_0", flags, 0, &bloomVsBlob, &errors);
+    if (FAILED(hr))
+    {
+        throw std::runtime_error(errors ? static_cast<const char*>(errors->GetBufferPointer()) : "Bloom VS compile failed");
+    }
+    errors.Reset();
+    hr = D3DCompileFromFile(bloomPath.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "PrefilterPS", "ps_5_0", flags, 0, &bloomPreBlob, &errors);
+    if (FAILED(hr))
+    {
+        throw std::runtime_error(errors ? static_cast<const char*>(errors->GetBufferPointer()) : "Bloom prefilter PS compile failed");
+    }
+    errors.Reset();
+    hr = D3DCompileFromFile(bloomPath.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "BlurPS", "ps_5_0", flags, 0, &bloomBlurBlob, &errors);
+    if (FAILED(hr))
+    {
+        throw std::runtime_error(errors ? static_cast<const char*>(errors->GetBufferPointer()) : "Bloom blur PS compile failed");
+    }
+    ThrowIfFailed(device_->CreateVertexShader(bloomVsBlob->GetBufferPointer(), bloomVsBlob->GetBufferSize(), nullptr, &bloomVs_), "Create bloom VS");
+    ThrowIfFailed(device_->CreatePixelShader(bloomPreBlob->GetBufferPointer(), bloomPreBlob->GetBufferSize(), nullptr, &bloomPrefilterPs_), "Create bloom prefilter PS");
+    ThrowIfFailed(device_->CreatePixelShader(bloomBlurBlob->GetBufferPointer(), bloomBlurBlob->GetBufferSize(), nullptr, &bloomBlurPs_), "Create bloom blur PS");
+
     D3D11_INPUT_ELEMENT_DESC layout[] = {
         { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0, D3D11_INPUT_PER_VERTEX_DATA, 0 },
         { "NORMAL", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D11_APPEND_ALIGNED_ELEMENT, D3D11_INPUT_PER_VERTEX_DATA, 0 },
@@ -385,6 +441,8 @@ void SweetsApp::CreateShadersAndStates()
     ThrowIfFailed(device_->CreateBuffer(&cb, nullptr, &objectCB_), "Create object CB");
     cb.ByteWidth = sizeof(PostCB);
     ThrowIfFailed(device_->CreateBuffer(&cb, nullptr, &postCB_), "Create post CB");
+    cb.ByteWidth = sizeof(BloomCB);
+    ThrowIfFailed(device_->CreateBuffer(&cb, nullptr, &bloomCB_), "Create bloom CB");
 
     D3D11_RASTERIZER_DESC rd{};
     rd.FillMode = D3D11_FILL_SOLID;

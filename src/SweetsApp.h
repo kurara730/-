@@ -41,6 +41,7 @@ private:
     void ReleaseFrameTargets();
     void CreateShadersAndStates();
     void CreateOffscreenTarget(ComPtr<ID3D11Texture2D>& texture, ComPtr<ID3D11RenderTargetView>& rtv, ComPtr<ID3D11ShaderResourceView>& srv, DXGI_FORMAT format);
+    void CreateOffscreenTargetSized(ComPtr<ID3D11Texture2D>& texture, ComPtr<ID3D11RenderTargetView>& rtv, ComPtr<ID3D11ShaderResourceView>& srv, DXGI_FORMAT format, UINT w, UINT h);
     void CreateMeshes();
     void LoadAssets();
     void LoadTitleAssets();
@@ -159,6 +160,7 @@ private:
     void DrawScene();
     void DrawGameplay3D();
     void DrawAdditiveScene();
+    void RenderBloom();
     void CompositeScene();
     void DrawHud();
     void DrawDebugHud();
@@ -246,12 +248,25 @@ private:
     ComPtr<ID3D11Texture2D> resolvedTex_;
     ComPtr<ID3D11RenderTargetView> resolvedRtv_;
     ComPtr<ID3D11ShaderResourceView> resolvedSrv_;
+    // ブルーム用(半解像度・HDR)。A/B でピンポンしてブラーをかける。
+    ComPtr<ID3D11Texture2D> bloomTexA_;
+    ComPtr<ID3D11RenderTargetView> bloomRtvA_;
+    ComPtr<ID3D11ShaderResourceView> bloomSrvA_;
+    ComPtr<ID3D11Texture2D> bloomTexB_;
+    ComPtr<ID3D11RenderTargetView> bloomRtvB_;
+    ComPtr<ID3D11ShaderResourceView> bloomSrvB_;
+    UINT bloomWidth_ = 0;
+    UINT bloomHeight_ = 0;
     ComPtr<ID3D11Texture2D> depthTex_;
     ComPtr<ID3D11DepthStencilView> dsv_;
     ComPtr<ID3D11VertexShader> vs_;
     ComPtr<ID3D11PixelShader> ps_;
     ComPtr<ID3D11VertexShader> postVs_;
     ComPtr<ID3D11PixelShader> postPs_;
+    ComPtr<ID3D11VertexShader> bloomVs_;
+    ComPtr<ID3D11PixelShader> bloomPrefilterPs_;
+    ComPtr<ID3D11PixelShader> bloomBlurPs_;
+    ComPtr<ID3D11Buffer> bloomCB_;
     ComPtr<ID3D11InputLayout> inputLayout_;
     ComPtr<ID3D11Buffer> frameCB_;
     ComPtr<ID3D11Buffer> objectCB_;
@@ -296,6 +311,7 @@ private:
     float mouseY_ = 400.0f;
 
     Screen screen_ = Screen::BootLoading;
+    Screen settingsReturnScreen_ = Screen::Title; // 音量設定画面から戻る先(タイトル or ポーズ)
     std::array<Player, MaxPlayers> players_{};
     Player& player_ = players_[0];
     Boss boss_;
