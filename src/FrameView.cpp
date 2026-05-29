@@ -312,6 +312,15 @@ void SweetsApp::DrawScene()
         }
         DrawSprite2D(CharacterSpriteId(p.character), p.pos, { p.radius * 2.45f, p.radius * 2.45f }, p.face - Pi * 0.5f, bodyColor, 0.14f);
         DrawSprite2D(L"2d_shot_player", p.pos + FromAngle(p.face) * (p.radius * 0.88f), { p.radius * 0.55f, p.radius * 0.55f }, p.face, faceColor, 0.13f);
+        DrawSprite2D(L"2d_shot_player", p.pos + FromAngle(p.face) * (p.radius * 1.55f), { p.radius * 1.75f, p.radius * 0.18f }, p.face, WithAlpha(Cream, 0.58f), 0.12f);
+        if (p.chargeFull)
+        {
+            spriteCanvas_.DrawRing(p.pos, p.radius * 1.85f, 0.10f, WithAlpha(Gold, 0.84f), 0.10f, 64);
+        }
+        else if (p.chargeReady)
+        {
+            spriteCanvas_.DrawRing(p.pos, p.radius * 1.55f, 0.07f, WithAlpha(Sky, 0.58f), 0.10f, 48);
+        }
         if ((p.focus || screen_ == Screen::HiddenBoss) && !p.downed)
         {
             spriteCanvas_.DrawCircle(p.pos, p.hitboxRadius, Red, 0.11f, 20);

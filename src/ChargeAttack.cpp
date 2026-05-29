@@ -71,9 +71,14 @@ void SweetsApp::FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint)
     }
     else
     {
-        p.dashT = 0.55f;
-        p.dashVel = FromAngle(aim) * (15.0f + p.speed * 0.5f);
-        p.inv = std::max(p.inv, 0.45f);
+        const bool fullCharge = p.chargeFull || p.chargeT >= 1.15f;
+        if (fullCharge)
+        {
+            p.dashT = 0.55f;
+            p.dashVel = FromAngle(aim) * (15.0f + p.speed * 0.5f);
+            p.inv = std::max(p.inv, 0.45f);
+            ReflectEnemyShotsNear(p.pos, p.radius + 0.95f, ownerIndex, CharacterType::Roll, Cream, 1.35f);
+        }
         for (int i = -1; i <= 1; ++i)
         {
             const float a = aim + i * 0.18f;
@@ -91,7 +96,7 @@ void SweetsApp::FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint)
             SyncShot3D(s);
             shots_.push_back(s);
         }
-        message_ = L"転がり突進";
+        message_ = fullCharge ? L"転がり突進" : L"反射ロール弾";
     }
     messageT_ = 1.4f;
 }

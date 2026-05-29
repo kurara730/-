@@ -205,6 +205,30 @@ void SweetsApp::DrawHud()
             gauge << L"Gauge " << std::max(1, HiddenBossGaugeCount - hiddenBossForm_ + 1) << L"/" << HiddenBossGaugeCount;
             const std::wstring gaugeText = gauge.str();
             d2dContext_->DrawTextW(gaugeText.c_str(), static_cast<UINT32>(gaugeText.size()), smallFormat_.Get(), D2D1::RectF(left + 230.0f, top + 16.0f, left + bw, top + 40.0f), textBrush_.Get());
+
+            std::wstring lockText;
+            if (hiddenBossForm_ == 1 && hiddenBossCoreOpenT_ <= 0.0f)
+            {
+                lockText = L"LOCK: 炎核を壊せ  本体ダメージ軽減中";
+            }
+            else if (hiddenBossForm_ == 2 && hiddenBossAuraBreakT_ <= 0.0f)
+            {
+                std::wostringstream ss;
+                ss << L"LOCK: 金色弾反射 " << hiddenBossReflectCount_ << L"/" << HiddenBossReflectBreakCount << L"  本体ダメージ軽減中";
+                lockText = ss.str();
+            }
+            else if (hiddenBossForm_ <= 2)
+            {
+                lockText = L"攻撃チャンス: 本体へ攻撃";
+            }
+            if (!lockText.empty())
+            {
+                textBrush_->SetColor(hiddenBossForm_ <= 2 && lockText.rfind(L"LOCK", 0) == 0
+                    ? D2D1::ColorF(1.0f, 0.42f, 0.22f, 1.0f)
+                    : D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f));
+                d2dContext_->DrawTextW(lockText.c_str(), static_cast<UINT32>(lockText.size()), smallFormat_.Get(),
+                    D2D1::RectF(left, top + 38.0f, left + bw, top + 62.0f), textBrush_.Get());
+            }
         }
     }
 
@@ -242,6 +266,47 @@ void SweetsApp::DrawHud()
             const float nearX = sx + std::cos(a) * r * 1.55f;
             const float nearY = sy + std::sin(a) * r * 1.20f;
             d2dContext_->DrawLine(D2D1::Point2F(edgeX, edgeY), D2D1::Point2F(nearX, nearY), textBrush_.Get(), 1.5f);
+        }
+    }
+
+    if (screen_ == Screen::HiddenBoss && hiddenBossPhaseIntroT_ <= 0.0f)
+    {
+        const float halfW = GameplayHalfWidth(width_, height_);
+        const float halfH = GameplayHalfHeight();
+        auto toScreen = [&](V2 world)
+        {
+            return D2D1::Point2F(
+                static_cast<float>(width_) * 0.5f + world.x / halfW * static_cast<float>(width_) * 0.5f,
+                static_cast<float>(height_) * 0.5f - world.z / halfH * static_cast<float>(height_) * 0.5f);
+        };
+
+        if (hiddenBossForm_ == 1 && hiddenBossCoreOpenT_ <= 0.0f)
+        {
+            textBrush_->SetColor(D2D1::ColorF(1.0f, 0.72f, 0.18f, 0.86f));
+            const D2D1_POINT_2F origin = D2D1::Point2F(static_cast<float>(width_) * 0.50f, 235.0f);
+            for (const auto& core : hiddenBossCores_)
+            {
+                if (!core.active) continue;
+                const D2D1_POINT_2F p = toScreen(core.pos);
+                d2dContext_->DrawLine(origin, p, textBrush_.Get(), 2.0f);
+                d2dContext_->DrawEllipse(D2D1::Ellipse(p, 30.0f, 30.0f), textBrush_.Get(), 3.0f);
+            }
+        }
+        else if (hiddenBossForm_ == 2 && hiddenBossAuraBreakT_ <= 0.0f)
+        {
+            textBrush_->SetColor(D2D1::ColorF(1.0f, 0.78f, 0.18f, 0.78f));
+            int shown = 0;
+            for (const auto& s : shots_)
+            {
+                if (!s.enemy || s.dead) continue;
+                if (!(s.color.r > 0.85f && s.color.g > 0.55f && s.color.b < 0.35f)) continue;
+                const D2D1_POINT_2F p = toScreen(s.pos);
+                const D2D1_POINT_2F origin = D2D1::Point2F(static_cast<float>(width_) * 0.50f, 235.0f);
+                d2dContext_->DrawLine(origin, p, textBrush_.Get(), 1.2f);
+                d2dContext_->DrawEllipse(D2D1::Ellipse(p, 18.0f, 18.0f), textBrush_.Get(), 2.0f);
+                d2dContext_->DrawEllipse(D2D1::Ellipse(p, 26.0f, 26.0f), textBrush_.Get(), 1.2f);
+                if (++shown >= 8) break;
+            }
         }
     }
 
@@ -579,7 +644,7 @@ void SweetsApp::DrawPauseMenu()
     d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
 
     const float panelW = 480.0f;
-    const float panelH = 370.0f;
+    const float panelH = 450.0f;
     const float left = (static_cast<float>(width_) - panelW) * 0.5f;
     const float top = (static_cast<float>(height_) - panelH) * 0.5f;
     const D2D1_RECT_F panel = D2D1::RectF(left, top, left + panelW, top + panelH);
@@ -640,6 +705,36 @@ void SweetsApp::DrawPauseMenu()
         d2dContext_->DrawTextW(pctText.c_str(), static_cast<UINT32>(pctText.size()), smallFormat_.Get(),
             D2D1::RectF(sliderRight + 10.0f, y - 10.0f, left + panelW - 8.0f, y + 14.0f), textBrush_.Get());
     }
+
+    const float aimTop = top + 348.0f;
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.92f));
+    const wchar_t* aimLabel = L"攻撃方向";
+    d2dContext_->DrawTextW(aimLabel, static_cast<UINT32>(wcslen(aimLabel)), smallFormat_.Get(),
+        D2D1::RectF(left + 48.0f, aimTop + 6.0f, left + 132.0f, aimTop + 32.0f), textBrush_.Get());
+    const float aimButtonW = 104.0f;
+    const float aimButtonH = 32.0f;
+    const float aimStartX = left + 138.0f;
+    for (int i = 0; i < 3; ++i)
+    {
+        const AimMode mode = static_cast<AimMode>(i);
+        const float x = aimStartX + i * (aimButtonW + 10.0f);
+        const D2D1_RECT_F rect = D2D1::RectF(x, aimTop, x + aimButtonW, aimTop + aimButtonH);
+        const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
+        const bool active = aimMode_ == mode || hover;
+        textBrush_->SetColor(OldSelectFill(active));
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get());
+        textBrush_->SetColor(OldSelectStroke(active));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get(), active ? 2.2f : 1.0f);
+        const wchar_t* label = AimModeName(mode);
+        textBrush_->SetColor(OldSelectText(active));
+        d2dContext_->DrawTextW(label, static_cast<UINT32>(wcslen(label)), smallFormat_.Get(),
+            D2D1::RectF(rect.left, rect.top + 7.0f, rect.right, rect.bottom), textBrush_.Get());
+    }
+
+    const wchar_t* aimHint = L"初期値は移動方向。マウス照準や近い敵オートにも切替できます。";
+    textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.86f));
+    d2dContext_->DrawTextW(aimHint, static_cast<UINT32>(wcslen(aimHint)), smallFormat_.Get(),
+        D2D1::RectF(left + 48.0f, aimTop + 42.0f, left + panelW - 48.0f, aimTop + 66.0f), textBrush_.Get());
 }
 
 void SweetsApp::DrawDebugHud()

@@ -698,7 +698,7 @@ struct AudioSystem::Impl
     ComPtr<IMFSourceReader> reader;
     std::deque<StreamPacket> queuedPackets;
     std::vector<BYTE> activeFormat;
-    std::array<CachedSound, 2> soundCache;
+    std::array<CachedSound, 3> soundCache;
     std::vector<ActiveSound> activeSounds;
     MusicTrack currentTrack = MusicTrack::None;
     std::wstring currentPath;

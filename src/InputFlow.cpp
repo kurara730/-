@@ -404,10 +404,22 @@ void SweetsApp::ActivatePauseMenuItem()
     }
 }
 
+void SweetsApp::SetAimMode(AimMode mode, bool save)
+{
+    aimMode_ = mode;
+    if (save)
+    {
+        SaveSettings();
+    }
+    message_ = L"攻撃方向: ";
+    message_ += AimModeName(aimMode_);
+    messageT_ = 1.2f;
+}
+
 bool SweetsApp::HandlePauseClick(float sx, float sy)
 {
     const float panelW = 480.0f;
-    const float panelH = 370.0f;
+    const float panelH = 450.0f;
     const float left = (static_cast<float>(width_) - panelW) * 0.5f;
     const float top = (static_cast<float>(height_) - panelH) * 0.5f;
     if (!PointInRect(sx, sy, left, top, left + panelW, top + panelH))
@@ -439,6 +451,21 @@ bool SweetsApp::HandlePauseClick(float sx, float sy)
             pauseMenuIndex_ = i + 2;
             draggingVolume_ = i;
             SetVolumeSlider(i, (sx - sliderLeft) / (sliderRight - sliderLeft), true);
+            return true;
+        }
+    }
+
+    const float aimTop = top + 348.0f;
+    const float aimButtonW = 104.0f;
+    const float aimButtonH = 32.0f;
+    const float aimStartX = left + 138.0f;
+    for (int i = 0; i < 3; ++i)
+    {
+        const float x = aimStartX + i * (aimButtonW + 10.0f);
+        if (PointInRect(sx, sy, x, aimTop, x + aimButtonW, aimTop + aimButtonH))
+        {
+            pauseMenuIndex_ = 6 + i;
+            SetAimMode(static_cast<AimMode>(i), true);
             return true;
         }
     }

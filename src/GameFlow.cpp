@@ -2,6 +2,8 @@
 #include "ReflectionSystem.h"
 #include "StageFactory.h"
 
+#include <filesystem>
+
 namespace
 {
 bool IsEliteType(EnemyType type)
@@ -10,6 +12,29 @@ bool IsEliteType(EnemyType type)
         || type == EnemyType::Barrier
         || type == EnemyType::Mirror
         || type == EnemyType::Teleport;
+}
+
+bool AssetExists(const std::wstring& relativePath)
+{
+    namespace fs = std::filesystem;
+    const fs::path rel(relativePath);
+    std::array<fs::path, 5> candidates{};
+    candidates[0] = fs::current_path() / rel;
+
+    wchar_t modulePath[MAX_PATH]{};
+    GetModuleFileNameW(nullptr, modulePath, MAX_PATH);
+    const fs::path exeDir = fs::path(modulePath).parent_path();
+    candidates[1] = exeDir / rel;
+    candidates[2] = exeDir.parent_path() / rel;
+    candidates[3] = exeDir.parent_path().parent_path() / rel;
+    candidates[4] = rel;
+
+    for (const auto& path : candidates)
+    {
+        std::error_code ec;
+        if (fs::exists(path, ec)) return true;
+    }
+    return false;
 }
 }
 
@@ -266,6 +291,7 @@ void SweetsApp::UpdateBootLoading(float dt)
         ApplyAudioVolume();
         audio_.LoadSoundEffect(SoundEffect::ChocoSlash, L"assets/audio/se/choco_slash.mp3");
         audio_.LoadSoundEffect(SoundEffect::UltimateSlash, L"assets/audio/se/ultimate_slash.mp3");
+        audio_.LoadSoundEffect(SoundEffect::Reflect, L"assets/audio/se/reflect.mp3");
         AdvanceLoadPhase(LoadPhase::Ready, L"Audio streaming ready");
         break;
     case LoadPhase::Ready:
@@ -410,6 +436,16 @@ void SweetsApp::UpdateAudioForScreen()
         else
         {
             audio_.PlayLoop(MusicTrack::HiddenBossGauge3, L"assets/audio/hidden_gauge3.mp3");
+        }
+        break;
+    case Screen::CompleteClear:
+        if (AssetExists(L"assets/audio/hidden_clear.mp3"))
+        {
+            audio_.PlayLoop(MusicTrack::HiddenBossClear, L"assets/audio/hidden_clear.mp3");
+        }
+        else
+        {
+            audio_.PlayLoop(MusicTrack::Title, L"assets/audio/333_BPM177.mp3");
         }
         break;
     default:

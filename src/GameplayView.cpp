@@ -254,6 +254,22 @@ void SweetsApp::DrawGameplay3D()
         DrawSphere(p.pos, PlayerBodyY, p.radius, body);
         const V2 nose = p.pos + FromAngle(p.face) * (p.radius * 0.75f);
         DrawSphere(nose, PlayerBodyY + 0.03f, p.radius * 0.16f, Cream);
+        const V2 line = p.pos + FromAngle(p.face) * (p.radius * 1.55f);
+        DrawCylinder(line, p.radius * 0.08f, 0.10f, WithAlpha(Cream, 0.65f));
+        if (p.chargeFull)
+        {
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(p.radius * 1.85f, 1.0f, p.radius * 1.85f) *
+                XMMatrixTranslation(p.pos.x, 0.075f, p.pos.z),
+                WithAlpha(Gold, 0.84f));
+        }
+        else if (p.chargeReady)
+        {
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(p.radius * 1.55f, 1.0f, p.radius * 1.55f) *
+                XMMatrixTranslation(p.pos.x, 0.07f, p.pos.z),
+                WithAlpha(Sky, 0.58f));
+        }
         if ((p.focus || screen_ == Screen::HiddenBoss) && !p.downed)
         {
             DrawMesh(ringMesh_,

@@ -76,9 +76,11 @@
 | `assets/audio/hidden_gauge1.mp3` | 隠しボス1ゲージ目BGM |
 | `assets/audio/hidden_gauge2.mp3` | 隠しボス2ゲージ目BGM |
 | `assets/audio/hidden_gauge3.mp3` | 隠しボス3ゲージ目BGM |
+| `assets/audio/hidden_clear.mp3` | 隠しボス撃破後BGM。未配置時はタイトルBGMへフォールバック |
 | `assets/audio/Lonery boy.wav` | 旧隠しボスBGM素材 |
 | `assets/audio/se/choco_slash.mp3` | チョコ通常攻撃SE |
 | `assets/audio/se/ultimate_slash.mp3` | 必殺技SE |
+| `assets/audio/se/reflect.mp3` | 反射SE差し替え口。未配置時は無音 |
 | `assets/video/title.mp4` | 任意配置のタイトル画面動画 |
 
 ## クレジット

@@ -1,6 +1,7 @@
 #include "SweetsApp.h"
 
 #include <algorithm>
+#include <sstream>
 
 namespace
 {
@@ -273,8 +274,36 @@ void SweetsApp::UpdateHiddenBoss(float dt)
         {
             if (s.enemy) s.dead = true;
         }
-        message_ = hiddenBossPhase_ == 0 ? L"Hidden Boss Phase 1" : (hiddenBossPhase_ == 1 ? L"Hidden Boss Phase 2" : L"Hidden Boss Phase 3");
-        messageT_ = 1.6f;
+        message_ = hiddenBossPhase_ == 0 ? L"炎核を壊せ" : (hiddenBossPhase_ == 1 ? L"金色弾を反射しろ" : L"回避して攻めろ");
+        messageT_ = 2.0f;
+    }
+
+    if (messageT_ <= 0.0f)
+    {
+        if (hiddenBossForm_ == 1)
+        {
+            message_ = hiddenBossCoreOpenT_ > 0.0f ? L"本体へ攻撃チャンス" : L"炎核を壊せ";
+            messageT_ = hiddenBossCoreOpenT_ > 0.0f ? 1.1f : 1.4f;
+        }
+        else if (hiddenBossForm_ == 2)
+        {
+            if (hiddenBossAuraBreakT_ > 0.0f)
+            {
+                message_ = L"オーラ解除中: 本体を削れ";
+            }
+            else
+            {
+                std::wostringstream ss;
+                ss << L"金色弾を反射しろ " << hiddenBossReflectCount_ << L"/" << HiddenBossReflectBreakCount;
+                message_ = ss.str();
+            }
+            messageT_ = 1.2f;
+        }
+        else
+        {
+            message_ = L"最終ゲージ: 回避して攻めろ";
+            messageT_ = 1.1f;
+        }
     }
 
     hiddenPatternCd_ -= dt;
@@ -291,45 +320,120 @@ void SweetsApp::UpdateHiddenBoss(float dt)
 
         const int phase = hiddenBossPhase_;
         const float aimed = AngleOf(player_.pos - boss_.pos);
+        const int pattern = hiddenPatternStep_ % 3;
         if (phase == 0)
         {
             const bool open = hiddenBossCoreOpenT_ > 0.0f;
-            for (int i = -2; i <= 2; ++i) spawn(aimed + i * 0.13f, open ? 3.85f : 3.15f, 0.075f, open ? Gold : Sky, 5.8f);
-            const int ringCount = open ? 18 : 10;
-            for (int i = 0; i < ringCount; ++i) spawn(boss_.spin + TwoPi * i / static_cast<float>(ringCount), open ? 2.45f : 1.85f, 0.070f, open ? Red : Grape, 6.2f, open ? 0.08f : 0.04f);
-            hiddenPatternCd_ = open ? 0.42f : 0.72f;
+            if (pattern == 0)
+            {
+                const int fan = open ? 2 : 1;
+                for (int i = -fan; i <= fan; ++i) spawn(aimed + i * 0.15f, open ? 3.45f : 2.70f, 0.073f, open ? Gold : Sky, 5.8f);
+                const int ringCount = open ? 14 : 8;
+                for (int i = 0; i < ringCount; ++i) spawn(boss_.spin + TwoPi * i / static_cast<float>(ringCount), open ? 2.20f : 1.65f, 0.070f, open ? Red : Grape, 6.2f, open ? 0.06f : 0.03f);
+                hiddenPatternCd_ = open ? 0.68f : 0.95f;
+            }
+            else if (pattern == 1)
+            {
+                for (int lane = -2; lane <= 2; ++lane)
+                {
+                    const float a = aimed + lane * 0.22f + std::sin(hiddenBossT_ * 0.8f) * 0.08f;
+                    spawn(a, open ? 3.00f : 2.25f, 0.070f, open ? Gold : Mint, 6.4f, 0.04f);
+                    if (open && std::abs(lane) == 2) spawn(a + 0.32f, 2.25f, 0.068f, Sky, 6.2f, -0.04f);
+                }
+                hiddenPatternCd_ = open ? 0.62f : 0.90f;
+            }
+            else
+            {
+                const int count = open ? 16 : 10;
+                for (int i = 0; i < count; ++i)
+                {
+                    const float speed = (i & 1) ? (open ? 3.05f : 2.35f) : (open ? 1.80f : 1.45f);
+                    spawn(boss_.spin * 0.9f + TwoPi * i / static_cast<float>(count), speed, 0.072f, (i & 1) ? Gold : Grape, 6.8f, (i & 1) ? 0.08f : -0.04f);
+                }
+                hiddenPatternCd_ = open ? 0.72f : 1.05f;
+            }
         }
         else if (phase == 1)
         {
             const bool broken = hiddenBossAuraBreakT_ > 0.0f;
-            for (int arm = 0; arm < (broken ? 5 : 4); ++arm)
+            if (!broken && pattern == 0)
             {
-                const float a = boss_.spin * 1.6f + arm * (TwoPi / static_cast<float>(broken ? 5 : 4));
-                spawn(a, broken ? 3.05f : 2.65f, 0.074f, Gold, 6.4f, (arm & 1) ? -0.18f : 0.18f, 0.03f);
-                spawn(a + 0.18f, broken ? 3.55f : 3.05f, 0.070f, broken ? Red : Mint, 5.4f, (arm & 1) ? -0.10f : 0.10f);
+                for (int i = -1; i <= 1; ++i) spawn(aimed + i * 0.24f, 2.45f, 0.088f, Gold, 7.0f, 0.0f, -0.015f);
+                hiddenPatternCd_ = 0.95f;
             }
-            if ((hiddenPatternStep_ % 3) == 0)
+            else if (pattern == 0)
             {
-                for (int i = -3; i <= 3; ++i) spawn(aimed + i * 0.09f, broken ? 4.55f : 3.95f, 0.068f, broken ? Cream : Gold, 4.8f, 0.0f, -0.04f);
+                for (int arm = 0; arm < 4; ++arm)
+                {
+                    const float a = boss_.spin * 1.35f + arm * (TwoPi / 4.0f);
+                    spawn(a, 2.85f, 0.074f, Gold, 6.4f, (arm & 1) ? -0.14f : 0.14f, 0.02f);
+                    spawn(a + 0.22f, 3.25f, 0.070f, Red, 5.4f, (arm & 1) ? -0.08f : 0.08f);
+                }
+                hiddenPatternCd_ = 0.66f;
             }
-            hiddenPatternCd_ = broken ? 0.29f : 0.38f;
+            else if (!broken && pattern == 1)
+            {
+                for (int i = 0; i < 8; ++i) spawn(boss_.spin + TwoPi * i / 8.0f, 1.85f, 0.070f, (i % 4 == 0) ? Gold : Mint, 7.0f, 0.08f);
+                for (int i = -1; i <= 1; i += 2) spawn(aimed + i * 0.18f, 2.65f, 0.086f, Gold, 6.8f);
+                hiddenPatternCd_ = 0.85f;
+            }
+            else if (pattern == 1)
+            {
+                for (int i = -4; i <= 4; ++i)
+                {
+                    if (i == 0) continue;
+                    spawn(aimed + i * 0.095f, 3.85f, 0.068f, i % 3 == 0 ? Gold : Cream, 5.0f, 0.0f, -0.025f);
+                }
+                for (int i = 0; i < 8; ++i) spawn(boss_.spin + TwoPi * i / 8.0f, 2.0f, 0.072f, Gold, 6.6f, 0.10f);
+                hiddenPatternCd_ = 0.62f;
+            }
+            else
+            {
+                const float wallBase = boss_.spin * 0.45f;
+                const int count = broken ? 16 : 10;
+                for (int i = 0; i < count; ++i)
+                {
+                    const float a = wallBase + TwoPi * i / static_cast<float>(count);
+                    if (i % 5 == 0) continue;
+                    spawn(a, broken ? 3.05f : 2.35f, 0.076f, (i % 4 == 0) ? Gold : Mint, 6.2f);
+                }
+                hiddenPatternCd_ = broken ? 0.68f : 0.95f;
+            }
         }
         else
         {
-            const float gap = std::sin(hiddenBossT_ * 1.2f) * 0.9f;
-            for (int i = 0; i < 22; ++i)
+            if (pattern == 0)
             {
-                const float a = -Pi * 0.94f + i * (Pi * 1.88f / 21.0f);
-                if (std::fabs(a - gap) < 0.22f) continue;
-                spawn(a, 2.55f + (i % 3) * 0.18f, 0.066f, Cream, 6.8f, 0.03f * std::sin(i * 1.7f));
+                const float gap = std::sin(hiddenBossT_ * 1.2f) * 0.9f;
+                for (int i = 0; i < 18; ++i)
+                {
+                    const float a = -Pi * 0.86f + i * (Pi * 1.72f / 17.0f);
+                    if (std::fabs(a - gap) < 0.30f) continue;
+                    spawn(a, 2.35f + (i % 3) * 0.16f, 0.066f, Cream, 6.8f, 0.025f * std::sin(i * 1.7f));
+                }
+                for (int i = -2; i <= 2; ++i) spawn(aimed + i * 0.10f, 4.20f, 0.066f, Red, 4.0f, 0.0f, -0.025f);
+                hiddenPatternCd_ = 0.72f;
             }
-            for (int i = 0; i < 16; ++i)
+            else if (pattern == 1)
             {
-                const float a = boss_.spin * 1.8f + i * (TwoPi / 16.0f);
-                spawn(a, 3.05f + 0.08f * (i % 4), 0.066f, (i & 1) ? Gold : Grape, 5.2f, (i & 1) ? 0.17f : -0.17f, 0.04f);
+                for (int i = 0; i < 16; ++i)
+                {
+                    const float a = boss_.spin * 1.6f + i * (TwoPi / 16.0f);
+                    spawn(a, 2.85f + 0.08f * (i % 4), 0.066f, (i & 1) ? Gold : Grape, 5.2f, (i & 1) ? 0.14f : -0.14f, 0.03f);
+                    if (i % 2 == 0) spawn(a + 0.09f, 2.20f, 0.064f, Cream, 6.0f, (i & 1) ? -0.08f : 0.08f);
+                }
+                hiddenPatternCd_ = 0.68f;
             }
-            for (int i = -3; i <= 3; ++i) spawn(aimed + i * 0.08f, 4.75f, 0.066f, Red, 4.0f, 0.0f, -0.03f);
-            hiddenPatternCd_ = 0.58f;
+            else
+            {
+                for (int i = -4; i <= 4; ++i) spawn(aimed + i * 0.075f, 3.85f + (std::abs(i) % 3) * 0.24f, 0.066f, i == 0 ? Red : Gold, 4.8f, 0.018f * static_cast<float>(i), -0.035f);
+                for (int i = 0; i < 14; ++i)
+                {
+                    const float a = boss_.spin * -1.15f + i * (TwoPi / 14.0f);
+                    spawn(a, 2.75f, 0.066f, (i % 3 == 0) ? Grape : Cream, 6.0f, -0.14f);
+                }
+                hiddenPatternCd_ = 0.75f;
+            }
         }
         ++hiddenPatternStep_;
     }

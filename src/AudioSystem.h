@@ -11,13 +11,15 @@ enum class MusicTrack
     GameOver,
     HiddenBossGauge1,
     HiddenBossGauge2,
-    HiddenBossGauge3
+    HiddenBossGauge3,
+    HiddenBossClear
 };
 
 enum class SoundEffect
 {
     ChocoSlash,
-    UltimateSlash
+    UltimateSlash,
+    Reflect
 };
 
 class AudioSystem

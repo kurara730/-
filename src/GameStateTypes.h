@@ -106,6 +106,7 @@ struct Player
     bool focus = false;
     bool charging = false;
     bool chargeReady = false;
+    bool chargeFull = false;
     bool downed = false;
     bool alive = true;
 };
@@ -188,6 +189,7 @@ struct Shot
     bool grazed = false;
     bool reflected = false;
     bool charged = false;
+    bool hitBoss = false;
     Color color = Cream;
 };
 

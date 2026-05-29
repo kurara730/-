@@ -68,6 +68,35 @@ enum class CoopSlotMode
     Pad
 };
 
+enum class AimMode
+{
+    Cursor = 0,
+    MoveDirection,
+    AutoTarget
+};
+
+enum class BossDamageKind
+{
+    NormalShot = 0,
+    ChargeShot,
+    ChocolateCharge,
+    Melee,
+    Bomb,
+    Ultimate,
+    ReflectedShot
+};
+
+inline constexpr const wchar_t* AimModeName(AimMode mode)
+{
+    switch (mode)
+    {
+    case AimMode::Cursor: return L"マウス";
+    case AimMode::AutoTarget: return L"近い敵";
+    case AimMode::MoveDirection:
+    default: return L"移動方向";
+    }
+}
+
 struct CharacterText
 {
     const wchar_t* jpName;

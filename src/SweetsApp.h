@@ -78,6 +78,9 @@ private:
     Player* FindNearestPlayer(V2 pos);
     const Player* FindNearestPlayer(V2 pos) const;
     V2 FindNearestEnemyOrBoss(V2 pos) const;
+    bool FindAimTarget(V2 pos, float range, V2& out) const;
+    float ResolvePlayerAim(const Player& p, int ownerIndex, V2 moveDir, V2 cursorPoint) const;
+    V2 ResolvePlayerAimPoint(const Player& p, int ownerIndex, V2 cursorPoint, float range) const;
     bool Use3DRules() const;
     void SetGameplayDimension(GameplayDimension dimension);
     void SyncAll3DState();
@@ -131,8 +134,10 @@ private:
     void DamageEnemy(Enemy& e, float dmg, V2 from, float knock, bool reflected, int ownerIndex);
     void DamageBoss(float dmg);
     void DamageBoss(float dmg, bool reflected, int ownerIndex);
+    void DamageBoss(float dmg, BossDamageKind kind, bool reflected, int ownerIndex);
     void Burst(V2 p, Color c, int count);
     void PlayCombatEffect(const std::wstring& id, V2 position, float y, float rotationY, float scale, Color fallbackColor, int fallbackCount);
+    void ReflectEnemyShotsNear(V2 center, float radius, int ownerIndex, CharacterType source, Color color, float power);
     void SpawnEnemyShot(V2 pos, float angle, float speed, float damage, float radius, Color color, float ttl = 5.0f, float angularVel = 0.0f, float accel = 0.0f);
     int ScaledBulletCount(int base) const;
     const DifficultyDef& CurrentDifficulty() const;
@@ -196,6 +201,7 @@ private:
     void ActivatePauseMenuItem();
     bool HandlePauseClick(float sx, float sy);
     bool HandlePauseDrag(float sx, float sy);
+    void SetAimMode(AimMode mode, bool save);
     void SetVolumeSlider(int index, float value, bool save);
     float VolumeSliderValue(int index) const;
     float* MutableVolumeSliderValue(int index);
@@ -327,6 +333,7 @@ private:
     GameMode pendingGameMode_ = GameMode::Story;
     GameOverChoice gameOverChoice_ = GameOverChoice::Retry;
     GameplayDimension gameplayDimension_ = GameplayDimension::TwoD;
+    AimMode aimMode_ = AimMode::MoveDirection;
     DebugState debug_;
     LoadPhase loadPhase_ = LoadPhase::Boot;
     bool hiddenBossUnlocked_ = false;

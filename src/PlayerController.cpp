@@ -1,5 +1,71 @@
 #include "SweetsApp.h"
 
+#include <algorithm>
+
+bool SweetsApp::FindAimTarget(V2 pos, float range, V2& out) const
+{
+    bool found = false;
+    float bestD = range * range;
+    if (boss_.active)
+    {
+        const float d = LenSq(boss_.pos - pos);
+        if (d <= bestD)
+        {
+            bestD = d;
+            out = boss_.pos;
+            found = true;
+        }
+    }
+    for (const auto& e : enemies_)
+    {
+        if (e.dead) continue;
+        const float d = LenSq(e.pos - pos);
+        if (d <= bestD)
+        {
+            bestD = d;
+            out = e.pos;
+            found = true;
+        }
+    }
+    return found;
+}
+
+float SweetsApp::ResolvePlayerAim(const Player& p, int ownerIndex, V2 moveDir, V2 cursorPoint) const
+{
+    if (ownerIndex == 0 && aimMode_ == AimMode::Cursor)
+    {
+        return AngleOf(cursorPoint - p.pos);
+    }
+    if (ownerIndex == 0 && aimMode_ == AimMode::AutoTarget)
+    {
+        V2 target{};
+        if (FindAimTarget(p.pos, 13.5f, target))
+        {
+            return AngleOf(target - p.pos);
+        }
+        return p.face;
+    }
+    if (LenSq(moveDir) > 0.001f)
+    {
+        return AngleOf(moveDir);
+    }
+    return p.face;
+}
+
+V2 SweetsApp::ResolvePlayerAimPoint(const Player& p, int ownerIndex, V2 cursorPoint, float range) const
+{
+    if (ownerIndex == 0 && aimMode_ == AimMode::Cursor)
+    {
+        return cursorPoint;
+    }
+    V2 target{};
+    if (FindAimTarget(p.pos, range, target))
+    {
+        return target;
+    }
+    return p.pos + FromAngle(p.face) * std::min(range, 5.0f);
+}
+
 void SweetsApp::UpdatePlayer(float dt)
 {
     if (player_.downed)
@@ -30,6 +96,10 @@ void SweetsApp::UpdatePlayer(float dt)
     }
     ClampInside(player_.pos, player_.radius);
     SyncPlayer3D(player_);
+    if (player_.character == CharacterType::Roll && player_.dashT > 0.0f)
+    {
+        ReflectEnemyShotsNear(player_.pos, player_.radius + 0.72f, 0, CharacterType::Roll, Cream, 1.30f);
+    }
 
     for (const auto& o : obstacles_)
     {
@@ -46,7 +116,8 @@ void SweetsApp::UpdatePlayer(float dt)
     }
 
     const V2 aimPoint = ScreenToWorld(mouseX_, mouseY_);
-    player_.face = AngleOf(aimPoint - player_.pos);
+    player_.face = ResolvePlayerAim(player_, 0, dir, aimPoint);
+    const V2 actionPoint = ResolvePlayerAimPoint(player_, 0, aimPoint, 8.0f);
 
     if (player_.fireCd > 0.0f) player_.fireCd -= dt;
     const bool primaryHeld = mouseLeft_ || KeyDown(VK_SPACE);
@@ -59,18 +130,19 @@ void SweetsApp::UpdatePlayer(float dt)
     {
         player_.chargeT += dt;
         player_.chargeReady = player_.chargeT >= 0.55f;
+        player_.chargeFull = player_.chargeT >= 1.15f;
         player_.charging = true;
     }
     else if (mouseRightReleased_ || player_.charging)
     {
         if (player_.chargeReady && player_.chargeCd <= 0.0f)
         {
-            FireCharged(player_, 0, player_.face, aimPoint);
+            FireCharged(player_, 0, player_.face, actionPoint);
         }
         else if (mouseRightReleased_ && player_.character == CharacterType::Cheese && obstacles_.size() < 20)
         {
             Obstacle wall{};
-            wall.pos = aimPoint;
+            wall.pos = actionPoint;
             ClampInside(wall.pos, 0.8f);
             wall.radius = 0.52f;
             wall.hp = 110.0f + player_.level * 18.0f;
@@ -85,6 +157,7 @@ void SweetsApp::UpdatePlayer(float dt)
         }
         player_.charging = false;
         player_.chargeReady = false;
+        player_.chargeFull = false;
         player_.chargeT = 0.0f;
     }
     mouseRightReleased_ = false;
@@ -199,7 +272,7 @@ void SweetsApp::DoMeleeFor(Player& p, int ownerIndex, float aim)
     }
     if (boss_.active && inCone(boss_.pos, boss_.radius, boss_.height))
     {
-        DamageBoss(s.damage * 0.8f, false, ownerIndex);
+        DamageBoss(s.damage * 0.8f, BossDamageKind::Melee, false, ownerIndex);
     }
 }
 
@@ -268,7 +341,7 @@ void SweetsApp::UseBombFor(Player& p, int ownerIndex)
     DamageHiddenBossCoresInRadius(p.pos, 5.6f, 180.0f + wave_ * 12.0f, ownerIndex);
     if (boss_.active && RuleDistance(p.pos, PlayerBodyY, boss_.pos, boss_.height) < 6.4f)
     {
-        DamageBoss(300.0f + wave_ * 18.0f, false, ownerIndex);
+        DamageBoss(300.0f + wave_ * 18.0f, BossDamageKind::Bomb, false, ownerIndex);
     }
 
     AddScore(cleared * 18, &p);
@@ -301,7 +374,7 @@ void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
             {
                 if (!e.dead) DamageEnemy(e, 240.0f + wave_ * 16.0f, p.pos, 2.4f, true, ownerIndex);
             }
-            if (boss_.active) DamageBoss(540.0f + wave_ * 24.0f, true, ownerIndex);
+            if (boss_.active) DamageBoss(540.0f + wave_ * 24.0f, BossDamageKind::Ultimate, false, ownerIndex);
             Burst((p.pos + other.pos) * 0.5f, Gold, 140);
             PlayCombatEffect(L"ult_chocolate", (p.pos + other.pos) * 0.5f, 0.55f, p.face, 1.95f, Gold, 80);
             message_ = L"合体必殺";
@@ -314,13 +387,14 @@ void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
     const auto weapon = p.weapon;
     if (weapon == Weapon::Strawberry)
     {
-        const V2 target = ownerIndex == 0 ? ScreenToWorld(mouseX_, mouseY_) : FindNearestEnemyOrBoss(p.pos);
+        const V2 cursorTarget = ScreenToWorld(mouseX_, mouseY_);
+        const V2 target = ownerIndex == 0 ? ResolvePlayerAimPoint(p, ownerIndex, cursorTarget, 14.0f) : FindNearestEnemyOrBoss(p.pos);
         for (auto& e : enemies_)
         {
             if (!e.dead && RuleDistance(e.pos, e.height, target, ShotBodyY) < 3.2f) DamageEnemy(e, 210.0f + wave_ * 18.0f, target, 2.0f, false, ownerIndex);
         }
         DamageHiddenBossCoresInRadius(target, 3.2f, 260.0f + wave_ * 18.0f, ownerIndex);
-        if (boss_.active && RuleDistance(boss_.pos, boss_.height, target, ShotBodyY) < 3.6f) DamageBoss(460.0f + wave_ * 22.0f, false, ownerIndex);
+        if (boss_.active && RuleDistance(boss_.pos, boss_.height, target, ShotBodyY) < 3.6f) DamageBoss(460.0f + wave_ * 22.0f, BossDamageKind::Ultimate, false, ownerIndex);
         Burst(target, Berry, 90);
         PlayCombatEffect(L"ult_shortcake", target, 0.50f, 0.0f, 1.75f, Berry, 70);
         message_ = L"巨大メテオ";
@@ -329,7 +403,7 @@ void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
     {
         for (auto& e : enemies_) if (!e.dead) DamageEnemy(e, 160.0f + wave_ * 12.0f, p.pos, 2.0f, false, ownerIndex);
         DamageHiddenBossCoresInRadius(p.pos, 7.5f, 220.0f + wave_ * 12.0f, ownerIndex);
-        if (boss_.active) DamageBoss(380.0f + wave_ * 18.0f, false, ownerIndex);
+        if (boss_.active) DamageBoss(380.0f + wave_ * 18.0f, BossDamageKind::Ultimate, false, ownerIndex);
         Burst(p.pos, Choco, 80);
         PlayCombatEffect(L"ult_chocolate", p.pos, 0.55f, p.face, 1.85f, Choco, 70);
         message_ = L"時計斬り";

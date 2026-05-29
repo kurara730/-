@@ -68,6 +68,10 @@ void SweetsApp::UpdateCoopPlayers(float dt)
             p.ai = false;
             UpdateGamepadPlayer(p, i, dt);
         }
+        if (p.character == CharacterType::Roll && p.dashT > 0.0f)
+        {
+            ReflectEnemyShotsNear(p.pos, p.radius + 0.72f, i, CharacterType::Roll, Cream, 1.30f);
+        }
     }
 
     TryRevivePlayers(dt);
@@ -114,6 +118,7 @@ void SweetsApp::UpdateGamepadPlayer(Player& p, int playerIndex, float dt)
     {
         p.chargeT += dt;
         p.chargeReady = p.chargeT >= 0.55f;
+        p.chargeFull = p.chargeT >= 1.15f;
         p.charging = true;
     }
     else if (p.charging)
@@ -121,6 +126,7 @@ void SweetsApp::UpdateGamepadPlayer(Player& p, int playerIndex, float dt)
         if (p.chargeReady && p.chargeCd <= 0.0f) FireCharged(p, playerIndex, p.face, p.pos + FromAngle(p.face) * 3.0f);
         p.charging = false;
         p.chargeReady = false;
+        p.chargeFull = false;
         p.chargeT = 0.0f;
     }
 
