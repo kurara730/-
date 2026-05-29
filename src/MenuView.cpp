@@ -135,7 +135,7 @@ void SweetsApp::DrawHud()
         << L"   フィーバー " << static_cast<int>(player_.fever) << L"%";
     if (screen_ == Screen::HiddenBoss)
     {
-        hud << L"   隠しボス 残り " << static_cast<int>(std::max(0.0f, HiddenBossDurationSeconds - hiddenBossT_)) << L"秒";
+        hud << L"   Hidden Boss P" << hiddenBossForm_;
     }
     d2dContext_->DrawTextW(hud.str().c_str(), static_cast<UINT32>(hud.str().size()), hudFormat_.Get(),
         D2D1::RectF(18.0f, 14.0f, static_cast<float>(width_) - 18.0f, 48.0f), textBrush_.Get());
@@ -165,9 +165,13 @@ void SweetsApp::DrawHud()
         const float left = 18.0f;
         const float top = 154.0f;
         const float bw = 360.0f;
-        const float pct = boss_.bossType == BossType::HiddenBoss
-            ? ClampFloat(1.0f - hiddenBossT_ / HiddenBossDurationSeconds, 0.0f, 1.0f)
-            : ClampFloat(boss_.hp / boss_.maxHp, 0.0f, 1.0f);
+        float pct = ClampFloat(boss_.hp / boss_.maxHp, 0.0f, 1.0f);
+        if (boss_.bossType == BossType::HiddenBoss)
+        {
+            const int remainingGauge = std::max(1, std::min(HiddenBossGaugeCount, static_cast<int>(std::ceil(std::max(1.0f, boss_.hp) / HiddenBossGaugeHp))));
+            const float activeGaugeHp = boss_.hp - HiddenBossGaugeHp * static_cast<float>(remainingGauge - 1);
+            pct = ClampFloat(activeGaugeHp / HiddenBossGaugeHp, 0.0f, 1.0f);
+        }
         textBrush_->SetColor(D2D1::ColorF(0.28f, 0.08f, 0.14f, 0.85f));
         d2dContext_->FillRectangle(D2D1::RectF(left, top, left + bw, top + 14.0f), textBrush_.Get());
         textBrush_->SetColor(D2D1::ColorF(1.0f, 0.24f, 0.35f, 0.95f));
@@ -175,6 +179,13 @@ void SweetsApp::DrawHud()
         textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f));
         const wchar_t* bossName = BossName(boss_.bossType);
         d2dContext_->DrawTextW(bossName, static_cast<UINT32>(wcslen(bossName)), smallFormat_.Get(), D2D1::RectF(left, top + 16, left + 220, top + 40), textBrush_.Get());
+        if (boss_.bossType == BossType::HiddenBoss)
+        {
+            std::wostringstream gauge;
+            gauge << L"Gauge " << std::max(1, HiddenBossGaugeCount - hiddenBossForm_ + 1) << L"/" << HiddenBossGaugeCount;
+            const std::wstring gaugeText = gauge.str();
+            d2dContext_->DrawTextW(gaugeText.c_str(), static_cast<UINT32>(gaugeText.size()), smallFormat_.Get(), D2D1::RectF(left + 230.0f, top + 16.0f, left + bw, top + 40.0f), textBrush_.Get());
+        }
     }
 
     textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.88f));
@@ -187,6 +198,31 @@ void SweetsApp::DrawHud()
         textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, ClampFloat(messageT_, 0.0f, 1.0f)));
         d2dContext_->DrawTextW(message_.c_str(), static_cast<UINT32>(message_.size()), hudFormat_.Get(),
             D2D1::RectF(18.0f, 188.0f, static_cast<float>(width_) - 18.0f, 226.0f), textBrush_.Get());
+    }
+
+    if (screen_ == Screen::HiddenBoss && hiddenBossPhaseIntroT_ > 0.0f)
+    {
+        const float fade = ClampFloat(hiddenBossPhaseIntroT_ / std::max(0.01f, hiddenBossPhaseIntroLife_), 0.0f, 1.0f);
+        const float halfW = GameplayHalfWidth(width_, height_);
+        const float halfH = GameplayHalfHeight();
+        const float sx = static_cast<float>(width_) * 0.5f + boss_.pos.x / halfW * static_cast<float>(width_) * 0.5f;
+        const float sy = static_cast<float>(height_) * 0.5f - boss_.pos.z / halfH * static_cast<float>(height_) * 0.5f;
+
+        textBrush_->SetColor(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.36f * fade));
+        d2dContext_->FillRectangle(D2D1::RectF(0.0f, 0.0f, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.20f, 0.85f * fade));
+        const float r = hiddenBossForm_ >= 3 ? 96.0f : 76.0f;
+        d2dContext_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(sx, sy), r, r * 0.78f), textBrush_.Get(), hiddenBossForm_ >= 3 ? 6.0f : 4.0f);
+        d2dContext_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(sx, sy), r * 1.35f, r * 1.05f), textBrush_.Get(), 2.0f);
+        for (int i = 0; i < 18; ++i)
+        {
+            const float a = TwoPi * i / 18.0f;
+            const float edgeX = sx + std::cos(a) * static_cast<float>(width_) * 0.46f;
+            const float edgeY = sy + std::sin(a) * static_cast<float>(height_) * 0.44f;
+            const float nearX = sx + std::cos(a) * r * 1.55f;
+            const float nearY = sy + std::sin(a) * r * 1.20f;
+            d2dContext_->DrawLine(D2D1::Point2F(edgeX, edgeY), D2D1::Point2F(nearX, nearY), textBrush_.Get(), 1.5f);
+        }
     }
 
     if (screen_ == Screen::Title)
@@ -258,7 +294,7 @@ void SweetsApp::DrawHud()
 
     if (screen_ == Screen::Title)
     {
-        textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.72f));
+        textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 1.0f));
         d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
         textBrush_->SetColor(D2D1::ColorF(1.0f, 0.86f, 0.36f, 1.0f));
         const wchar_t* title = L"スイーツパニック DX11";
@@ -353,10 +389,12 @@ void SweetsApp::DrawHud()
         {
             const bool selected = (i == 0 && gameOverChoice_ == GameOverChoice::Retry) || (i == 1 && gameOverChoice_ == GameOverChoice::Title);
             const float x = static_cast<float>(width_) * 0.5f - choiceW - 10.0f + i * (choiceW + 20.0f);
-            textBrush_->SetColor(selected ? D2D1::ColorF(0.20f, 0.08f, 0.13f, 0.98f) : D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.92f));
-            d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(x, choiceTop, x + choiceW, choiceTop + 46.0f), 8.0f, 8.0f), textBrush_.Get());
-            textBrush_->SetColor(selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f));
-            d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(x, choiceTop, x + choiceW, choiceTop + 46.0f), 8.0f, 8.0f), textBrush_.Get(), selected ? 3.0f : 1.0f);
+            const D2D1_RECT_F rect = D2D1::RectF(x, choiceTop, x + choiceW, choiceTop + 46.0f);
+            const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
+            textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.18f) : (selected ? D2D1::ColorF(0.20f, 0.08f, 0.13f, 0.98f) : D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.92f)));
+            d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get());
+            textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : (selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f)));
+            d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), selected || hover ? 3.0f : 1.0f);
             d2dContext_->DrawTextW(choices[i], static_cast<UINT32>(wcslen(choices[i])), hudFormat_.Get(),
                 D2D1::RectF(x, choiceTop + 10.0f, x + choiceW, choiceTop + 46.0f), textBrush_.Get());
         }
@@ -442,7 +480,7 @@ void SweetsApp::DrawBootLoading()
 
 void SweetsApp::DrawCredits()
 {
-    textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.78f));
+    textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 1.0f));
     d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
 
     titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
@@ -468,6 +506,20 @@ void SweetsApp::DrawCredits()
     d2dContext_->DrawTextW(back, static_cast<UINT32>(wcslen(back)), smallFormat_.Get(),
         D2D1::RectF(0.0f, static_cast<float>(height_) * 0.68f, static_cast<float>(width_), static_cast<float>(height_) * 0.74f), textBrush_.Get());
 
+    const float buttonW = 190.0f;
+    const float buttonH = 46.0f;
+    const float buttonX = (static_cast<float>(width_) - buttonW) * 0.5f;
+    const float buttonY = static_cast<float>(height_) * 0.68f;
+    const D2D1_RECT_F backRect = D2D1::RectF(buttonX, buttonY, buttonX + buttonW, buttonY + buttonH);
+    const bool hover = PointInRect(mouseX_, mouseY_, backRect.left, backRect.top, backRect.right, backRect.bottom);
+    textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.18f) : D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.92f));
+    d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(backRect, 8.0f, 8.0f), textBrush_.Get());
+    textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f));
+    d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(backRect, 8.0f, 8.0f), textBrush_.Get(), hover ? 3.0f : 1.5f);
+    const wchar_t* backButton = L"Back";
+    d2dContext_->DrawTextW(backButton, static_cast<UINT32>(wcslen(backButton)), hudFormat_.Get(),
+        D2D1::RectF(backRect.left, backRect.top + 10.0f, backRect.right, backRect.bottom), textBrush_.Get());
+
     titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
@@ -475,7 +527,7 @@ void SweetsApp::DrawCredits()
 
 void SweetsApp::DrawCharacterSelect()
 {
-    textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.78f));
+    textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 1.0f));
     d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
 
     titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
@@ -530,10 +582,11 @@ void SweetsApp::DrawPauseMenu()
         const float y = top + 76.0f + i * 56.0f;
         const bool selected = pauseMenuIndex_ == i;
         const D2D1_RECT_F rect = D2D1::RectF(buttonX, y, buttonX + buttonW, y + buttonH);
-        textBrush_->SetColor(selected ? D2D1::ColorF(0.23f, 0.10f, 0.15f, 1.0f) : D2D1::ColorF(0.16f, 0.07f, 0.11f, 0.94f));
+        const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
+        textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.18f) : (selected ? D2D1::ColorF(0.23f, 0.10f, 0.15f, 1.0f) : D2D1::ColorF(0.16f, 0.07f, 0.11f, 0.94f)));
         d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get());
-        textBrush_->SetColor(selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f));
-        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), selected ? 2.5f : 1.0f);
+        textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : (selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f)));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), selected || hover ? 2.5f : 1.0f);
         d2dContext_->DrawTextW(buttons[i], static_cast<UINT32>(wcslen(buttons[i])), hudFormat_.Get(),
             D2D1::RectF(rect.left, rect.top + 9.0f, rect.right, rect.bottom), textBrush_.Get());
     }
@@ -655,7 +708,7 @@ void SweetsApp::DrawDebugHud()
 
 void SweetsApp::DrawDifficultySelection()
 {
-    textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.78f));
+    textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 1.0f));
     d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
 
     titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
@@ -690,14 +743,20 @@ void SweetsApp::DrawDifficultySelection()
         const float y = top + row * (cardH + gap);
         const bool selected = i == difficultyIndex_;
         const D2D1_RECT_F rect = D2D1::RectF(x, y, x + cardW, y + cardH);
+        const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
 
         textBrush_->SetColor(selected ? D2D1::ColorF(0.20f, 0.08f, 0.14f, 0.98f) : D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.93f));
         d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get());
-        textBrush_->SetColor(selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(def.color.r, def.color.g, def.color.b, 0.75f));
-        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), selected ? 3.0f : 1.0f);
+        if (hover)
+        {
+            textBrush_->SetColor(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.14f));
+            d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get());
+        }
+        textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : (selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(def.color.r, def.color.g, def.color.b, 0.75f)));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), selected || hover ? 3.0f : 1.0f);
 
         std::wstring name = practice ? L"Hidden Boss Practice" : def.name;
-        textBrush_->SetColor(D2D1::ColorF(def.color.r, def.color.g, def.color.b, 1.0f));
+        textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : D2D1::ColorF(def.color.r, def.color.g, def.color.b, 1.0f));
         d2dContext_->DrawTextW(name.c_str(), static_cast<UINT32>(name.size()), hudFormat_.Get(),
             D2D1::RectF(x + 10.0f, y + 12.0f, x + cardW - 10.0f, y + 40.0f), textBrush_.Get());
 
@@ -749,6 +808,20 @@ void SweetsApp::DrawClearScreen()
     textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f));
     d2dContext_->DrawTextW(line.c_str(), static_cast<UINT32>(line.size()), hudFormat_.Get(),
         D2D1::RectF(0, static_cast<float>(height_) * 0.47f, static_cast<float>(width_), static_cast<float>(height_) * 0.56f), textBrush_.Get());
+
+    const float buttonW = 220.0f;
+    const float buttonH = 46.0f;
+    const float buttonX = (static_cast<float>(width_) - buttonW) * 0.5f;
+    const float buttonY = static_cast<float>(height_) * 0.62f;
+    const D2D1_RECT_F rect = D2D1::RectF(buttonX, buttonY, buttonX + buttonW, buttonY + buttonH);
+    const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
+    textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.18f) : D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.92f));
+    d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get());
+    textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f));
+    d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), hover ? 3.0f : 1.5f);
+    const wchar_t* back = L"Title";
+    d2dContext_->DrawTextW(back, static_cast<UINT32>(wcslen(back)), hudFormat_.Get(),
+        D2D1::RectF(rect.left, rect.top + 10.0f, rect.right, rect.bottom), textBrush_.Get());
 
     titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
@@ -900,12 +973,18 @@ void SweetsApp::DrawLoadoutSelection()
         const bool selected = i == loadoutIndex_;
         const float x = startX + i * (cardW + gap);
         const D2D1_RECT_F card = D2D1::RectF(x, top, x + cardW, top + cardH);
+        const bool hover = PointInRect(mouseX_, mouseY_, card.left, card.top, card.right, card.bottom);
 
         textBrush_->SetColor(selected ? D2D1::ColorF(0.20f, 0.08f, 0.13f, 0.98f) : D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.92f));
         d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(card, 8.0f, 8.0f), textBrush_.Get());
+        if (hover)
+        {
+            textBrush_->SetColor(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.14f));
+            d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(card, 8.0f, 8.0f), textBrush_.Get());
+        }
 
-        textBrush_->SetColor(selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(0.42f, 0.25f, 0.34f, 1.0f));
-        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(card, 8.0f, 8.0f), textBrush_.Get(), selected ? 3.0f : 1.0f);
+        textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : (selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(0.42f, 0.25f, 0.34f, 1.0f)));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(card, 8.0f, 8.0f), textBrush_.Get(), selected || hover ? 3.0f : 1.0f);
 
         D2D1_COLOR_F accent = D2D1::ColorF(loadout.color.r, loadout.color.g, loadout.color.b, 1.0f);
         fill(D2D1::RectF(x, top, x + cardW, top + 5.0f), accent);
@@ -913,7 +992,7 @@ void SweetsApp::DrawLoadoutSelection()
         std::wostringstream index;
         index << CharacterTexts[i].roleIcon;
         drawText(index.str(), hudFormat_.Get(), D2D1::RectF(x + 12.0f, top + 12.0f, x + 42.0f, top + 42.0f), accent);
-        drawText(loadout.name, hudFormat_.Get(), D2D1::RectF(x + 40.0f, top + 12.0f, x + cardW - 12.0f, top + 40.0f), D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f));
+        drawText(loadout.name, hudFormat_.Get(), D2D1::RectF(x + 40.0f, top + 12.0f, x + cardW - 12.0f, top + 40.0f), hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f));
         drawText(loadout.role, smallFormat_.Get(), D2D1::RectF(x + 14.0f, top + 43.0f, x + cardW - 14.0f, top + 63.0f), D2D1::ColorF(1.0f, 0.82f, 0.28f, 0.95f));
         drawText(loadout.summary, smallFormat_.Get(), D2D1::RectF(x + 14.0f, top + 63.0f, x + cardW - 14.0f, top + 84.0f), D2D1::ColorF(0.84f, 0.75f, 0.78f, 0.95f));
         drawText(CharacterTexts[i].normal, smallFormat_.Get(), D2D1::RectF(x + 14.0f, top + 86.0f, x + cardW - 14.0f, top + 105.0f), D2D1::ColorF(0.95f, 0.85f, 0.88f, 0.95f));

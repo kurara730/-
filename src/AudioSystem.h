@@ -9,7 +9,15 @@ enum class MusicTrack
     Title,
     Gameplay,
     GameOver,
-    HiddenBoss
+    HiddenBossGauge1,
+    HiddenBossGauge2,
+    HiddenBossGauge3
+};
+
+enum class SoundEffect
+{
+    ChocoSlash,
+    UltimateSlash
 };
 
 class AudioSystem
@@ -24,10 +32,14 @@ public:
     bool Play(MusicTrack track, const std::wstring& relativePath, bool loop);
     bool PlayLoop(MusicTrack track, const std::wstring& relativePath);
     bool PlayOnce(MusicTrack track, const std::wstring& relativePath);
+    void LoadSoundEffect(SoundEffect effect, const std::wstring& relativePath);
+    bool PlaySoundEffect(SoundEffect effect);
     void Update(float dt);
     void Stop();
     void SetVolume(float volume);
+    void SetSoundVolume(float volume);
     float Volume() const;
+    float SoundVolume() const;
 
     MusicTrack CurrentTrack() const;
     float CurrentDurationSeconds() const;

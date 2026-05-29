@@ -194,6 +194,9 @@ private:
     bool SelectCoopSlotAt(float sx, float sy);
     bool SelectTitleMenuAt(float sx, float sy);
     bool SelectDifficultyAt(float sx, float sy);
+    bool SelectCreditsAt(float sx, float sy);
+    bool SelectGameOverAt(float sx, float sy);
+    bool SelectClearAt(float sx, float sy);
     bool KeyDown(int key) const;
     float Rand(float a, float b);
     int RandInt(int a, int b);
@@ -338,6 +341,9 @@ private:
     float hiddenPatternCd_ = 0.0f;
     int hiddenPatternStep_ = 0;
     int hiddenBossPhase_ = -1;
+    int hiddenBossForm_ = 1;
+    float hiddenBossPhaseIntroT_ = 0.0f;
+    float hiddenBossPhaseIntroLife_ = 0.0f;
     float messageT_ = 0.0f;
     float bootLoadElapsed_ = 0.0f;
     float loadPhaseElapsed_ = 0.0f;

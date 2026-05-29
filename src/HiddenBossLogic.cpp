@@ -1,15 +1,14 @@
 #include "SweetsApp.h"
-#include "ReflectionSystem.h"
-#include "StageFactory.h"
+
+#include <algorithm>
 
 namespace
 {
-bool IsEliteType(EnemyType type)
+int HiddenBossFormFromHp(float hp)
 {
-    return type == EnemyType::Healer
-        || type == EnemyType::Barrier
-        || type == EnemyType::Mirror
-        || type == EnemyType::Teleport;
+    if (hp <= HiddenBossGaugeHp) return 3;
+    if (hp <= HiddenBossGaugeHp * 2.0f) return 2;
+    return 1;
 }
 }
 
@@ -29,6 +28,7 @@ void SweetsApp::StartHiddenBoss()
     stage_ = StageType::BossArena;
     stageTimer_ = 0.0f;
     shrinkRadius_ = ArenaRadius;
+
     boss_ = {};
     boss_.active = true;
     boss_.bossType = BossType::HiddenBoss;
@@ -36,19 +36,23 @@ void SweetsApp::StartHiddenBoss()
     boss_.pos = { 0.0f, -4.8f };
     boss_.height = BossBodyY + 0.22f;
     boss_.radius = 1.05f;
-    boss_.maxHp = 999999.0f;
+    boss_.maxHp = HiddenBossTotalHp;
     boss_.hp = boss_.maxHp;
     boss_.speed = 0.35f;
     boss_.atk = 15.0f;
     boss_.phase = 1;
     boss_.attackCd = 0.0f;
     SyncBoss3D(boss_);
+
     hiddenBossT_ = 0.0f;
     hiddenPatternCd_ = 0.0f;
     hiddenPatternStep_ = 0;
     hiddenBossPhase_ = -1;
+    hiddenBossForm_ = 1;
+    hiddenBossPhaseIntroT_ = 0.0f;
+    hiddenBossPhaseIntroLife_ = 0.0f;
     screen_ = Screen::HiddenBoss;
-    message_ = L"隠しボス: 曲が終わるまで耐えろ";
+    message_ = L"Hidden Boss";
     messageT_ = 3.0f;
 }
 
@@ -100,25 +104,29 @@ void SweetsApp::UpdateHiddenBoss(float dt)
     if (player_.feverT > 0.0f) player_.feverT -= dt;
     else player_.fever = std::max(0.0f, player_.fever - dt * 16.0f);
 
-    boss_.spin += dt * 1.35f;
+    hiddenBossForm_ = HiddenBossFormFromHp(std::max(1.0f, boss_.hp));
+    boss_.phase = hiddenBossForm_;
+    boss_.spin += dt * (1.35f + hiddenBossForm_ * 0.20f);
     boss_.pos.x = std::sin(hiddenBossT_ * 0.55f) * 2.7f;
     boss_.pos.z = -3.0f + std::sin(hiddenBossT_ * 0.37f) * 0.55f;
     if (boss_.flash > 0.0f) boss_.flash -= dt;
+
+    if (hiddenBossPhaseIntroT_ > 0.0f)
+    {
+        mouseRightReleased_ = false;
+        hiddenBossPhaseIntroT_ = std::max(0.0f, hiddenBossPhaseIntroT_ - dt);
+        boss_.flash = std::max(boss_.flash, 0.08f);
+        boss_.spin += dt * (hiddenBossForm_ >= 3 ? 3.6f : 2.6f);
+        UpdateParticles(dt);
+        particles_.erase(std::remove_if(particles_.begin(), particles_.end(), [](const Particle& p) { return p.ttl <= 0.0f || p.y < -0.1f; }), particles_.end());
+        return;
+    }
 
     UpdateStage(dt);
     UpdatePlayer(dt);
     UpdateCoopPlayers(dt);
 
-    const float hiddenFrenzyStart = HiddenBossDurationSeconds - 20.0f;
-    int activeHiddenPhase = 0;
-    if (hiddenBossT_ >= hiddenFrenzyStart)
-    {
-        activeHiddenPhase = 3;
-    }
-    else
-    {
-        activeHiddenPhase = std::min(2, static_cast<int>(hiddenBossT_ / 45.0f));
-    }
+    const int activeHiddenPhase = std::max(0, std::min(hiddenBossForm_ - 1, 2));
     if (activeHiddenPhase != hiddenBossPhase_)
     {
         hiddenBossPhase_ = activeHiddenPhase;
@@ -128,9 +136,7 @@ void SweetsApp::UpdateHiddenBoss(float dt)
         {
             if (s.enemy) s.dead = true;
         }
-        message_ = hiddenBossPhase_ == 0 ? L"第1波: 誘導と放射" : (hiddenBossPhase_ == 1 ? L"第2波: 回転弾幕" : L"最終波: 隙間を読め");
-        if (hiddenBossPhase_ == 2) message_ = L"第3波: 速度差を読む";
-        if (hiddenBossPhase_ == 3) message_ = L"発狂ゾーン: 最後まで避け切れ";
+        message_ = hiddenBossPhase_ == 0 ? L"Hidden Boss Phase 1" : (hiddenBossPhase_ == 1 ? L"Hidden Boss Phase 2" : L"Hidden Boss Phase 3");
         messageT_ = 1.6f;
     }
 
@@ -168,7 +174,7 @@ void SweetsApp::UpdateHiddenBoss(float dt)
             }
             hiddenPatternCd_ = 0.32f;
         }
-        else if (phase == 2)
+        else
         {
             const float gap = std::sin(hiddenBossT_ * 1.2f) * 0.9f;
             for (int i = 0; i < 22; ++i)
@@ -184,29 +190,6 @@ void SweetsApp::UpdateHiddenBoss(float dt)
             }
             for (int i = -3; i <= 3; ++i) spawn(aimed + i * 0.08f, 4.75f, 0.066f, Red, 4.0f, 0.0f, -0.03f);
             hiddenPatternCd_ = 0.58f;
-        }
-        else
-        {
-            const float gap = std::sin(hiddenBossT_ * 1.75f) * 1.0f;
-            for (int i = 0; i < 30; ++i)
-            {
-                const float a = boss_.spin * 2.4f + i * (TwoPi / 30.0f);
-                if (std::fabs(std::sin(a - gap)) < 0.10f) continue;
-                spawn(a, 2.65f + (i % 4) * 0.16f, 0.066f, (i & 1) ? Grape : Gold, 6.2f, (i & 1) ? 0.20f : -0.20f, 0.045f);
-            }
-            for (int i = -4; i <= 4; ++i)
-            {
-                spawn(aimed + i * 0.065f, 4.45f + 0.08f * std::abs(i), 0.066f, Red, 4.2f, 0.0f, -0.035f);
-            }
-            if ((hiddenPatternStep_ % 2) == 0)
-            {
-                for (int i = 0; i < 18; ++i)
-                {
-                    const float a = -boss_.spin * 1.7f + i * (TwoPi / 18.0f);
-                    spawn(a, 3.35f, 0.064f, Mint, 4.8f, 0.14f * std::sin(hiddenBossT_ + i), 0.02f);
-                }
-            }
-            hiddenPatternCd_ = 0.24f;
         }
         ++hiddenPatternStep_;
     }
@@ -225,22 +208,11 @@ void SweetsApp::UpdateHiddenBoss(float dt)
     particles_.erase(std::remove_if(particles_.begin(), particles_.end(), [](const Particle& p) { return p.ttl <= 0.0f || p.y < -0.1f; }), particles_.end());
 
     NormalizePlayerLifeStates();
-    if (hiddenBossT_ >= HiddenBossDurationSeconds)
-    {
-        SaveProgress();
-        AddScore(50000, &player_);
-        shots_.clear();
-        boss_.active = false;
-        screen_ = Screen::CompleteClear;
-        message_ = L"完全クリア";
-        messageT_ = 999.0f;
-    }
-    else if (AllPlayersDown())
+    if (AllPlayersDown())
     {
         screen_ = Screen::GameOver;
         gameOverChoice_ = GameOverChoice::Retry;
-        message_ = L"ゲームオーバー";
+        message_ = L"Game Over";
         messageT_ = 999.0f;
     }
 }
-

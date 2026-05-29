@@ -55,6 +55,9 @@ void SweetsApp::ResetGame()
     hiddenPatternCd_ = 0.0f;
     hiddenPatternStep_ = 0;
     hiddenBossPhase_ = -1;
+    hiddenBossForm_ = 1;
+    hiddenBossPhaseIntroT_ = 0.0f;
+    hiddenBossPhaseIntroLife_ = 0.0f;
     pendingHiddenBoss_ = false;
     message_ = L"";
     messageT_ = 0.0f;
@@ -255,6 +258,8 @@ void SweetsApp::UpdateBootLoading(float dt)
         break;
     case LoadPhase::Audio:
         ApplyAudioVolume();
+        audio_.LoadSoundEffect(SoundEffect::ChocoSlash, L"assets/audio/se/choco_slash.mp3");
+        audio_.LoadSoundEffect(SoundEffect::UltimateSlash, L"assets/audio/se/ultimate_slash.mp3");
         AdvanceLoadPhase(LoadPhase::Ready, L"Audio streaming ready");
         break;
     case LoadPhase::Ready:
@@ -385,7 +390,18 @@ void SweetsApp::UpdateAudioForScreen()
         audio_.PlayLoop(MusicTrack::GameOver, L"assets/audio/ruins.mp3");
         break;
     case Screen::HiddenBoss:
-        audio_.PlayOnce(MusicTrack::HiddenBoss, L"assets/audio/Lonery boy.wav");
+        if (hiddenBossForm_ <= 1)
+        {
+            audio_.PlayLoop(MusicTrack::HiddenBossGauge1, L"assets/audio/Lonery boy.wav");
+        }
+        else if (hiddenBossForm_ == 2)
+        {
+            audio_.PlayLoop(MusicTrack::HiddenBossGauge2, L"assets/audio/Lonery boy.wav");
+        }
+        else
+        {
+            audio_.PlayLoop(MusicTrack::HiddenBossGauge3, L"assets/audio/Lonery boy.wav");
+        }
         break;
     default:
         audio_.Stop();
@@ -396,6 +412,7 @@ void SweetsApp::UpdateAudioForScreen()
 void SweetsApp::ApplyAudioVolume()
 {
     audio_.SetVolume(ClampFloat(masterVolume_, 0.0f, 1.0f) * ClampFloat(bgmVolume_, 0.0f, 1.0f));
+    audio_.SetSoundVolume(ClampFloat(masterVolume_, 0.0f, 1.0f) * ClampFloat(seVolume_, 0.0f, 1.0f));
 }
 
 void SweetsApp::NormalizePlayerLifeStates()

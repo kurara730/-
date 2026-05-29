@@ -169,6 +169,7 @@ void SweetsApp::DoMeleeFor(Player& p, int ownerIndex, float aim)
     s.visualMode = SlashVisualMode::Hidden;
     SyncSlash3D(s);
     slashes_.push_back(s);
+    audio_.PlaySoundEffect(SoundEffect::ChocoSlash);
     PlayCombatEffect(L"sword_slash", p.pos, 0.52f, aim, 1.10f, Choco, 22);
 
     auto inCone = [&](V2 target, float r, float targetY)
@@ -281,6 +282,7 @@ void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
         if (!other.active || other.index == ownerIndex || other.downed || other.ult < 100.0f) continue;
         if (RuleDistance(p.pos, PlayerBodyY, other.pos, PlayerBodyY) < 2.4f)
         {
+            audio_.PlaySoundEffect(SoundEffect::UltimateSlash);
             p.ult = 0.0f;
             other.ult = 0.0f;
             for (auto& s : shots_)
@@ -299,6 +301,7 @@ void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
             return;
         }
     }
+    audio_.PlaySoundEffect(SoundEffect::UltimateSlash);
     p.ult = 0.0f;
     const auto weapon = p.weapon;
     if (weapon == Weapon::Strawberry)

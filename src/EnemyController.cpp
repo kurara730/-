@@ -555,8 +555,50 @@ void SweetsApp::DamageBoss(float dmg, bool reflected, int ownerIndex)
     if (!boss_.active) return;
     if (boss_.bossType == BossType::HiddenBoss)
     {
-        boss_.flash = 0.08f;
-        AddScore(reflected ? 18 : 9, &players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))]);
+        if (hiddenBossPhaseIntroT_ > 0.0f) return;
+        const int oldForm = hiddenBossForm_;
+        boss_.hp -= dmg;
+        boss_.flash = 0.15f;
+        Player& owner = players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))];
+        AddScore(static_cast<int>(dmg * (reflected ? 2.0f : 1.0f)), &owner);
+        if (boss_.hp <= 0.0f)
+        {
+            SaveProgress();
+            AddScore(50000 + (reflected ? 5000 : 0), &owner);
+            shots_.clear();
+            Burst(boss_.pos, Gold, 160);
+            boss_.active = false;
+            screen_ = Screen::CompleteClear;
+            message_ = L"Complete Clear";
+            messageT_ = 999.0f;
+            return;
+        }
+
+        int nextForm = 1;
+        if (boss_.hp <= HiddenBossGaugeHp) nextForm = 3;
+        else if (boss_.hp <= HiddenBossGaugeHp * 2.0f) nextForm = 2;
+        if (nextForm > oldForm)
+        {
+            const float boundaryHp = HiddenBossGaugeHp * static_cast<float>(HiddenBossGaugeCount - nextForm + 1);
+            boss_.hp = std::max(boss_.hp, boundaryHp);
+            hiddenBossForm_ = nextForm;
+            boss_.phase = nextForm;
+            hiddenBossPhase_ = nextForm - 1;
+            hiddenPatternStep_ = 0;
+            hiddenPatternCd_ = nextForm == 2 ? 1.25f : 0.85f;
+            hiddenBossPhaseIntroLife_ = nextForm == 2 ? 1.6f : 1.0f;
+            hiddenBossPhaseIntroT_ = hiddenBossPhaseIntroLife_;
+            for (auto& s : shots_)
+            {
+                if (s.enemy) s.dead = true;
+            }
+            Burst(boss_.pos, Gold, nextForm == 2 ? 130 : 170);
+            screenFlashT_ = nextForm == 2 ? 0.28f : 0.20f;
+            screenFlashLife_ = screenFlashT_;
+            screenFlashColor_ = Gold;
+            message_ = nextForm == 2 ? L"Hidden Boss Phase 2" : L"Hidden Boss Final Phase";
+            messageT_ = 1.8f;
+        }
         return;
     }
     boss_.hp -= dmg;

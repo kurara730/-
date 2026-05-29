@@ -167,6 +167,17 @@ void SweetsApp::DrawScene()
 
     ID3D11RenderTargetView* rtv = sceneTarget;
     context_->OMSetRenderTargets(1, &rtv, dsv_.Get());
+    const bool showGameplayScene =
+        screen_ == Screen::Playing ||
+        screen_ == Screen::Paused ||
+        screen_ == Screen::Clear ||
+        screen_ == Screen::HiddenBossIntro ||
+        screen_ == Screen::HiddenBoss ||
+        screen_ == Screen::CompleteClear;
+    if (!showGameplayScene)
+    {
+        return;
+    }
     if (Use3DRules())
     {
         DrawGameplay3D();
@@ -230,6 +241,26 @@ void SweetsApp::DrawScene()
         Color c = boss_.flash > 0.0f ? Cream : (boss_.bossType == BossType::HiddenBoss ? Grape : (boss_.bossType == BossType::DonutKing ? Sky : (boss_.bossType == BossType::MirrorMacaron ? Gold : Rose)));
         DrawSprite2D(boss_.bossType == BossType::HiddenBoss ? L"2d_boss_hidden" : L"2d_boss_normal", boss_.pos, { boss_.radius * 2.85f, boss_.radius * 2.85f }, boss_.spin * 0.35f, c, 0.18f);
         spriteCanvas_.DrawRing(boss_.pos, boss_.radius * 1.42f, 0.10f, WithAlpha(Red, 0.45f), 0.19f, 72);
+        if (boss_.bossType == BossType::HiddenBoss && hiddenBossForm_ >= 2)
+        {
+            const float pulse = 0.12f * std::sin(gameTime_ * (hiddenBossForm_ >= 3 ? 7.0f : 4.8f));
+            const float strength = hiddenBossForm_ >= 3 ? 0.78f : 0.56f;
+            spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (1.85f + pulse), 0.14f, WithAlpha(Gold, strength), 0.17f, 96);
+            spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (2.28f - pulse), 0.08f, WithAlpha(Cream, strength * 0.48f), 0.16f, 96);
+        }
+        if (boss_.bossType == BossType::HiddenBoss && hiddenBossPhaseIntroT_ > 0.0f)
+        {
+            const float fade = ClampFloat(hiddenBossPhaseIntroT_ / std::max(0.01f, hiddenBossPhaseIntroLife_), 0.0f, 1.0f);
+            for (int i = 0; i < 18; ++i)
+            {
+                const float a = TwoPi * i / 18.0f + gameTime_ * 0.9f;
+                const V2 p0 = boss_.pos + FromAngle(a) * (ArenaRadius * 0.88f);
+                const V2 p1 = boss_.pos + FromAngle(a) * (boss_.radius * 2.25f);
+                const V2 mid = (p0 + p1) * 0.5f;
+                const float length = Len(p0 - p1);
+                DrawSprite2D(L"effect_sword_line", mid, { 0.12f, length }, a + Pi * 0.5f, WithAlpha(Gold, 0.45f * fade), 0.155f);
+            }
+        }
         if (boss_.telegraphT > 0.0f && boss_.telegraphLife > 0.0f)
         {
             const float t = 1.0f - ClampFloat(boss_.telegraphT / boss_.telegraphLife, 0.0f, 1.0f);
@@ -312,6 +343,18 @@ void SweetsApp::DrawAdditiveScene()
     const float clear[4] = { 0, 0, 0, 1 };
     context_->ClearRenderTargetView(additiveRtv_.Get(), clear);
 
+    const bool showGameplayScene =
+        screen_ == Screen::Playing ||
+        screen_ == Screen::Paused ||
+        screen_ == Screen::Clear ||
+        screen_ == Screen::HiddenBossIntro ||
+        screen_ == Screen::HiddenBoss ||
+        screen_ == Screen::CompleteClear;
+    if (!showGameplayScene)
+    {
+        return;
+    }
+
     ID3D11RenderTargetView* rtv = additiveRtv_.Get();
     context_->OMSetRenderTargets(1, &rtv, dsv_.Get());
     spriteCanvas_.Begin(view_ * proj_, true);
@@ -384,6 +427,13 @@ void SweetsApp::DrawAdditiveScene()
     for (const auto& p : particles_)
     {
         spriteCanvas_.DrawCircle(p.pos, 0.10f + p.y * 0.04f, WithAlpha(p.color, ClampFloat(p.ttl * 2.5f, 0.0f, 1.0f)), 0.04f, 16);
+    }
+    if (boss_.active && boss_.bossType == BossType::HiddenBoss && hiddenBossForm_ >= 2)
+    {
+        const float pulse = 0.15f * std::sin(gameTime_ * (hiddenBossForm_ >= 3 ? 8.0f : 5.4f));
+        const float alpha = hiddenBossForm_ >= 3 ? 0.92f : 0.68f;
+        spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (2.05f + pulse), 0.20f, WithAlpha(Gold, alpha), 0.035f, 120);
+        spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (2.72f - pulse), 0.10f, WithAlpha(Cream, alpha * 0.42f), 0.034f, 120);
     }
     spriteCanvas_.End();
 }

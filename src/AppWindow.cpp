@@ -160,6 +160,18 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         {
             return 0;
         }
+        if (screen_ == Screen::Credits && SelectCreditsAt(mouseX_, mouseY_))
+        {
+            return 0;
+        }
+        if (screen_ == Screen::GameOver && SelectGameOverAt(mouseX_, mouseY_))
+        {
+            return 0;
+        }
+        if ((screen_ == Screen::Clear || screen_ == Screen::CompleteClear) && SelectClearAt(mouseX_, mouseY_))
+        {
+            return 0;
+        }
         mouseLeft_ = true;
         SetCapture(hwnd);
         return 0;

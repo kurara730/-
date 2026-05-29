@@ -193,6 +193,19 @@ void SweetsApp::DrawGameplay3D()
             XMMatrixScaling(boss_.radius * 1.42f, 1.0f, boss_.radius * 1.42f) *
             XMMatrixTranslation(boss_.pos.x, 0.10f, boss_.pos.z),
             WithAlpha(Red, 0.45f));
+        if (boss_.bossType == BossType::HiddenBoss && hiddenBossForm_ >= 2)
+        {
+            const float pulse = 0.14f * std::sin(gameTime_ * (hiddenBossForm_ >= 3 ? 8.0f : 5.2f));
+            const float alpha = hiddenBossForm_ >= 3 ? 0.88f : 0.64f;
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(boss_.radius * (2.05f + pulse), 1.0f, boss_.radius * (2.05f + pulse)) *
+                XMMatrixTranslation(boss_.pos.x, 0.16f, boss_.pos.z),
+                WithAlpha(Gold, alpha));
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(boss_.radius * (2.70f - pulse), 1.0f, boss_.radius * (2.70f - pulse)) *
+                XMMatrixTranslation(boss_.pos.x, 0.18f, boss_.pos.z),
+                WithAlpha(Cream, alpha * 0.42f));
+        }
         if (boss_.telegraphT > 0.0f && boss_.telegraphLife > 0.0f)
         {
             const float t = 1.0f - ClampFloat(boss_.telegraphT / boss_.telegraphLife, 0.0f, 1.0f);

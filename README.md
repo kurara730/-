@@ -74,6 +74,8 @@
 | `assets/audio/233_BPM163.mp3` | ゲームプレイ中BGM |
 | `assets/audio/ruins.mp3` | ゲームオーバーBGM |
 | `assets/audio/Lonery boy.wav` | 隠しボスBGM |
+| `assets/audio/se/choco_slash.mp3` | チョコ通常攻撃SE |
+| `assets/audio/se/ultimate_slash.mp3` | 必殺技SE |
 | `assets/video/title.mp4` | 任意配置のタイトル画面動画 |
 
 ## クレジット
