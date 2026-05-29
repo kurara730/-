@@ -124,6 +124,13 @@ void SweetsApp::UpdateShots(float dt)
         }
         else
         {
+            if (DamageHiddenBossCore(ReflectedDamage(s), s.pos, s.ownerIndex))
+            {
+                if (s.pierce > 0) --s.pierce;
+                else s.dead = true;
+            }
+            if (s.dead) continue;
+
             for (auto& e : enemies_)
             {
                 if (e.dead) continue;

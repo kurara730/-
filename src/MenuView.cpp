@@ -49,6 +49,26 @@ bool PointInRect(float sx, float sy, float left, float top, float right, float b
     return sx >= left && sx <= right && sy >= top && sy <= bottom;
 }
 
+D2D1_COLOR_F OldSelectFill(bool active)
+{
+    return active ? D2D1::ColorF(0.23f, 0.10f, 0.15f, 0.98f) : D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.92f);
+}
+
+D2D1_COLOR_F OldSelectStroke(bool active)
+{
+    return active ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(0.42f, 0.25f, 0.34f, 0.90f);
+}
+
+D2D1_COLOR_F OldSelectText(bool active)
+{
+    return active ? D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f) : D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f);
+}
+
+float OldSelectStrokeWidth(bool active)
+{
+    return active ? 3.0f : 1.0f;
+}
+
 float GameplayHalfHeight()
 {
     return 11.5f;
@@ -168,9 +188,9 @@ void SweetsApp::DrawHud()
         float pct = ClampFloat(boss_.hp / boss_.maxHp, 0.0f, 1.0f);
         if (boss_.bossType == BossType::HiddenBoss)
         {
-            const int remainingGauge = std::max(1, std::min(HiddenBossGaugeCount, static_cast<int>(std::ceil(std::max(1.0f, boss_.hp) / HiddenBossGaugeHp))));
-            const float activeGaugeHp = boss_.hp - HiddenBossGaugeHp * static_cast<float>(remainingGauge - 1);
-            pct = ClampFloat(activeGaugeHp / HiddenBossGaugeHp, 0.0f, 1.0f);
+            const int remainingGauge = std::max(1, std::min(HiddenBossGaugeCount, static_cast<int>(std::ceil(std::max(1.0f, boss_.hp) / hiddenBossGaugeHp_))));
+            const float activeGaugeHp = boss_.hp - hiddenBossGaugeHp_ * static_cast<float>(remainingGauge - 1);
+            pct = ClampFloat(activeGaugeHp / hiddenBossGaugeHp_, 0.0f, 1.0f);
         }
         textBrush_->SetColor(D2D1::ColorF(0.28f, 0.08f, 0.14f, 0.85f));
         d2dContext_->FillRectangle(D2D1::RectF(left, top, left + bw, top + 14.0f), textBrush_.Get());
@@ -254,17 +274,15 @@ void SweetsApp::DrawHud()
             const D2D1_RECT_F rect = D2D1::RectF(menuX, y, menuX + itemW, y + itemH);
             const bool selected = i == titleMenuIndex_;
             const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
-            if (hover)
+            const bool active = selected || hover;
+            if (active)
             {
-                textBrush_->SetColor(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.16f));
+                textBrush_->SetColor(OldSelectFill(true));
                 d2dContext_->FillRectangle(rect, textBrush_.Get());
+                textBrush_->SetColor(OldSelectStroke(true));
+                d2dContext_->DrawRectangle(rect, textBrush_.Get(), 3.0f);
             }
-            else if (selected)
-            {
-                textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, 0.10f));
-                d2dContext_->FillRectangle(rect, textBrush_.Get());
-            }
-            textBrush_->SetColor(selected || hover ? D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f) : D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f));
+            textBrush_->SetColor(OldSelectText(active));
             d2dContext_->DrawTextW(items[i], static_cast<UINT32>(wcslen(items[i])), titleFormat_.Get(),
                 D2D1::RectF(rect.left + 8.0f, rect.top - 2.0f, rect.right, rect.bottom + 8.0f), textBrush_.Get());
         }
@@ -391,10 +409,12 @@ void SweetsApp::DrawHud()
             const float x = static_cast<float>(width_) * 0.5f - choiceW - 10.0f + i * (choiceW + 20.0f);
             const D2D1_RECT_F rect = D2D1::RectF(x, choiceTop, x + choiceW, choiceTop + 46.0f);
             const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
-            textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.18f) : (selected ? D2D1::ColorF(0.20f, 0.08f, 0.13f, 0.98f) : D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.92f)));
+            const bool active = selected || hover;
+            textBrush_->SetColor(OldSelectFill(active));
             d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get());
-            textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : (selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f)));
-            d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), selected || hover ? 3.0f : 1.0f);
+            textBrush_->SetColor(OldSelectStroke(active));
+            d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), OldSelectStrokeWidth(active));
+            textBrush_->SetColor(OldSelectText(active));
             d2dContext_->DrawTextW(choices[i], static_cast<UINT32>(wcslen(choices[i])), hudFormat_.Get(),
                 D2D1::RectF(x, choiceTop + 10.0f, x + choiceW, choiceTop + 46.0f), textBrush_.Get());
         }
@@ -512,11 +532,12 @@ void SweetsApp::DrawCredits()
     const float buttonY = static_cast<float>(height_) * 0.68f;
     const D2D1_RECT_F backRect = D2D1::RectF(buttonX, buttonY, buttonX + buttonW, buttonY + buttonH);
     const bool hover = PointInRect(mouseX_, mouseY_, backRect.left, backRect.top, backRect.right, backRect.bottom);
-    textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.18f) : D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.92f));
+    textBrush_->SetColor(OldSelectFill(hover));
     d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(backRect, 8.0f, 8.0f), textBrush_.Get());
-    textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f));
+    textBrush_->SetColor(OldSelectStroke(hover));
     d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(backRect, 8.0f, 8.0f), textBrush_.Get(), hover ? 3.0f : 1.5f);
     const wchar_t* backButton = L"Back";
+    textBrush_->SetColor(OldSelectText(hover));
     d2dContext_->DrawTextW(backButton, static_cast<UINT32>(wcslen(backButton)), hudFormat_.Get(),
         D2D1::RectF(backRect.left, backRect.top + 10.0f, backRect.right, backRect.bottom), textBrush_.Get());
 
@@ -583,10 +604,12 @@ void SweetsApp::DrawPauseMenu()
         const bool selected = pauseMenuIndex_ == i;
         const D2D1_RECT_F rect = D2D1::RectF(buttonX, y, buttonX + buttonW, y + buttonH);
         const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
-        textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.18f) : (selected ? D2D1::ColorF(0.23f, 0.10f, 0.15f, 1.0f) : D2D1::ColorF(0.16f, 0.07f, 0.11f, 0.94f)));
+        const bool active = selected || hover;
+        textBrush_->SetColor(OldSelectFill(active));
         d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get());
-        textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : (selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f)));
-        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), selected || hover ? 2.5f : 1.0f);
+        textBrush_->SetColor(OldSelectStroke(active));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), active ? 2.5f : 1.0f);
+        textBrush_->SetColor(OldSelectText(active));
         d2dContext_->DrawTextW(buttons[i], static_cast<UINT32>(wcslen(buttons[i])), hudFormat_.Get(),
             D2D1::RectF(rect.left, rect.top + 9.0f, rect.right, rect.bottom), textBrush_.Get());
     }
@@ -693,14 +716,66 @@ void SweetsApp::DrawDebugHud()
         if (i == 3) on = debug_.invincible;
         if (i == 11) on = Use3DRules();
         const bool hover = PointInRect(mouseX_, mouseY_, x, y, x + buttonW, y + buttonH);
+        const bool active = on || hover;
         const D2D1_RECT_F rect = D2D1::RectF(x, y, x + buttonW, y + buttonH);
-        textBrush_->SetColor(on ? D2D1::ColorF(0.18f, 0.32f, 0.38f, 0.98f) : (hover ? D2D1::ColorF(0.28f, 0.28f, 0.32f, 0.98f) : D2D1::ColorF(0.12f, 0.12f, 0.15f, 0.96f)));
+        textBrush_->SetColor(active ? OldSelectFill(true) : D2D1::ColorF(0.12f, 0.12f, 0.15f, 0.96f));
         d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get());
-        textBrush_->SetColor(on ? D2D1::ColorF(0.65f, 0.88f, 1.0f, 1.0f) : D2D1::ColorF(0.86f, 0.86f, 0.90f, 0.94f));
-        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get(), 1.0f);
+        textBrush_->SetColor(active ? OldSelectStroke(true) : D2D1::ColorF(0.86f, 0.86f, 0.90f, 0.94f));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get(), hover ? 2.0f : 1.0f);
+        textBrush_->SetColor(active ? OldSelectText(true) : D2D1::ColorF(0.86f, 0.86f, 0.90f, 0.94f));
         d2dContext_->DrawTextW(labels[i], static_cast<UINT32>(wcslen(labels[i])), smallFormat_.Get(),
             D2D1::RectF(x + 8.0f, y + 6.0f, x + buttonW - 8.0f, y + buttonH), textBrush_.Get());
     }
+
+    const std::array<const wchar_t*, 7> fxLabels{
+        L"明るさ",
+        L"加算FX",
+        L"フラッシュ",
+        L"敵弾発光",
+        L"剣FX",
+        L"必殺FX",
+        L"隠しオーラ"
+    };
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f));
+    d2dContext_->DrawTextW(L"表示調整", 4, smallFormat_.Get(),
+        D2D1::RectF(panelLeft + 18.0f, 510.0f, panelRight - 16.0f, 532.0f), textBrush_.Get());
+
+    const float sliderLabelX = panelLeft + 18.0f;
+    const float sliderLeft = panelLeft + 118.0f;
+    const float sliderRight = panelRight - 52.0f;
+    for (int i = 0; i < static_cast<int>(fxLabels.size()); ++i)
+    {
+        const float y = 540.0f + i * 28.0f;
+        const float value = DebugFxSliderValue(i);
+        const bool hover = PointInRect(mouseX_, mouseY_, sliderLeft - 8.0f, y - 12.0f, sliderRight + 8.0f, y + 20.0f);
+        const bool active = hover || draggingDebugFx_ == i;
+        textBrush_->SetColor(active ? OldSelectText(true) : D2D1::ColorF(0.86f, 0.86f, 0.90f, 0.94f));
+        d2dContext_->DrawTextW(fxLabels[i], static_cast<UINT32>(wcslen(fxLabels[i])), smallFormat_.Get(),
+            D2D1::RectF(sliderLabelX, y - 8.0f, sliderLeft - 8.0f, y + 16.0f), textBrush_.Get());
+        textBrush_->SetColor(D2D1::ColorF(0.12f, 0.12f, 0.15f, 0.96f));
+        d2dContext_->FillRectangle(D2D1::RectF(sliderLeft, y, sliderRight, y + 8.0f), textBrush_.Get());
+        textBrush_->SetColor(active ? OldSelectStroke(true) : D2D1::ColorF(0.65f, 0.88f, 1.0f, 0.84f));
+        d2dContext_->FillRectangle(D2D1::RectF(sliderLeft, y, sliderLeft + (sliderRight - sliderLeft) * value, y + 8.0f), textBrush_.Get());
+        const float knob = sliderLeft + (sliderRight - sliderLeft) * value;
+        d2dContext_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(knob, y + 4.0f), active ? 7.0f : 5.5f, active ? 7.0f : 5.5f), textBrush_.Get());
+        const float display = i == 0 ? (0.5f + value) : (value * 2.0f);
+        std::wostringstream valueText;
+        valueText << static_cast<int>(display * 100.0f + 0.5f) << L"%";
+        const std::wstring valueString = valueText.str();
+        textBrush_->SetColor(D2D1::ColorF(0.86f, 0.86f, 0.90f, 0.86f));
+        d2dContext_->DrawTextW(valueString.c_str(), static_cast<UINT32>(valueString.size()), smallFormat_.Get(),
+            D2D1::RectF(sliderRight + 8.0f, y - 8.0f, panelRight - 12.0f, y + 16.0f), textBrush_.Get());
+    }
+
+    const D2D1_RECT_F resetRect = D2D1::RectF(panelRight - 224.0f, 742.0f, panelRight - 34.0f, 772.0f);
+    const bool resetHover = PointInRect(mouseX_, mouseY_, resetRect.left, resetRect.top, resetRect.right, resetRect.bottom);
+    textBrush_->SetColor(OldSelectFill(resetHover));
+    d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(resetRect, 6.0f, 6.0f), textBrush_.Get());
+    textBrush_->SetColor(OldSelectStroke(resetHover));
+    d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(resetRect, 6.0f, 6.0f), textBrush_.Get(), resetHover ? 2.0f : 1.0f);
+    textBrush_->SetColor(OldSelectText(resetHover));
+    d2dContext_->DrawTextW(L"FXリセット", 6, smallFormat_.Get(),
+        D2D1::RectF(resetRect.left + 12.0f, resetRect.top + 7.0f, resetRect.right - 12.0f, resetRect.bottom), textBrush_.Get());
     return;
     }
 #endif
@@ -744,19 +819,15 @@ void SweetsApp::DrawDifficultySelection()
         const bool selected = i == difficultyIndex_;
         const D2D1_RECT_F rect = D2D1::RectF(x, y, x + cardW, y + cardH);
         const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
+        const bool active = selected || hover;
 
-        textBrush_->SetColor(selected ? D2D1::ColorF(0.20f, 0.08f, 0.14f, 0.98f) : D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.93f));
+        textBrush_->SetColor(OldSelectFill(active));
         d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get());
-        if (hover)
-        {
-            textBrush_->SetColor(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.14f));
-            d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get());
-        }
-        textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : (selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(def.color.r, def.color.g, def.color.b, 0.75f)));
-        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), selected || hover ? 3.0f : 1.0f);
+        textBrush_->SetColor(active ? OldSelectStroke(true) : D2D1::ColorF(def.color.r, def.color.g, def.color.b, 0.75f));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), OldSelectStrokeWidth(active));
 
         std::wstring name = practice ? L"Hidden Boss Practice" : def.name;
-        textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : D2D1::ColorF(def.color.r, def.color.g, def.color.b, 1.0f));
+        textBrush_->SetColor(active ? OldSelectText(true) : D2D1::ColorF(def.color.r, def.color.g, def.color.b, 1.0f));
         d2dContext_->DrawTextW(name.c_str(), static_cast<UINT32>(name.size()), hudFormat_.Get(),
             D2D1::RectF(x + 10.0f, y + 12.0f, x + cardW - 10.0f, y + 40.0f), textBrush_.Get());
 
@@ -815,11 +886,12 @@ void SweetsApp::DrawClearScreen()
     const float buttonY = static_cast<float>(height_) * 0.62f;
     const D2D1_RECT_F rect = D2D1::RectF(buttonX, buttonY, buttonX + buttonW, buttonY + buttonH);
     const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
-    textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.18f) : D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.92f));
+    textBrush_->SetColor(OldSelectFill(hover));
     d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get());
-    textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f));
+    textBrush_->SetColor(OldSelectStroke(hover));
     d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), hover ? 3.0f : 1.5f);
     const wchar_t* back = L"Title";
+    textBrush_->SetColor(OldSelectText(hover));
     d2dContext_->DrawTextW(back, static_cast<UINT32>(wcslen(back)), hudFormat_.Get(),
         D2D1::RectF(rect.left, rect.top + 10.0f, rect.right, rect.bottom), textBrush_.Get());
 
@@ -974,17 +1046,13 @@ void SweetsApp::DrawLoadoutSelection()
         const float x = startX + i * (cardW + gap);
         const D2D1_RECT_F card = D2D1::RectF(x, top, x + cardW, top + cardH);
         const bool hover = PointInRect(mouseX_, mouseY_, card.left, card.top, card.right, card.bottom);
+        const bool active = selected || hover;
 
-        textBrush_->SetColor(selected ? D2D1::ColorF(0.20f, 0.08f, 0.13f, 0.98f) : D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.92f));
+        textBrush_->SetColor(OldSelectFill(active));
         d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(card, 8.0f, 8.0f), textBrush_.Get());
-        if (hover)
-        {
-            textBrush_->SetColor(D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.14f));
-            d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(card, 8.0f, 8.0f), textBrush_.Get());
-        }
 
-        textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : (selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(0.42f, 0.25f, 0.34f, 1.0f)));
-        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(card, 8.0f, 8.0f), textBrush_.Get(), selected || hover ? 3.0f : 1.0f);
+        textBrush_->SetColor(OldSelectStroke(active));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(card, 8.0f, 8.0f), textBrush_.Get(), OldSelectStrokeWidth(active));
 
         D2D1_COLOR_F accent = D2D1::ColorF(loadout.color.r, loadout.color.g, loadout.color.b, 1.0f);
         fill(D2D1::RectF(x, top, x + cardW, top + 5.0f), accent);
@@ -992,7 +1060,7 @@ void SweetsApp::DrawLoadoutSelection()
         std::wostringstream index;
         index << CharacterTexts[i].roleIcon;
         drawText(index.str(), hudFormat_.Get(), D2D1::RectF(x + 12.0f, top + 12.0f, x + 42.0f, top + 42.0f), accent);
-        drawText(loadout.name, hudFormat_.Get(), D2D1::RectF(x + 40.0f, top + 12.0f, x + cardW - 12.0f, top + 40.0f), hover ? D2D1::ColorF(1.0f, 1.0f, 1.0f, 1.0f) : D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f));
+        drawText(loadout.name, hudFormat_.Get(), D2D1::RectF(x + 40.0f, top + 12.0f, x + cardW - 12.0f, top + 40.0f), OldSelectText(active));
         drawText(loadout.role, smallFormat_.Get(), D2D1::RectF(x + 14.0f, top + 43.0f, x + cardW - 14.0f, top + 63.0f), D2D1::ColorF(1.0f, 0.82f, 0.28f, 0.95f));
         drawText(loadout.summary, smallFormat_.Get(), D2D1::RectF(x + 14.0f, top + 63.0f, x + cardW - 14.0f, top + 84.0f), D2D1::ColorF(0.84f, 0.75f, 0.78f, 0.95f));
         drawText(CharacterTexts[i].normal, smallFormat_.Get(), D2D1::RectF(x + 14.0f, top + 86.0f, x + cardW - 14.0f, top + 105.0f), D2D1::ColorF(0.95f, 0.85f, 0.88f, 0.95f));
@@ -1063,27 +1131,20 @@ void SweetsApp::DrawCoopSlotSelection()
             const D2D1_RECT_F rect = D2D1::RectF(x, y, x + modeW, y + rowH);
             const bool selected = coopSlotModes_[playerIndex] == static_cast<CoopSlotMode>(mode);
             const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
-            fill(rect, selected ? D2D1::ColorF(0.22f, 0.10f, 0.15f, 0.95f) : D2D1::ColorF(0.08f, 0.04f, 0.07f, 0.82f));
-            if (hover)
-            {
-                fill(rect, D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.12f));
-            }
-            stroke(rect, selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 0.95f) : D2D1::ColorF(0.42f, 0.25f, 0.34f, 0.9f), selected ? 2.0f : 1.0f);
-            draw(modes[mode], D2D1::RectF(x, y + 6.0f, x + modeW, y + rowH), selected ? D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f) : D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.9f));
+            const bool active = selected || hover;
+            fill(rect, active ? OldSelectFill(true) : D2D1::ColorF(0.08f, 0.04f, 0.07f, 0.82f));
+            stroke(rect, active ? OldSelectStroke(true) : D2D1::ColorF(0.42f, 0.25f, 0.34f, 0.9f), active ? 2.0f : 1.0f);
+            draw(modes[mode], D2D1::RectF(x, y + 6.0f, x + modeW, y + rowH), OldSelectText(active));
         }
 
         const int loadoutIndex = std::max(0, std::min(coopLoadoutIndices_[playerIndex], static_cast<int>(Loadouts.size()) - 1));
         const D2D1_RECT_F charRect = D2D1::RectF(charX, y, charX + charW, y + rowH);
         const bool charHover = PointInRect(mouseX_, mouseY_, charRect.left, charRect.top, charRect.right, charRect.bottom);
-        fill(charRect, coopSlotModes_[playerIndex] == CoopSlotMode::Off ? D2D1::ColorF(0.06f, 0.035f, 0.055f, 0.72f) : D2D1::ColorF(0.12f, 0.055f, 0.09f, 0.92f));
-        if (charHover)
-        {
-            fill(charRect, D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.10f));
-        }
-        stroke(charRect, D2D1::ColorF(0.42f, 0.25f, 0.34f, 0.9f), 1.0f);
+        fill(charRect, charHover ? OldSelectFill(true) : (coopSlotModes_[playerIndex] == CoopSlotMode::Off ? D2D1::ColorF(0.06f, 0.035f, 0.055f, 0.72f) : D2D1::ColorF(0.12f, 0.055f, 0.09f, 0.92f)));
+        stroke(charRect, charHover ? OldSelectStroke(true) : D2D1::ColorF(0.42f, 0.25f, 0.34f, 0.9f), charHover ? 2.0f : 1.0f);
         std::wstring charText = L"Character: ";
         charText += Loadouts[loadoutIndex].name;
-        draw(charText, D2D1::RectF(charRect.left + 6.0f, charRect.top + 6.0f, charRect.right - 6.0f, charRect.bottom), D2D1::ColorF(0.92f, 0.82f, 0.86f, 0.95f));
+        draw(charText, D2D1::RectF(charRect.left + 6.0f, charRect.top + 6.0f, charRect.right - 6.0f, charRect.bottom), OldSelectText(charHover));
     }
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }

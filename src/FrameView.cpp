@@ -245,8 +245,23 @@ void SweetsApp::DrawScene()
         {
             const float pulse = 0.12f * std::sin(gameTime_ * (hiddenBossForm_ >= 3 ? 7.0f : 4.8f));
             const float strength = hiddenBossForm_ >= 3 ? 0.78f : 0.56f;
-            spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (1.85f + pulse), 0.14f, WithAlpha(Gold, strength), 0.17f, 96);
-            spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (2.28f - pulse), 0.08f, WithAlpha(Cream, strength * 0.48f), 0.16f, 96);
+#if defined(_DEBUG)
+            const float auraFx = ClampFloat(debug_.hiddenBossAuraFx, 0.0f, 2.0f);
+#else
+            const float auraFx = 1.0f;
+#endif
+            spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (1.85f + pulse), 0.14f, WithAlpha(Gold, ClampFloat(strength * auraFx, 0.0f, 1.0f)), 0.17f, 96);
+            spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (2.28f - pulse), 0.08f, WithAlpha(Cream, ClampFloat(strength * 0.48f * auraFx, 0.0f, 1.0f)), 0.16f, 96);
+        }
+        if (boss_.bossType == BossType::HiddenBoss && hiddenBossForm_ == 1)
+        {
+            for (const auto& core : hiddenBossCores_)
+            {
+                if (!core.active) continue;
+                const Color coreColor = core.flash > 0.0f ? Cream : Gold;
+                spriteCanvas_.DrawCircle(core.pos, core.radius * 1.15f, WithAlpha(coreColor, 0.84f), 0.165f, 32);
+                spriteCanvas_.DrawRing(core.pos, core.radius * 1.45f, 0.045f, WithAlpha(Red, 0.68f), 0.164f, 48);
+            }
         }
         if (boss_.bossType == BossType::HiddenBoss && hiddenBossPhaseIntroT_ > 0.0f)
         {
@@ -358,11 +373,23 @@ void SweetsApp::DrawAdditiveScene()
     ID3D11RenderTargetView* rtv = additiveRtv_.Get();
     context_->OMSetRenderTargets(1, &rtv, dsv_.Get());
     spriteCanvas_.Begin(view_ * proj_, true);
+#if defined(_DEBUG)
+    const float enemyGlowFx = ClampFloat(debug_.enemyBulletGlow, 0.0f, 2.0f);
+    const float swordFx = ClampFloat(debug_.swordFx, 0.0f, 2.0f);
+    const float ultimateFx = ClampFloat(debug_.ultimateFx, 0.0f, 2.0f);
+    const float auraFx = ClampFloat(debug_.hiddenBossAuraFx, 0.0f, 2.0f);
+#else
+    const float enemyGlowFx = 1.0f;
+    const float swordFx = 1.0f;
+    const float ultimateFx = 1.0f;
+    const float auraFx = 1.0f;
+#endif
+    auto fxAlpha = [](float alpha) { return ClampFloat(alpha, 0.0f, 1.0f); };
 
     for (const auto& s : shots_)
     {
         const float glow = s.enemy ? 2.1f : (s.reflected ? 2.8f : 1.7f);
-        spriteCanvas_.DrawCircle(s.pos, s.radius * glow, WithAlpha(s.color, s.enemy ? 0.42f : 0.55f), 0.06f, 24);
+        spriteCanvas_.DrawCircle(s.pos, s.radius * glow, WithAlpha(s.color, fxAlpha(s.enemy ? 0.42f * enemyGlowFx : 0.55f)), 0.06f, 24);
     }
     for (const auto& s : slashes_)
     {
@@ -374,8 +401,8 @@ void SweetsApp::DrawAdditiveScene()
         const float progress = ClampFloat(1.0f - pulse.ttl / life, 0.0f, 1.0f);
         const float fade = ClampFloat(pulse.ttl / life, 0.0f, 1.0f);
         const float radius = pulse.startRadius + (pulse.endRadius - pulse.startRadius) * progress;
-        spriteCanvas_.DrawRing(pulse.pos, radius, 0.15f + radius * 0.025f, WithAlpha(pulse.color, 0.88f * fade), 0.05f, 96);
-        spriteCanvas_.DrawRing(pulse.pos, radius * 0.62f, 0.09f, WithAlpha(Cream, 0.34f * fade), 0.04f, 72);
+        spriteCanvas_.DrawRing(pulse.pos, radius, 0.15f + radius * 0.025f, WithAlpha(pulse.color, fxAlpha(0.88f * fade * ultimateFx)), 0.05f, 96);
+        spriteCanvas_.DrawRing(pulse.pos, radius * 0.62f, 0.09f, WithAlpha(Cream, fxAlpha(0.34f * fade * ultimateFx)), 0.04f, 72);
     }
     for (const auto& visual : swordEffectVisuals_)
     {
@@ -392,13 +419,13 @@ void SweetsApp::DrawAdditiveScene()
         const float rotation = visual.angle - Pi * 0.5f;
         const float sweep = 1.0f + 0.16f * std::sin(progress * Pi);
 
-        DrawSprite2D(L"effect_sword_thunder", center, { width * sweep, length * (1.0f + progress * 0.10f) }, rotation, WithAlpha(Cream, 0.96f * fade), 0.035f);
-        DrawSprite2D(L"effect_sword_line", center - side * (0.16f * baseScale), { width * 0.72f, length * 0.92f }, rotation + 0.05f, WithAlpha(Sky, 0.58f * fade), 0.034f);
-        DrawSprite2D(L"effect_sword_line", center + side * (0.18f * baseScale), { width * 0.52f, length * 0.76f }, rotation - 0.07f, WithAlpha(Choco, 0.46f * fade), 0.033f);
+        DrawSprite2D(L"effect_sword_thunder", center, { width * sweep, length * (1.0f + progress * 0.10f) }, rotation, WithAlpha(Cream, fxAlpha(0.96f * fade * swordFx)), 0.035f);
+        DrawSprite2D(L"effect_sword_line", center - side * (0.16f * baseScale), { width * 0.72f, length * 0.92f }, rotation + 0.05f, WithAlpha(Sky, fxAlpha(0.58f * fade * swordFx)), 0.034f);
+        DrawSprite2D(L"effect_sword_line", center + side * (0.18f * baseScale), { width * 0.52f, length * 0.76f }, rotation - 0.07f, WithAlpha(Choco, fxAlpha(0.46f * fade * swordFx)), 0.033f);
         if (visual.charged)
         {
-            DrawSprite2D(L"effect_sword_ring", root + forward * (0.42f * baseScale), { 1.55f * baseScale, 1.55f * baseScale }, gameTime_ * 5.0f, WithAlpha(Sky, 0.72f * fade), 0.032f);
-            DrawSprite2D(L"effect_sword_thunder", center + forward * (0.32f * baseScale), { width * 1.22f, length * 1.10f }, rotation, WithAlpha(Gold, 0.42f * fade), 0.031f);
+            DrawSprite2D(L"effect_sword_ring", root + forward * (0.42f * baseScale), { 1.55f * baseScale, 1.55f * baseScale }, gameTime_ * 5.0f, WithAlpha(Sky, fxAlpha(0.72f * fade * swordFx)), 0.032f);
+            DrawSprite2D(L"effect_sword_thunder", center + forward * (0.32f * baseScale), { width * 1.22f, length * 1.10f }, rotation, WithAlpha(Gold, fxAlpha(0.42f * fade * swordFx)), 0.031f);
         }
 
         const int sparkCount = visual.charged ? 9 : 5;
@@ -408,7 +435,7 @@ void SweetsApp::DrawAdditiveScene()
             const float wave = std::sin((t + progress) * TwoPi * 1.7f);
             const V2 sparkPos = root + forward * (length * t) + side * (wave * width * 0.42f);
             const float sparkSize = (visual.charged ? 0.34f : 0.24f) * baseScale * (1.0f - 0.35f * t);
-            DrawSprite2D(L"effect_sword_particle", sparkPos, { sparkSize, sparkSize }, visual.angle + t * TwoPi, WithAlpha((i & 1) ? Gold : Cream, 0.82f * fade), 0.030f);
+            DrawSprite2D(L"effect_sword_particle", sparkPos, { sparkSize, sparkSize }, visual.angle + t * TwoPi, WithAlpha((i & 1) ? Gold : Cream, fxAlpha(0.82f * fade * swordFx)), 0.030f);
         }
     }
     for (const auto& p : players_)
@@ -432,8 +459,25 @@ void SweetsApp::DrawAdditiveScene()
     {
         const float pulse = 0.15f * std::sin(gameTime_ * (hiddenBossForm_ >= 3 ? 8.0f : 5.4f));
         const float alpha = hiddenBossForm_ >= 3 ? 0.92f : 0.68f;
-        spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (2.05f + pulse), 0.20f, WithAlpha(Gold, alpha), 0.035f, 120);
-        spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (2.72f - pulse), 0.10f, WithAlpha(Cream, alpha * 0.42f), 0.034f, 120);
+        const bool broken = hiddenBossForm_ == 2 && hiddenBossAuraBreakT_ > 0.0f;
+        const float flameAlpha = broken ? 0.34f : alpha;
+        spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (2.05f + pulse), 0.20f, WithAlpha(Gold, fxAlpha(flameAlpha * auraFx)), 0.035f, 120);
+        spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (2.72f - pulse), 0.10f, WithAlpha(Cream, fxAlpha(flameAlpha * 0.42f * auraFx)), 0.034f, 120);
+        const int flameCount = hiddenBossForm_ >= 3 ? 22 : 16;
+        for (int i = 0; i < flameCount; ++i)
+        {
+            const float t = static_cast<float>(i) / static_cast<float>(flameCount);
+            const float a = TwoPi * t + gameTime_ * (hiddenBossForm_ >= 3 ? 0.95f : 0.68f);
+            const float wave = std::sin(gameTime_ * 5.2f + t * 17.0f);
+            const V2 base = boss_.pos + FromAngle(a) * (boss_.radius * (1.45f + 0.13f * wave));
+            const float length = boss_.radius * (1.35f + 0.42f * std::fabs(wave)) * (hiddenBossForm_ >= 3 ? 1.18f : 1.0f);
+            const float width = boss_.radius * (0.20f + 0.05f * std::fabs(wave));
+            DrawSprite2D(L"effect_sword_line", base + V2{ 0.0f, length * 0.36f }, { width, length }, 0.0f, WithAlpha((i & 1) ? Gold : Cream, fxAlpha(0.58f * flameAlpha * auraFx)), 0.033f);
+            if ((i % 3) == 0)
+            {
+                DrawSprite2D(L"effect_sword_particle", base + V2{ 0.0f, length * 0.78f }, { width * 2.0f, width * 2.0f }, a + gameTime_, WithAlpha(Gold, fxAlpha(0.65f * flameAlpha * auraFx)), 0.032f);
+            }
+        }
     }
     spriteCanvas_.End();
 }
@@ -460,9 +504,9 @@ void SweetsApp::CompositeScene()
     PostCB post{};
 #if defined(_DEBUG)
     const bool useTaa = debug_.taa && debug_.taaFrame > 0 && !debug_.additiveView;
-    post.params = XMFLOAT4(useTaa ? 0.18f : 0.0f, 1.0f, debug_.additiveView ? 1.0f : 0.0f, 0.0f);
+    post.params = XMFLOAT4(useTaa ? 0.18f : 0.0f, ClampFloat(debug_.additiveFx, 0.0f, 2.0f), debug_.additiveView ? 1.0f : 0.0f, ClampFloat(debug_.brightness, 0.5f, 1.5f));
 #else
-    post.params = XMFLOAT4(0.0f, 1.0f, 0.0f, 0.0f);
+    post.params = XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f);
 #endif
     context_->UpdateSubresource(postCB_.Get(), 0, nullptr, &post, 0, 0);
     ID3D11Buffer* pcb = postCB_.Get();
@@ -496,7 +540,12 @@ void SweetsApp::DrawScreenFlashOverlay()
     }
 
     const float t = ClampFloat(screenFlashT_ / std::max(0.01f, screenFlashLife_), 0.0f, 1.0f);
-    const float alpha = 0.34f * t * t;
+#if defined(_DEBUG)
+    const float flashFx = ClampFloat(debug_.screenFlashFx, 0.0f, 2.0f);
+#else
+    const float flashFx = 1.0f;
+#endif
+    const float alpha = ClampFloat(0.34f * t * t * flashFx, 0.0f, 1.0f);
     const D2D1_RECT_F full = D2D1::RectF(0.0f, 0.0f, static_cast<float>(width_), static_cast<float>(height_));
 
     textBrush_->SetColor(D2D1::ColorF(screenFlashColor_.r, screenFlashColor_.g, screenFlashColor_.b, alpha));

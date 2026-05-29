@@ -94,6 +94,9 @@ add_executable(SweetsActionDX11 WIN32
     assets/audio/333_BPM177.mp3
     assets/audio/ruins.mp3
     "assets/audio/Lonery boy.wav"
+    assets/audio/hidden_gauge1.mp3
+    assets/audio/hidden_gauge2.mp3
+    assets/audio/hidden_gauge3.mp3
     assets/audio/se/choco_slash.mp3
     assets/audio/se/ultimate_slash.mp3
     assets/effects/sword_slash.efkefc

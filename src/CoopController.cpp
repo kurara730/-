@@ -232,6 +232,44 @@ bool SweetsApp::AllPlayersDown() const
     return anyActive;
 }
 
+int SweetsApp::ActivePlayerCount() const
+{
+    int count = 0;
+    for (const auto& p : players_)
+    {
+        if (p.active) ++count;
+    }
+    return std::max(1, count);
+}
+
+float SweetsApp::MultiplayerHpMultiplier() const
+{
+    switch (std::min(4, ActivePlayerCount()))
+    {
+    case 2: return 1.35f;
+    case 3: return 1.65f;
+    case 4: return 1.90f;
+    default: return 1.0f;
+    }
+}
+
+float SweetsApp::HiddenBossLevelHpMultiplier() const
+{
+    if (hiddenBossPractice_) return 1.0f;
+    float totalLevel = 0.0f;
+    int count = 0;
+    for (const auto& p : players_)
+    {
+        if (!p.active) continue;
+        totalLevel += static_cast<float>(std::max(1, p.level));
+        ++count;
+    }
+    if (count <= 0) return 1.0f;
+    const float avgLevel = totalLevel / static_cast<float>(count);
+    const float bonusLevels = std::min(std::max(0.0f, avgLevel - 1.0f), 20.0f);
+    return std::min(1.7f, 1.0f + bonusLevels * 0.035f);
+}
+
 Player* SweetsApp::FindNearestPlayer(V2 pos)
 {
     Player* best = nullptr;

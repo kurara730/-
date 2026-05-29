@@ -56,6 +56,12 @@ void SweetsApp::ResetGame()
     hiddenPatternStep_ = 0;
     hiddenBossPhase_ = -1;
     hiddenBossForm_ = 1;
+    hiddenBossGaugeHp_ = HiddenBossBaseGaugeHp;
+    hiddenBossTotalHp_ = HiddenBossBaseGaugeHp * HiddenBossGaugeCount;
+    hiddenBossCoreOpenT_ = 0.0f;
+    hiddenBossAuraBreakT_ = 0.0f;
+    hiddenBossReflectCount_ = 0;
+    hiddenBossCores_ = {};
     hiddenBossPhaseIntroT_ = 0.0f;
     hiddenBossPhaseIntroLife_ = 0.0f;
     pendingHiddenBoss_ = false;
@@ -389,18 +395,21 @@ void SweetsApp::UpdateAudioForScreen()
     case Screen::GameOver:
         audio_.PlayLoop(MusicTrack::GameOver, L"assets/audio/ruins.mp3");
         break;
+    case Screen::HiddenBossIntro:
+        audio_.PlayLoop(MusicTrack::HiddenBossGauge1, L"assets/audio/hidden_gauge1.mp3");
+        break;
     case Screen::HiddenBoss:
         if (hiddenBossForm_ <= 1)
         {
-            audio_.PlayLoop(MusicTrack::HiddenBossGauge1, L"assets/audio/Lonery boy.wav");
+            audio_.PlayLoop(MusicTrack::HiddenBossGauge1, L"assets/audio/hidden_gauge1.mp3");
         }
         else if (hiddenBossForm_ == 2)
         {
-            audio_.PlayLoop(MusicTrack::HiddenBossGauge2, L"assets/audio/Lonery boy.wav");
+            audio_.PlayLoop(MusicTrack::HiddenBossGauge2, L"assets/audio/hidden_gauge2.mp3");
         }
         else
         {
-            audio_.PlayLoop(MusicTrack::HiddenBossGauge3, L"assets/audio/Lonery boy.wav");
+            audio_.PlayLoop(MusicTrack::HiddenBossGauge3, L"assets/audio/hidden_gauge3.mp3");
         }
         break;
     default:

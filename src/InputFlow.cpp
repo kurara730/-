@@ -18,6 +18,37 @@ CoopSlotMode CoopModeFromIndex(int index)
     default: return CoopSlotMode::Off;
     }
 }
+
+constexpr int DebugActionCount = 12;
+constexpr int DebugFxSliderCount = 7;
+
+bool DebugActionRect(int index, float width, float& x, float& y, float& w, float& h)
+{
+    if (index < 0 || index >= DebugActionCount) return false;
+    const float left = width - 342.0f;
+    const float buttonW = 148.0f;
+    const float buttonH = 30.0f;
+    const float gap = 10.0f;
+    const float top = 286.0f;
+    const int col = index % 2;
+    const int row = index / 2;
+    x = left + col * (buttonW + gap);
+    y = top + row * (buttonH + 8.0f);
+    w = buttonW;
+    h = buttonH;
+    return true;
+}
+
+bool DebugFxSliderRect(int index, float width, float& x, float& y, float& w, float& h)
+{
+    if (index < 0 || index >= DebugFxSliderCount) return false;
+    const float left = width - 342.0f;
+    x = left + 118.0f;
+    y = 540.0f + index * 28.0f;
+    w = 190.0f;
+    h = 8.0f;
+    return true;
+}
 }
 
 void SweetsApp::OnKeyDown(WPARAM key)
@@ -136,28 +167,127 @@ bool SweetsApp::HandleDebugClick(float sx, float sy)
 #if defined(_DEBUG)
     if (!DebugPanelContains(sx, sy)) return false;
 
-    const float left = static_cast<float>(width_) - 342.0f;
-    const float buttonW = 148.0f;
-    const float buttonH = 30.0f;
-    const float gap = 10.0f;
-    const float top = 286.0f;
-    for (int i = 0; i < 12; ++i)
+    for (int i = 0; i < DebugActionCount; ++i)
     {
-        const int col = i % 2;
-        const int row = i / 2;
-        const float x = left + col * (buttonW + gap);
-        const float y = top + row * (buttonH + 8.0f);
-        if (PointInRect(sx, sy, x, y, x + buttonW, y + buttonH))
+        float x = 0.0f;
+        float y = 0.0f;
+        float w = 0.0f;
+        float h = 0.0f;
+        DebugActionRect(i, static_cast<float>(width_), x, y, w, h);
+        if (PointInRect(sx, sy, x, y, x + w, y + h))
         {
             ExecuteDebugAction(i);
             return true;
         }
+    }
+
+    for (int i = 0; i < DebugFxSliderCount; ++i)
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+        float w = 0.0f;
+        float h = 0.0f;
+        DebugFxSliderRect(i, static_cast<float>(width_), x, y, w, h);
+        if (PointInRect(sx, sy, x - 8.0f, y - 12.0f, x + w + 8.0f, y + h + 12.0f))
+        {
+            draggingDebugFx_ = i;
+            SetDebugFxSlider(i, (sx - x) / w);
+            return true;
+        }
+    }
+
+    const float resetX = static_cast<float>(width_) - 224.0f;
+    const float resetY = 742.0f;
+    if (PointInRect(sx, sy, resetX, resetY, resetX + 190.0f, resetY + 30.0f))
+    {
+        ResetDebugFxAdjustments();
+        return true;
     }
     return true;
 #else
     (void)sx;
     (void)sy;
     return false;
+#endif
+}
+
+bool SweetsApp::HandleDebugDrag(float sx, float sy)
+{
+#if defined(_DEBUG)
+    (void)sy;
+    if (draggingDebugFx_ < 0) return false;
+    float x = 0.0f;
+    float y = 0.0f;
+    float w = 0.0f;
+    float h = 0.0f;
+    if (!DebugFxSliderRect(draggingDebugFx_, static_cast<float>(width_), x, y, w, h))
+    {
+        draggingDebugFx_ = -1;
+        return false;
+    }
+    SetDebugFxSlider(draggingDebugFx_, (sx - x) / w);
+    return true;
+#else
+    (void)sx;
+    (void)sy;
+    return false;
+#endif
+}
+
+void SweetsApp::ResetDebugFxAdjustments()
+{
+#if defined(_DEBUG)
+    debug_.brightness = 1.0f;
+    debug_.additiveFx = 1.0f;
+    debug_.screenFlashFx = 1.0f;
+    debug_.enemyBulletGlow = 1.0f;
+    debug_.swordFx = 1.0f;
+    debug_.ultimateFx = 1.0f;
+    debug_.hiddenBossAuraFx = 1.0f;
+    message_ = L"DEBUG: FX繝ｪ繧ｻ繝・ヨ";
+    messageT_ = 1.2f;
+#endif
+}
+
+void SweetsApp::SetDebugFxSlider(int index, float normalizedValue)
+{
+#if defined(_DEBUG)
+    const float t = ClampFloat(normalizedValue, 0.0f, 1.0f);
+    float value = index == 0 ? (0.5f + t) : (t * 2.0f);
+    switch (index)
+    {
+    case 0: debug_.brightness = value; break;
+    case 1: debug_.additiveFx = value; break;
+    case 2: debug_.screenFlashFx = value; break;
+    case 3: debug_.enemyBulletGlow = value; break;
+    case 4: debug_.swordFx = value; break;
+    case 5: debug_.ultimateFx = value; break;
+    case 6: debug_.hiddenBossAuraFx = value; break;
+    default: break;
+    }
+#else
+    (void)index;
+    (void)normalizedValue;
+#endif
+}
+
+float SweetsApp::DebugFxSliderValue(int index) const
+{
+#if defined(_DEBUG)
+    switch (index)
+    {
+    case 0: return ClampFloat(debug_.brightness - 0.5f, 0.0f, 1.0f);
+    case 1: return ClampFloat(debug_.additiveFx * 0.5f, 0.0f, 1.0f);
+    case 2: return ClampFloat(debug_.screenFlashFx * 0.5f, 0.0f, 1.0f);
+    case 3: return ClampFloat(debug_.enemyBulletGlow * 0.5f, 0.0f, 1.0f);
+    case 4: return ClampFloat(debug_.swordFx * 0.5f, 0.0f, 1.0f);
+    case 5: return ClampFloat(debug_.ultimateFx * 0.5f, 0.0f, 1.0f);
+    case 6: return ClampFloat(debug_.hiddenBossAuraFx * 0.5f, 0.0f, 1.0f);
+    default: return 0.0f;
+    }
+#else
+    (void)index;
+    return 0.5f;
 #endif
 }
 

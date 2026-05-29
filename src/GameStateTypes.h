@@ -257,6 +257,19 @@ struct Particle
     Color color = Cream;
 };
 
+struct HiddenBossCore
+{
+    V2 pos{};
+    V3 pos3{};
+    float angle = 0.0f;
+    float orbitRadius = 2.7f;
+    float radius = 0.34f;
+    float hp = 220.0f;
+    float maxHp = 220.0f;
+    float flash = 0.0f;
+    bool active = false;
+};
+
 struct EffectPulse
 {
     V2 pos{};

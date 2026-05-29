@@ -197,14 +197,40 @@ void SweetsApp::DrawGameplay3D()
         {
             const float pulse = 0.14f * std::sin(gameTime_ * (hiddenBossForm_ >= 3 ? 8.0f : 5.2f));
             const float alpha = hiddenBossForm_ >= 3 ? 0.88f : 0.64f;
+#if defined(_DEBUG)
+            const float auraFx = ClampFloat(debug_.hiddenBossAuraFx, 0.0f, 2.0f);
+#else
+            const float auraFx = 1.0f;
+#endif
             DrawMesh(ringMesh_,
                 XMMatrixScaling(boss_.radius * (2.05f + pulse), 1.0f, boss_.radius * (2.05f + pulse)) *
                 XMMatrixTranslation(boss_.pos.x, 0.16f, boss_.pos.z),
-                WithAlpha(Gold, alpha));
+                WithAlpha(Gold, ClampFloat(alpha * auraFx, 0.0f, 1.0f)));
             DrawMesh(ringMesh_,
                 XMMatrixScaling(boss_.radius * (2.70f - pulse), 1.0f, boss_.radius * (2.70f - pulse)) *
                 XMMatrixTranslation(boss_.pos.x, 0.18f, boss_.pos.z),
-                WithAlpha(Cream, alpha * 0.42f));
+                WithAlpha(Cream, ClampFloat(alpha * 0.42f * auraFx, 0.0f, 1.0f)));
+            const int flameCount = hiddenBossForm_ >= 3 ? 18 : 12;
+            for (int i = 0; i < flameCount; ++i)
+            {
+                const float a = TwoPi * static_cast<float>(i) / static_cast<float>(flameCount) + gameTime_ * 0.8f;
+                const float wave = std::sin(gameTime_ * 5.0f + i * 1.7f);
+                const V2 pos = boss_.pos + FromAngle(a) * (boss_.radius * (1.55f + 0.12f * wave));
+                DrawCylinder(pos, 0.045f + 0.018f * std::fabs(wave), 0.70f + 0.28f * std::fabs(wave), WithAlpha(Gold, ClampFloat(0.58f * auraFx, 0.0f, 1.0f)));
+                DrawSphere(pos, BossBodyY + 0.88f + 0.18f * wave, 0.10f, WithAlpha(Cream, ClampFloat(0.45f * auraFx, 0.0f, 1.0f)));
+            }
+        }
+        if (boss_.bossType == BossType::HiddenBoss && hiddenBossForm_ == 1)
+        {
+            for (const auto& core : hiddenBossCores_)
+            {
+                if (!core.active) continue;
+                DrawSphere(core.pos, ShotBodyY + 0.12f, core.radius, core.flash > 0.0f ? Cream : Gold);
+                DrawMesh(ringMesh_,
+                    XMMatrixScaling(core.radius * 1.55f, 1.0f, core.radius * 1.55f) *
+                    XMMatrixTranslation(core.pos.x, ShotBodyY + 0.02f, core.pos.z),
+                    WithAlpha(Red, 0.68f));
+            }
         }
         if (boss_.telegraphT > 0.0f && boss_.telegraphLife > 0.0f)
         {
@@ -488,9 +514,14 @@ void SweetsApp::DrawUltimatePreview(const Player& p, int ownerIndex)
         return;
     }
 
+#if defined(_DEBUG)
+    const float ultimateFx = ClampFloat(debug_.ultimateFx, 0.0f, 2.0f);
+#else
+    const float ultimateFx = 1.0f;
+#endif
     auto drawRing = [&](V2 center, float radius, Color color, float alpha)
     {
-        spriteCanvas_.DrawRing(center, radius, 0.10f + radius * 0.015f, WithAlpha(color, alpha), 0.09f, 96);
+        spriteCanvas_.DrawRing(center, radius, 0.10f + radius * 0.015f, WithAlpha(color, ClampFloat(alpha * ultimateFx, 0.0f, 1.0f)), 0.09f, 96);
     };
 
     const Color accent = Loadouts[static_cast<int>(p.character)].color;

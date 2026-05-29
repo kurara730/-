@@ -1,6 +1,6 @@
 cbuffer PostCB : register(b0)
 {
-    float4 params; // x: taa blend, y: additive scale, z: view mode, w: unused
+    float4 params; // x: taa blend, y: additive scale, z: view mode, w: brightness
 };
 
 Texture2D sceneTex : register(t0);
@@ -36,7 +36,8 @@ float4 PSMain(VSOut input) : SV_TARGET
         return float4(additive.rgb, 1.0f);
     }
 
-    float4 current = float4(sceneColor.rgb + additive.rgb * params.y, 1.0f);
+    float brightness = max(params.w, 0.0f);
+    float4 current = float4((sceneColor.rgb + additive.rgb * params.y) * brightness, 1.0f);
     float4 history = historyTex.Sample(linearSampler, input.uv);
     return lerp(current, history, saturate(params.x));
 }

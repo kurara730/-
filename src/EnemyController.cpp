@@ -89,6 +89,7 @@ void SweetsApp::SpawnEnemy()
     }
     const DifficultyDef& diff = CurrentDifficulty();
     e.hp *= diff.enemyHpMul;
+    e.hp *= MultiplayerHpMultiplier();
     e.atk *= diff.enemyAtkMul;
     if (profile == EncounterProfile::MobRelease)
     {
@@ -120,7 +121,7 @@ void SweetsApp::SpawnBoss()
     boss_.pos = { 0.0f, -1.2f };
     boss_.radius = 1.15f + 0.06f * static_cast<float>(wave_ / 3);
     const DifficultyDef& diff = CurrentDifficulty();
-    boss_.maxHp = (720.0f + wave_ * 260.0f) * diff.bossHpMul;
+    boss_.maxHp = (720.0f + wave_ * 260.0f) * diff.bossHpMul * MultiplayerHpMultiplier();
     boss_.hp = boss_.maxHp;
     boss_.speed = 1.2f + wave_ * 0.035f;
     boss_.atk = (13.0f + wave_ * 1.3f) * diff.enemyAtkMul;
@@ -330,7 +331,7 @@ void SweetsApp::UpdateBoss(float dt)
             ClampInside(mirror.pos, 0.5f);
             mirror.height = Use3DRules() ? 0.82f : EnemyBodyY;
             mirror.radius = 0.38f;
-            mirror.hp = (28.0f + wave_ * 6.0f) * CurrentDifficulty().enemyHpMul;
+            mirror.hp = (28.0f + wave_ * 6.0f) * CurrentDifficulty().enemyHpMul * MultiplayerHpMultiplier();
             mirror.maxHp = mirror.hp;
             mirror.speed = 1.5f;
             mirror.atk = boss_.atk * 0.5f;
@@ -521,7 +522,7 @@ void SweetsApp::DamageEnemy(Enemy& e, float dmg, V2 from, float knock, bool refl
                 child.kind = static_cast<int>(child.type);
                 child.pos = e.pos + FromAngle(Rand(0.0f, TwoPi)) * 0.45f;
                 child.radius = 0.25f;
-                child.hp = 12.0f + wave_ * 2.0f;
+                child.hp = (12.0f + wave_ * 2.0f) * MultiplayerHpMultiplier();
                 child.maxHp = child.hp;
                 child.speed = 2.8f;
                 child.atk = 5.0f;
@@ -557,10 +558,35 @@ void SweetsApp::DamageBoss(float dmg, bool reflected, int ownerIndex)
     {
         if (hiddenBossPhaseIntroT_ > 0.0f) return;
         const int oldForm = hiddenBossForm_;
-        boss_.hp -= dmg;
+        float appliedDmg = dmg;
+        if (hiddenBossForm_ == 1)
+        {
+            appliedDmg *= hiddenBossCoreOpenT_ > 0.0f ? 1.35f : 0.22f;
+        }
+        else if (hiddenBossForm_ == 2)
+        {
+            if (reflected && hiddenBossAuraBreakT_ <= 0.0f)
+            {
+                ++hiddenBossReflectCount_;
+                Burst(boss_.pos, Gold, 18);
+                if (hiddenBossReflectCount_ >= 5)
+                {
+                    hiddenBossReflectCount_ = 0;
+                    hiddenBossAuraBreakT_ = 7.0f;
+                    for (auto& s : shots_) if (s.enemy) s.dead = true;
+                    screenFlashT_ = 0.22f;
+                    screenFlashLife_ = screenFlashT_;
+                    screenFlashColor_ = Gold;
+                    message_ = L"金色オーラ解除: 攻撃チャンス";
+                    messageT_ = 2.0f;
+                }
+            }
+            appliedDmg *= hiddenBossAuraBreakT_ > 0.0f ? 1.30f : (reflected ? 0.60f : 0.18f);
+        }
+        boss_.hp -= appliedDmg;
         boss_.flash = 0.15f;
         Player& owner = players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))];
-        AddScore(static_cast<int>(dmg * (reflected ? 2.0f : 1.0f)), &owner);
+        AddScore(static_cast<int>(appliedDmg * (reflected ? 2.0f : 1.0f)), &owner);
         if (boss_.hp <= 0.0f)
         {
             SaveProgress();
@@ -575,17 +601,21 @@ void SweetsApp::DamageBoss(float dmg, bool reflected, int ownerIndex)
         }
 
         int nextForm = 1;
-        if (boss_.hp <= HiddenBossGaugeHp) nextForm = 3;
-        else if (boss_.hp <= HiddenBossGaugeHp * 2.0f) nextForm = 2;
+        if (boss_.hp <= hiddenBossGaugeHp_) nextForm = 3;
+        else if (boss_.hp <= hiddenBossGaugeHp_ * 2.0f) nextForm = 2;
         if (nextForm > oldForm)
         {
-            const float boundaryHp = HiddenBossGaugeHp * static_cast<float>(HiddenBossGaugeCount - nextForm + 1);
+            const float boundaryHp = hiddenBossGaugeHp_ * static_cast<float>(HiddenBossGaugeCount - nextForm + 1);
             boss_.hp = std::max(boss_.hp, boundaryHp);
             hiddenBossForm_ = nextForm;
             boss_.phase = nextForm;
             hiddenBossPhase_ = nextForm - 1;
             hiddenPatternStep_ = 0;
             hiddenPatternCd_ = nextForm == 2 ? 1.25f : 0.85f;
+            hiddenBossCoreOpenT_ = 0.0f;
+            hiddenBossAuraBreakT_ = 0.0f;
+            hiddenBossReflectCount_ = 0;
+            hiddenBossCores_ = {};
             hiddenBossPhaseIntroLife_ = nextForm == 2 ? 1.6f : 1.0f;
             hiddenBossPhaseIntroT_ = hiddenBossPhaseIntroLife_;
             for (auto& s : shots_)

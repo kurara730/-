@@ -72,6 +72,9 @@ private:
     void UpdateGamepadPlayer(Player& p, int playerIndex, float dt);
     void TryRevivePlayers(float dt);
     bool AllPlayersDown() const;
+    int ActivePlayerCount() const;
+    float MultiplayerHpMultiplier() const;
+    float HiddenBossLevelHpMultiplier() const;
     Player* FindNearestPlayer(V2 pos);
     const Player* FindNearestPlayer(V2 pos) const;
     V2 FindNearestEnemyOrBoss(V2 pos) const;
@@ -106,6 +109,10 @@ private:
     void UpdateClear(float dt);
     void UpdateHiddenBossIntro(float dt);
     void UpdateHiddenBoss(float dt);
+    void ResetHiddenBossCores();
+    void UpdateHiddenBossCores(float dt);
+    bool DamageHiddenBossCore(float dmg, V2 from, int ownerIndex);
+    void DamageHiddenBossCoresInRadius(V2 center, float radius, float dmg, int ownerIndex);
     void UpdateEventVideo(float dt);
     void UpdatePlaying(float dt);
     void UpdateAudioForScreen();
@@ -178,8 +185,12 @@ private:
     void OnKeyDown(WPARAM key);
     bool HandleDebugKey(WPARAM key);
     bool HandleDebugClick(float sx, float sy);
+    bool HandleDebugDrag(float sx, float sy);
     bool DebugPanelContains(float sx, float sy) const;
     void ExecuteDebugAction(int action);
+    void ResetDebugFxAdjustments();
+    void SetDebugFxSlider(int index, float normalizedValue);
+    float DebugFxSliderValue(int index) const;
     void RestartCurrentRun();
     void StartSelectedTitleItem();
     void ActivatePauseMenuItem();
@@ -288,6 +299,7 @@ private:
     std::vector<Particle> particles_;
     std::vector<EffectPulse> effectPulses_;
     std::vector<SwordEffectVisual> swordEffectVisuals_;
+    std::array<HiddenBossCore, HiddenBossCoreCount> hiddenBossCores_{};
     AssetCatalog assetCatalog_;
     EffekseerSystem effekseer_;
     AudioSystem audio_;
@@ -309,6 +321,7 @@ private:
     int difficultyIndex_ = 1;
     int pauseMenuIndex_ = 0;
     int draggingVolume_ = -1;
+    int draggingDebugFx_ = -1;
     Difficulty difficulty_ = Difficulty::Normal;
     GameMode gameMode_ = GameMode::Story;
     GameMode pendingGameMode_ = GameMode::Story;
@@ -342,6 +355,11 @@ private:
     int hiddenPatternStep_ = 0;
     int hiddenBossPhase_ = -1;
     int hiddenBossForm_ = 1;
+    float hiddenBossGaugeHp_ = HiddenBossBaseGaugeHp;
+    float hiddenBossTotalHp_ = HiddenBossBaseGaugeHp * HiddenBossGaugeCount;
+    float hiddenBossCoreOpenT_ = 0.0f;
+    float hiddenBossAuraBreakT_ = 0.0f;
+    int hiddenBossReflectCount_ = 0;
     float hiddenBossPhaseIntroT_ = 0.0f;
     float hiddenBossPhaseIntroLife_ = 0.0f;
     float messageT_ = 0.0f;
