@@ -50,7 +50,7 @@ void SweetsApp::LoadProgress()
     bgmVolume_ = 1.0f;
     seVolume_ = 1.0f;
     uiVolume_ = 1.0f;
-    aimMode_ = AimMode::MoveDirection;
+    aimMode_ = AimMode::Cursor;
     const std::filesystem::path path = SaveFilePath();
     std::ifstream in(path);
     if (!in) return;

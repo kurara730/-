@@ -290,6 +290,7 @@ void SweetsApp::OnKeyDown(WPARAM key)
         if (key == 'Q') UseUltimate();
         if (key == 'X' || key == VK_CONTROL) UseBomb();
         if (key == 'R') RestartCurrentRun();
+        if (key == 'T') SetAimMode(static_cast<AimMode>((static_cast<int>(aimMode_) + 1) % 3), true);
     }
 }
 

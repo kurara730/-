@@ -335,7 +335,7 @@ private:
     GameMode pendingGameMode_ = GameMode::Story;
     GameOverChoice gameOverChoice_ = GameOverChoice::Retry;
     GameplayDimension gameplayDimension_ = GameplayDimension::TwoD;
-    AimMode aimMode_ = AimMode::MoveDirection;
+    AimMode aimMode_ = AimMode::Cursor;
     DebugState debug_;
     LoadPhase loadPhase_ = LoadPhase::Boot;
     bool hiddenBossUnlocked_ = false;
