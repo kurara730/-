@@ -421,11 +421,6 @@ void SweetsApp::ExecuteDebugAction(int action)
     case 11:
         SetGameplayDimension(gameplayDimension_ == GameplayDimension::TwoD ? GameplayDimension::ThreeD : GameplayDimension::TwoD);
         break;
-    case 12:
-        LoadCharacterTableFromCsv();
-        message_ = L"DEBUG: データ再読込";
-        messageT_ = 1.4f;
-        break;
     default:
         break;
     }
