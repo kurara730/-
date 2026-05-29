@@ -75,6 +75,24 @@ private:
     Player* FindNearestPlayer(V2 pos);
     const Player* FindNearestPlayer(V2 pos) const;
     V2 FindNearestEnemyOrBoss(V2 pos) const;
+    bool Use3DRules() const;
+    void SetGameplayDimension(GameplayDimension dimension);
+    void SyncAll3DState();
+    void SyncPlayer3D(Player& p);
+    void SyncEnemy3D(Enemy& e);
+    void SyncBoss3D(Boss& b);
+    void SyncShot3D(Shot& s);
+    void SyncPickup3D(Pickup& p);
+    void SyncObstacle3D(Obstacle& o);
+    void SyncSlash3D(Slash& s);
+    V3 Grounded3D(V2 pos, float y) const;
+    float RuleDistance(V2 a, float ay, V2 b, float by) const;
+    float RuleDistance(const Shot& s, const Player& p) const;
+    float RuleDistance(const Shot& s, const Enemy& e) const;
+    float RuleDistance(const Shot& s, const Boss& b) const;
+    float RuleDistance(const Player& p, const Enemy& e) const;
+    float RuleDistance(const Player& p, const Pickup& item) const;
+    bool RuleCircleHit(V2 a, float ay, float ar, V2 b, float by, float br) const;
     float AddScore(int base, const Player* source = nullptr);
     void GrantBossSkill(Player& p);
 
@@ -127,6 +145,8 @@ private:
 
     void Render();
     void DrawScene();
+    void DrawGameplay2D();
+    void DrawGameplay3D();
     void DrawAdditiveScene();
     void CompositeScene();
     void DrawHud();
@@ -149,7 +169,9 @@ private:
     void DrawSphere(V2 p, float y, float r, Color c);
     void DrawCylinder(V2 p, float radius, float height, Color c);
     void DrawPickupShape(const Pickup& p);
+    void DrawPickupShape3D(const Pickup& p);
     void DrawSector(const Slash& s);
+    void DrawSector3D(const Slash& s);
     void DrawUltimatePreview(const Player& p, int ownerIndex);
     void DrawSprite2D(const std::wstring& spriteId, V2 pos, V2 size, float rotation, Color tint, float depth = 0.5f);
     V2 ScreenToWorld(float sx, float sy) const;
@@ -178,6 +200,7 @@ private:
     int RandInt(int a, int b);
     V2 RandInArena(float margin);
     void ClampInside(V2& p, float radius) const;
+    void ClampInside(V3& p, float radius) const;
 
 private:
     HWND hwnd_ = nullptr;
@@ -262,6 +285,7 @@ private:
     std::vector<Obstacle> obstacles_;
     std::vector<Particle> particles_;
     std::vector<EffectPulse> effectPulses_;
+    std::vector<SwordEffectVisual> swordEffectVisuals_;
     AssetCatalog assetCatalog_;
     EffekseerSystem effekseer_;
     AudioSystem audio_;
@@ -287,6 +311,7 @@ private:
     GameMode gameMode_ = GameMode::Story;
     GameMode pendingGameMode_ = GameMode::Story;
     GameOverChoice gameOverChoice_ = GameOverChoice::Retry;
+    GameplayDimension gameplayDimension_ = GameplayDimension::TwoD;
     DebugState debug_;
     LoadPhase loadPhase_ = LoadPhase::Boot;
     bool hiddenBossUnlocked_ = false;

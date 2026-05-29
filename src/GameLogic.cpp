@@ -39,6 +39,7 @@ void SweetsApp::ResetGame()
     pickups_.clear();
     particles_.clear();
     effectPulses_.clear();
+    swordEffectVisuals_.clear();
     obstacles_.clear();
     wave_ = 1;
     score_ = 0;
@@ -58,6 +59,7 @@ void SweetsApp::ResetGame()
     message_ = L"";
     messageT_ = 0.0f;
     screenFlashT_ = 0.0f;
+    SyncAll3DState();
     StartWave();
 }
 
@@ -108,6 +110,7 @@ void SweetsApp::StartHiddenBoss()
     obstacles_.clear();
     particles_.clear();
     effectPulses_.clear();
+    swordEffectVisuals_.clear();
     screenFlashT_ = 0.0f;
     stage_ = StageType::BossArena;
     stageTimer_ = 0.0f;
@@ -117,6 +120,7 @@ void SweetsApp::StartHiddenBoss()
     boss_.bossType = BossType::HiddenBoss;
     boss_.type = static_cast<int>(BossType::HiddenBoss);
     boss_.pos = { 0.0f, -4.8f };
+    boss_.height = BossBodyY + 0.22f;
     boss_.radius = 1.05f;
     boss_.maxHp = 999999.0f;
     boss_.hp = boss_.maxHp;
@@ -124,6 +128,7 @@ void SweetsApp::StartHiddenBoss()
     boss_.atk = 15.0f;
     boss_.phase = 1;
     boss_.attackCd = 0.0f;
+    SyncBoss3D(boss_);
     hiddenBossT_ = 0.0f;
     hiddenPatternCd_ = 0.0f;
     hiddenPatternStep_ = 0;
@@ -241,6 +246,7 @@ void SweetsApp::SpawnPickup()
     case PickupType::Speed: p.color = Sky; break;
     default: p.color = Sky; break;
     }
+    SyncPickup3D(p);
     pickups_.push_back(p);
 }
 
@@ -748,6 +754,12 @@ void SweetsApp::UpdateShots(float dt)
         }
 
         s.pos += s.vel * dt;
+        if (Use3DRules() && s.enemy)
+        {
+            const float wave = std::sin(gameTime_ * 1.7f + s.pos.x * 0.37f + s.pos.z * 0.23f);
+            s.height = ClampFloat(ShotBodyY + 0.26f * wave + 0.08f * static_cast<float>(s.reflectedCount), 0.16f, 1.15f);
+        }
+        SyncShot3D(s);
         const float dist = Len(s.pos);
         if (dist > ArenaRadius - s.radius)
         {
@@ -768,7 +780,7 @@ void SweetsApp::UpdateShots(float dt)
         for (const auto& o : obstacles_)
         {
             V2 d = s.pos - o.pos;
-            const float l = Len(d);
+            const float l = RuleDistance(s.pos, s.height, o.pos, o.height);
             if (l < s.radius + o.radius)
             {
                 V2 n = Normalize(d);
@@ -805,7 +817,7 @@ void SweetsApp::UpdateShots(float dt)
                 if (!p.active || p.downed) continue;
                 const float hitDist = s.radius + p.hitboxRadius;
                 const float grazeDist = s.radius + p.grazeRadius;
-                const float d = Len(s.pos - p.pos);
+                const float d = RuleDistance(s, p);
                 if (!s.grazed && d < grazeDist && d >= hitDist)
                 {
                     s.grazed = true;
@@ -828,7 +840,7 @@ void SweetsApp::UpdateShots(float dt)
             for (auto& e : enemies_)
             {
                 if (e.dead) continue;
-                if (Len(s.pos - e.pos) < s.radius + e.radius)
+                if (RuleDistance(s, e) < s.radius + e.radius)
                 {
                     const bool wasChargedSplit = s.charged && s.sourceCharacter == CharacterType::Shortcake && s.splitCount > 0;
                     DamageEnemy(e, ReflectedDamage(s), s.pos, 1.0f, s.reflected, s.ownerIndex);
@@ -842,7 +854,7 @@ void SweetsApp::UpdateShots(float dt)
                     break;
                 }
             }
-            if (!s.dead && boss_.active && Len(s.pos - boss_.pos) < s.radius + boss_.radius)
+            if (!s.dead && boss_.active && RuleDistance(s, boss_) < s.radius + boss_.radius)
             {
                 if (s.charged && s.sourceCharacter == CharacterType::Shortcake && s.splitCount > 0) SpawnSplitShots(s, boss_.pos);
                 DamageBoss(ReflectedDamage(s), s.reflected, s.ownerIndex);
@@ -865,10 +877,11 @@ void SweetsApp::UpdatePickups(float dt)
         for (auto& p : players_)
         {
             if (!p.active || p.downed) continue;
-            const float d = Len(p.pos - item.pos);
+            const float d = RuleDistance(p, item);
             if (p.magnetT > 0.0f && d < 4.6f)
             {
                 item.pos += Normalize(p.pos - item.pos) * (dt * 6.5f);
+                SyncPickup3D(item);
             }
             if (d < item.radius + p.radius && d < bestD)
             {
@@ -946,6 +959,8 @@ void SweetsApp::UpdateParticles(float dt)
         p.pos += p.vel * dt;
         p.y += p.vy * dt;
         p.vy -= 6.0f * dt;
+        p.pos3 = Grounded3D(p.pos, p.y);
+        p.vel3 = Grounded3D(p.vel, p.vy);
     }
 }
 
@@ -958,10 +973,19 @@ void SweetsApp::UpdateEffectVisuals(float dt)
     for (auto& pulse : effectPulses_)
     {
         pulse.ttl -= dt;
+        pulse.pos3 = Grounded3D(pulse.pos, pulse.y);
     }
     effectPulses_.erase(
         std::remove_if(effectPulses_.begin(), effectPulses_.end(), [](const EffectPulse& pulse) { return pulse.ttl <= 0.0f; }),
         effectPulses_.end());
+    for (auto& visual : swordEffectVisuals_)
+    {
+        visual.ttl -= dt;
+        visual.pos3 = Grounded3D(visual.pos, visual.height);
+    }
+    swordEffectVisuals_.erase(
+        std::remove_if(swordEffectVisuals_.begin(), swordEffectVisuals_.end(), [](const SwordEffectVisual& visual) { return visual.ttl <= 0.0f; }),
+        swordEffectVisuals_.end());
 }
 
 void SweetsApp::SpawnEnemyShot(V2 pos, float angle, float speed, float damage, float radius, Color color, float ttl, float angularVel, float accel)
@@ -995,6 +1019,11 @@ void SweetsApp::SpawnEnemyShot(V2 pos, float angle, float speed, float damage, f
     s.angularVel = angularVel;
     s.accel = accel;
     s.ownerIndex = -1;
+    if (Use3DRules())
+    {
+        s.height = ClampFloat(ShotBodyY + 0.20f * std::sin(gameTime_ * 2.1f + angle * 3.0f), 0.16f, 1.05f);
+    }
+    SyncShot3D(s);
     shots_.push_back(s);
 }
 
@@ -1009,6 +1038,8 @@ void SweetsApp::Burst(V2 p, Color c, int count)
         q.vel = FromAngle(a) * spd;
         q.y = Rand(0.12f, 0.8f);
         q.vy = Rand(1.0f, 4.2f);
+        q.pos3 = Grounded3D(q.pos, q.y);
+        q.vel3 = Grounded3D(q.vel, q.vy);
         q.ttl = Rand(0.35f, 0.9f);
         q.color = c;
         particles_.push_back(q);
@@ -1024,7 +1055,8 @@ void SweetsApp::PlayCombatEffect(const std::wstring& id, V2 position, float y, f
     const bool roll = id == L"ult_roll";
     const bool ultimate = shortcake || chocolate || cheese || roll;
 
-    const float boostedScale = scale * (sword ? 2.0f : (ultimate ? 2.5f : 1.8f));
+    const bool chargedSword = sword && scale >= 1.30f;
+    const float boostedScale = scale * (sword ? (chargedSword ? 2.35f : 1.85f) : (ultimate ? 2.5f : 1.8f));
     const bool played = effekseer_.Play(id, position, y, rotationY, boostedScale);
 
     auto addPulse = [&](float startRadius, float endRadius, float life, Color color, float pulseY)
@@ -1037,6 +1069,7 @@ void SweetsApp::PlayCombatEffect(const std::wstring& id, V2 position, float y, f
         pulse.life = life;
         pulse.y = pulseY;
         pulse.color = color;
+        pulse.pos3 = Grounded3D(pulse.pos, pulse.y);
         effectPulses_.push_back(pulse);
     };
 
@@ -1061,23 +1094,29 @@ void SweetsApp::PlayCombatEffect(const std::wstring& id, V2 position, float y, f
         visual.ttl = life;
         visual.damage = 0.0f;
         visual.color = color;
+        SyncSlash3D(visual);
         slashes_.push_back(visual);
+    };
+
+    auto addSwordVisual = [&](bool charged)
+    {
+        SwordEffectVisual visual{};
+        visual.pos = position;
+        visual.angle = rotationY;
+        visual.scale = scale;
+        visual.range = charged ? 3.35f : 2.20f;
+        visual.arc = charged ? 0.70f : 0.52f;
+        visual.height = y;
+        visual.life = charged ? 0.34f : 0.22f;
+        visual.ttl = visual.life;
+        visual.charged = charged;
+        visual.pos3 = Grounded3D(visual.pos, visual.height);
+        swordEffectVisuals_.push_back(visual);
     };
 
     if (sword)
     {
-        const bool chargedSlash = scale >= 1.30f;
-        addSlashVisual(3.4f * scale, 1.85f, 0.28f, WithAlpha(Choco, 0.95f), rotationY);
-        addSlashVisual(2.35f * scale, 1.35f, 0.18f, WithAlpha(Cream, 0.88f), rotationY + 0.08f);
-        addPulse(0.45f * scale, 2.1f * scale, 0.24f, Choco, y + 0.04f);
-        if (chargedSlash)
-        {
-            addSlashVisual(4.15f * scale, 2.20f, 0.32f, WithAlpha(Gold, 0.90f), rotationY - 0.06f);
-            addPulse(0.80f * scale, 3.15f * scale, 0.34f, Gold, y + 0.06f);
-        }
-        Burst(position + FromAngle(rotationY) * 0.35f, Choco, fallbackCount + 18);
-        Burst(position + FromAngle(rotationY) * 0.80f, Cream, 10);
-        addFlash(Cream, chargedSlash ? 0.13f : 0.07f);
+        addSwordVisual(chargedSword);
     }
     else if (shortcake)
     {
@@ -1129,7 +1168,7 @@ void SweetsApp::PlayCombatEffect(const std::wstring& id, V2 position, float y, f
         addFlash(fallbackColor, 0.08f);
     }
 
-    if (!played)
+    if (!played && !sword)
     {
         Burst(position, fallbackColor, fallbackCount + (ultimate ? 80 : 20));
     }

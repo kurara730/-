@@ -24,12 +24,13 @@ void SweetsApp::FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint)
         s.ownerIndex = ownerIndex;
         s.sourceCharacter = CharacterType::Shortcake;
         s.color = Berry;
+        SyncShot3D(s);
         shots_.push_back(s);
         message_ = L"分裂チャージ";
     }
     else if (p.character == CharacterType::Chocolate)
     {
-        PlayCombatEffect(L"sword_slash", p.pos + FromAngle(aim) * 0.85f, 0.54f, aim, 1.35f, Choco, 28);
+        PlayCombatEffect(L"sword_slash", p.pos, 0.56f, aim, 1.45f, Choco, 28);
         for (int i = -1; i <= 1; ++i)
         {
             const float a = aim + i * 0.10f;
@@ -45,6 +46,7 @@ void SweetsApp::FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint)
             s.ownerIndex = ownerIndex;
             s.sourceCharacter = CharacterType::Chocolate;
             s.color = Choco;
+            SyncShot3D(s);
             shots_.push_back(s);
         }
         message_ = L"斬撃波";
@@ -63,6 +65,7 @@ void SweetsApp::FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint)
         wall.cheeseWall = true;
         wall.moving = true;
         wall.color = Gold;
+        SyncObstacle3D(wall);
         obstacles_.push_back(wall);
         message_ = L"トゲ付き壁";
     }
@@ -85,6 +88,7 @@ void SweetsApp::FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint)
             s.ownerIndex = ownerIndex;
             s.sourceCharacter = CharacterType::Roll;
             s.color = Cream;
+            SyncShot3D(s);
             shots_.push_back(s);
         }
         message_ = L"転がり突進";
@@ -108,6 +112,7 @@ void SweetsApp::SpawnSplitShots(const Shot& source, V2 at)
         child.sourceCharacter = CharacterType::Shortcake;
         child.homingStrength = 2.2f;
         child.color = Berry;
+        SyncShot3D(child);
         shots_.push_back(child);
     }
     Burst(at, Berry, 24);

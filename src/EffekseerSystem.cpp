@@ -173,6 +173,7 @@ void EffekseerSystem::LoadEffect(const std::wstring& id, const std::wstring& rel
     }
 
     impl_->effects[id] = effect;
+    lastError_.clear();
 #else
     (void)id;
     (void)relativePath;
@@ -234,6 +235,18 @@ bool EffekseerSystem::Available() const
 #if defined(SWEETS_USE_EFFEKSEER) && SWEETS_USE_EFFEKSEER
     return impl_ && impl_->manager && impl_->renderer;
 #else
+    return false;
+#endif
+}
+
+bool EffekseerSystem::HasEffect(const std::wstring& id) const
+{
+#if defined(SWEETS_USE_EFFEKSEER) && SWEETS_USE_EFFEKSEER
+    if (!impl_) return false;
+    const auto found = impl_->effects.find(id);
+    return found != impl_->effects.end() && found->second;
+#else
+    (void)id;
     return false;
 #endif
 }

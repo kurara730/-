@@ -29,16 +29,19 @@ void SweetsApp::UpdatePlayer(float dt)
         player_.pos += player_.vel * dt;
     }
     ClampInside(player_.pos, player_.radius);
+    SyncPlayer3D(player_);
 
     for (const auto& o : obstacles_)
     {
         if (o.damageField) continue;
         V2 d = player_.pos - o.pos;
-        const float l = Len(d);
+        const float l = RuleDistance(player_.pos, PlayerBodyY, o.pos, o.height);
         const float minD = player_.radius + o.radius;
         if (l > 0.0001f && l < minD)
         {
-            player_.pos = o.pos + d / l * minD;
+            const V2 n = Normalize(d);
+            player_.pos = o.pos + n * minD;
+            SyncPlayer3D(player_);
         }
     }
 
@@ -77,6 +80,7 @@ void SweetsApp::UpdatePlayer(float dt)
             wall.reflectPower = 1.35f + player_.corePower;
             wall.cheeseWall = true;
             wall.color = Gold;
+            SyncObstacle3D(wall);
             obstacles_.push_back(wall);
         }
         player_.charging = false;
@@ -140,6 +144,7 @@ void SweetsApp::FirePrimaryFor(Player& p, int ownerIndex, float aim)
         s.ownerIndex = ownerIndex;
         s.sourceCharacter = p.character;
         s.homingStrength = p.character == CharacterType::Shortcake ? 1.7f : 0.0f;
+        SyncShot3D(s);
         shots_.push_back(s);
     }
 }
@@ -161,13 +166,15 @@ void SweetsApp::DoMeleeFor(Player& p, int ownerIndex, float aim)
     s.arc = 1.45f;
     s.damage = 44.0f * dmgScale;
     s.color = Choco;
+    s.visualMode = SlashVisualMode::Hidden;
+    SyncSlash3D(s);
     slashes_.push_back(s);
-    PlayCombatEffect(L"sword_slash", p.pos + FromAngle(aim) * 0.65f, 0.52f, aim, 1.15f, Choco, 22);
+    PlayCombatEffect(L"sword_slash", p.pos, 0.52f, aim, 1.10f, Choco, 22);
 
-    auto inCone = [&](V2 target, float r)
+    auto inCone = [&](V2 target, float r, float targetY)
     {
         V2 d = target - p.pos;
-        const float l = Len(d);
+        const float l = Use3DRules() ? RuleDistance(p.pos, PlayerBodyY, target, targetY) : Len(d);
         if (l > s.range + r) return false;
         float da = AngleOf(d) - aim;
         while (da > Pi) da -= TwoPi;
@@ -177,12 +184,12 @@ void SweetsApp::DoMeleeFor(Player& p, int ownerIndex, float aim)
 
     for (auto& e : enemies_)
     {
-        if (!e.dead && inCone(e.pos, e.radius))
+        if (!e.dead && inCone(e.pos, e.radius, e.height))
         {
             DamageEnemy(e, s.damage, p.pos, 1.8f, false, ownerIndex);
         }
     }
-    if (boss_.active && inCone(boss_.pos, boss_.radius))
+    if (boss_.active && inCone(boss_.pos, boss_.radius, boss_.height))
     {
         DamageBoss(s.damage * 0.8f, false, ownerIndex);
     }
@@ -236,7 +243,7 @@ void SweetsApp::UseBombFor(Player& p, int ownerIndex)
     int cleared = 0;
     for (auto& s : shots_)
     {
-        if (s.enemy && Len(s.pos - p.pos) < 9.5f)
+        if (s.enemy && RuleDistance(s.pos, s.height, p.pos, PlayerBodyY) < 9.5f)
         {
             s.dead = true;
             ++cleared;
@@ -245,12 +252,12 @@ void SweetsApp::UseBombFor(Player& p, int ownerIndex)
 
     for (auto& e : enemies_)
     {
-        if (!e.dead && Len(e.pos - p.pos) < 5.6f)
+        if (!e.dead && RuleDistance(p, e) < 5.6f)
         {
             DamageEnemy(e, 120.0f + wave_ * 12.0f, p.pos, 2.0f, false, ownerIndex);
         }
     }
-    if (boss_.active && Len(boss_.pos - p.pos) < 6.4f)
+    if (boss_.active && RuleDistance(p.pos, PlayerBodyY, boss_.pos, boss_.height) < 6.4f)
     {
         DamageBoss(300.0f + wave_ * 18.0f, false, ownerIndex);
     }
@@ -272,7 +279,7 @@ void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
     for (auto& other : players_)
     {
         if (!other.active || other.index == ownerIndex || other.downed || other.ult < 100.0f) continue;
-        if (Len(other.pos - p.pos) < 2.4f)
+        if (RuleDistance(p.pos, PlayerBodyY, other.pos, PlayerBodyY) < 2.4f)
         {
             p.ult = 0.0f;
             other.ult = 0.0f;
@@ -299,9 +306,9 @@ void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
         const V2 target = ownerIndex == 0 ? ScreenToWorld(mouseX_, mouseY_) : FindNearestEnemyOrBoss(p.pos);
         for (auto& e : enemies_)
         {
-            if (!e.dead && Len(e.pos - target) < 3.2f) DamageEnemy(e, 210.0f + wave_ * 18.0f, target, 2.0f, false, ownerIndex);
+            if (!e.dead && RuleDistance(e.pos, e.height, target, ShotBodyY) < 3.2f) DamageEnemy(e, 210.0f + wave_ * 18.0f, target, 2.0f, false, ownerIndex);
         }
-        if (boss_.active && Len(boss_.pos - target) < 3.6f) DamageBoss(460.0f + wave_ * 22.0f, false, ownerIndex);
+        if (boss_.active && RuleDistance(boss_.pos, boss_.height, target, ShotBodyY) < 3.6f) DamageBoss(460.0f + wave_ * 22.0f, false, ownerIndex);
         Burst(target, Berry, 90);
         PlayCombatEffect(L"ult_shortcake", target, 0.50f, 0.0f, 1.75f, Berry, 70);
         message_ = L"巨大メテオ";
@@ -332,6 +339,7 @@ void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
             o.reflectPower = 1.5f + p.corePower;
             o.cheeseWall = true;
             o.color = Gold;
+            SyncObstacle3D(o);
             obstacles_.push_back(o);
         }
         Burst(p.pos, Gold, 70);
@@ -353,6 +361,7 @@ void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
             s.color = Cream;
             s.ownerIndex = ownerIndex;
             s.sourceCharacter = CharacterType::Roll;
+            SyncShot3D(s);
             shots_.push_back(s);
         }
         Burst(p.pos, Cream, 70);

@@ -160,6 +160,12 @@
     <None Include="assets\audio\Lonery boy.wav" />
     <None Include="assets\audio\ruins.mp3" />
     <None Include="assets\effects\sword_slash.efkefc" />
+    <None Include="assets\effects\sword\sword_slash.efkefc" />
+    <None Include="assets\effects\sword\Sword9.efkproj" />
+    <None Include="assets\effects\sword\Texture\AuroraRing.png" />
+    <None Include="assets\effects\sword\Texture\Line01.png" />
+    <None Include="assets\effects\sword\Texture\Particle01.png" />
+    <None Include="assets\effects\sword\Texture\Thunder1.png" />
     <None Include="assets\effects\ult_cheese.efkefc" />
     <None Include="assets\effects\ult_chocolate.efkefc" />
     <None Include="assets\effects\ult_roll.efkefc" />

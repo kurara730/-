@@ -81,6 +81,12 @@ add_executable(SweetsActionDX11 WIN32
     assets/audio/ruins.mp3
     "assets/audio/Lonery boy.wav"
     assets/effects/sword_slash.efkefc
+    assets/effects/sword/sword_slash.efkefc
+    assets/effects/sword/Sword9.efkproj
+    assets/effects/sword/Texture/Thunder1.png
+    assets/effects/sword/Texture/Line01.png
+    assets/effects/sword/Texture/Particle01.png
+    assets/effects/sword/Texture/AuroraRing.png
     assets/effects/ult_shortcake.efkefc
     assets/effects/ult_chocolate.efkefc
     assets/effects/ult_cheese.efkefc

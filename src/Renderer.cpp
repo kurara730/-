@@ -622,8 +622,22 @@ void SweetsApp::DrawScene()
 
     const float halfH = GameplayHalfHeight();
     const float halfW = GameplayHalfWidth(width_, height_);
-    view_ = XMMatrixIdentity();
-    proj_ = XMMatrixOrthographicOffCenterLH(-halfW, halfW, -halfH, halfH, 0.0f, 10.0f);
+    if (Use3DRules())
+    {
+        SyncAll3DState();
+        const XMVECTOR eye = XMVectorSet(0.0f, 15.8f, -17.8f, 1.0f);
+        const XMVECTOR at = XMVectorSet(0.0f, 0.0f, 0.8f, 1.0f);
+        const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+        view_ = XMMatrixLookAtLH(eye, at, up);
+        proj_ = XMMatrixPerspectiveFovLH(XMConvertToRadians(48.0f), static_cast<float>(std::max(1u, width_)) / std::max(1.0f, static_cast<float>(height_)), 0.1f, 80.0f);
+        cameraPos_ = { 0.0f, 15.8f, -17.8f };
+    }
+    else
+    {
+        view_ = XMMatrixIdentity();
+        proj_ = XMMatrixOrthographicOffCenterLH(-halfW, halfW, -halfH, halfH, 0.0f, 10.0f);
+        cameraPos_ = { 0.0f, 15.5f, -18.5f };
+    }
 #if defined(_DEBUG)
     if (debug_.taa)
     {
@@ -642,6 +656,11 @@ void SweetsApp::DrawScene()
 
     ID3D11RenderTargetView* rtv = sceneTarget;
     context_->OMSetRenderTargets(1, &rtv, dsv_.Get());
+    if (Use3DRules())
+    {
+        DrawGameplay3D();
+        return;
+    }
     spriteRenderer_.Begin(view_ * proj_, false);
 
     spriteRenderer_.DrawCircle({ 0.0f, 0.0f }, ArenaRadius + 1.3f, WithAlpha(Rose, 0.24f), 0.95f, 96);
@@ -776,6 +795,154 @@ void SweetsApp::DrawScene()
     spriteRenderer_.End();
 }
 
+void SweetsApp::DrawGameplay3D()
+{
+    float blendFactor[4]{ 0, 0, 0, 0 };
+    context_->IASetInputLayout(inputLayout_.Get());
+    context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    context_->VSSetShader(vs_.Get(), nullptr, 0);
+    context_->PSSetShader(ps_.Get(), nullptr, 0);
+    ID3D11Buffer* frameCb = frameCB_.Get();
+    ID3D11Buffer* objectCb = objectCB_.Get();
+    context_->VSSetConstantBuffers(0, 1, &frameCb);
+    context_->PSSetConstantBuffers(0, 1, &frameCb);
+    context_->VSSetConstantBuffers(1, 1, &objectCb);
+    context_->PSSetConstantBuffers(1, 1, &objectCb);
+    context_->RSSetState(rasterState_.Get());
+    context_->OMSetDepthStencilState(depthState_.Get(), 0);
+    context_->OMSetBlendState(alphaBlend_.Get(), blendFactor, 0xffffffff);
+
+    DrawMesh(floorMesh_,
+        XMMatrixScaling(ArenaRadius + 1.3f, 1.0f, ArenaRadius + 1.3f) *
+        XMMatrixTranslation(0.0f, -0.035f, 0.0f),
+        WithAlpha(Rose, 0.16f));
+    DrawMesh(floorMesh_,
+        XMMatrixScaling(ArenaRadius, 1.0f, ArenaRadius) *
+        XMMatrixTranslation(0.0f, -0.025f, 0.0f),
+        WithAlpha({ 0.18f, 0.07f, 0.12f, 1.0f }, 0.94f));
+    DrawMesh(ringMesh_,
+        XMMatrixScaling(ArenaRadius, 1.0f, ArenaRadius) *
+        XMMatrixTranslation(0.0f, 0.015f, 0.0f),
+        WithAlpha(Gold, 0.80f));
+    DrawMesh(ringMesh_,
+        XMMatrixScaling(ArenaRadius * 0.68f, 1.0f, ArenaRadius * 0.68f) *
+        XMMatrixTranslation(0.0f, 0.025f, 0.0f),
+        WithAlpha(Cream, 0.22f));
+
+    for (const auto& o : obstacles_)
+    {
+        if (o.damageField)
+        {
+            DrawCylinder(o.pos, o.radius, 0.08f, WithAlpha(Red, 0.42f));
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(o.radius, 1.0f, o.radius) *
+                XMMatrixTranslation(o.pos.x, 0.16f, o.pos.z),
+                WithAlpha(Red, 0.78f));
+        }
+        else
+        {
+            DrawCylinder(o.pos, o.radius, o.cheeseWall ? 0.82f : 0.56f, WithAlpha(o.color, 0.86f));
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(o.radius * 1.08f, 1.0f, o.radius * 1.08f) *
+                XMMatrixTranslation(o.pos.x, 0.65f, o.pos.z),
+                WithAlpha(Cream, 0.30f));
+        }
+    }
+
+    for (const auto& p : pickups_) DrawPickupShape3D(p);
+
+    for (const auto& s : shots_)
+    {
+        const float scale = s.charged ? 1.55f : 1.0f;
+        DrawSphere(s.pos, s.height, s.radius * 1.75f * scale, s.color);
+        if (s.enemy)
+        {
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(s.radius * 2.25f, 1.0f, s.radius * 2.25f) *
+                XMMatrixTranslation(s.pos.x, s.height, s.pos.z),
+                WithAlpha(Cream, 0.26f));
+        }
+    }
+
+    for (const auto& e : enemies_)
+    {
+        if (e.dead) continue;
+        Color c = e.flash > 0.0f ? Cream : e.color;
+        if (e.barrierT > 0.0f) c = Sky;
+        DrawSphere(e.pos, e.height, e.radius, c);
+        DrawCylinder(e.pos, e.radius * 0.62f, e.height, WithAlpha(c, 0.42f));
+    }
+
+    if (boss_.active)
+    {
+        Color c = boss_.flash > 0.0f ? Cream : (boss_.bossType == BossType::HiddenBoss ? Grape : Rose);
+        DrawSphere(boss_.pos, boss_.height, boss_.radius, c);
+        DrawMesh(ringMesh_,
+            XMMatrixScaling(boss_.radius * 1.42f, 1.0f, boss_.radius * 1.42f) *
+            XMMatrixTranslation(boss_.pos.x, 0.10f, boss_.pos.z),
+            WithAlpha(Red, 0.45f));
+        if (boss_.telegraphT > 0.0f && boss_.telegraphLife > 0.0f)
+        {
+            const float t = 1.0f - ClampFloat(boss_.telegraphT / boss_.telegraphLife, 0.0f, 1.0f);
+            const Color telegraph = boss_.telegraphAttack == 0 ? Grape : (boss_.telegraphAttack == 1 ? Red : (boss_.telegraphAttack == 2 ? Gold : Mint));
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(boss_.radius * (1.75f + t * 1.15f), 1.0f, boss_.radius * (1.75f + t * 1.15f)) *
+                XMMatrixTranslation(boss_.pos.x, 0.14f, boss_.pos.z),
+                WithAlpha(telegraph, 0.72f));
+        }
+    }
+
+    for (const auto& s : slashes_) DrawSector3D(s);
+
+    for (const auto& p : players_)
+    {
+        if (!p.active) continue;
+        const Color base = Loadouts[static_cast<int>(p.character)].color;
+        Color body = p.downed ? WithAlpha(Red, 0.65f) : (p.inv > 0.0f ? Cream : base);
+        if (screen_ == Screen::HiddenBoss && !p.downed) body = WithAlpha(body, 0.42f);
+        DrawSphere(p.pos, PlayerBodyY, p.radius, body);
+        const V2 nose = p.pos + FromAngle(p.face) * (p.radius * 0.75f);
+        DrawSphere(nose, PlayerBodyY + 0.03f, p.radius * 0.16f, Cream);
+        if ((p.focus || screen_ == Screen::HiddenBoss) && !p.downed)
+        {
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(p.hitboxRadius, 1.0f, p.hitboxRadius) *
+                XMMatrixTranslation(p.pos.x, 0.06f, p.pos.z),
+                Red);
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(p.grazeRadius, 1.0f, p.grazeRadius) *
+                XMMatrixTranslation(p.pos.x, 0.055f, p.pos.z),
+                WithAlpha(Sky, p.grazeFlash > 0.0f ? 0.70f : 0.30f));
+        }
+        if (p.shieldT > 0.0f)
+        {
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(p.radius * 2.1f, 1.0f, p.radius * 2.1f) *
+                XMMatrixTranslation(p.pos.x, 0.08f, p.pos.z),
+                WithAlpha(Sky, 0.45f));
+        }
+    }
+
+    for (const auto& particle : particles_)
+    {
+        DrawSphere(particle.pos, std::max(0.03f, particle.y), 0.055f + particle.y * 0.04f, WithAlpha(particle.color, ClampFloat(particle.ttl * 2.0f, 0.0f, 1.0f)));
+    }
+
+#if defined(_DEBUG)
+    if (debug_.overlays)
+    {
+        for (const auto& p : players_)
+        {
+            if (!p.active) continue;
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(p.hitboxRadius, 1.0f, p.hitboxRadius) *
+                XMMatrixTranslation(p.pos.x, 0.085f, p.pos.z),
+                WithAlpha(Red, 0.85f));
+        }
+    }
+#endif
+}
+
 void SweetsApp::DrawAdditiveScene()
 {
     if (!additiveRtv_) return;
@@ -803,6 +970,40 @@ void SweetsApp::DrawAdditiveScene()
         const float radius = pulse.startRadius + (pulse.endRadius - pulse.startRadius) * progress;
         spriteRenderer_.DrawRing(pulse.pos, radius, 0.15f + radius * 0.025f, WithAlpha(pulse.color, 0.88f * fade), 0.05f, 96);
         spriteRenderer_.DrawRing(pulse.pos, radius * 0.62f, 0.09f, WithAlpha(Cream, 0.34f * fade), 0.04f, 72);
+    }
+    for (const auto& visual : swordEffectVisuals_)
+    {
+        const float life = std::max(0.01f, visual.life);
+        const float progress = ClampFloat(1.0f - visual.ttl / life, 0.0f, 1.0f);
+        const float fade = ClampFloat(visual.ttl / life, 0.0f, 1.0f);
+        const float baseScale = std::max(0.1f, visual.scale);
+        const float length = visual.range * baseScale * (visual.charged ? 1.05f : 0.96f);
+        const float width = std::max(0.18f, std::tan(visual.arc * 0.5f) * visual.range * 0.36f) * baseScale;
+        const V2 forward = FromAngle(visual.angle);
+        const V2 side{ -forward.z, forward.x };
+        const V2 root = visual.pos + forward * (0.12f * baseScale);
+        const V2 center = root + forward * (length * 0.48f);
+        const float rotation = visual.angle - Pi * 0.5f;
+        const float sweep = 1.0f + 0.16f * std::sin(progress * Pi);
+
+        DrawSprite2D(L"effect_sword_thunder", center, { width * sweep, length * (1.0f + progress * 0.10f) }, rotation, WithAlpha(Cream, 0.96f * fade), 0.035f);
+        DrawSprite2D(L"effect_sword_line", center - side * (0.16f * baseScale), { width * 0.72f, length * 0.92f }, rotation + 0.05f, WithAlpha(Sky, 0.58f * fade), 0.034f);
+        DrawSprite2D(L"effect_sword_line", center + side * (0.18f * baseScale), { width * 0.52f, length * 0.76f }, rotation - 0.07f, WithAlpha(Choco, 0.46f * fade), 0.033f);
+        if (visual.charged)
+        {
+            DrawSprite2D(L"effect_sword_ring", root + forward * (0.42f * baseScale), { 1.55f * baseScale, 1.55f * baseScale }, gameTime_ * 5.0f, WithAlpha(Sky, 0.72f * fade), 0.032f);
+            DrawSprite2D(L"effect_sword_thunder", center + forward * (0.32f * baseScale), { width * 1.22f, length * 1.10f }, rotation, WithAlpha(Gold, 0.42f * fade), 0.031f);
+        }
+
+        const int sparkCount = visual.charged ? 9 : 5;
+        for (int i = 0; i < sparkCount; ++i)
+        {
+            const float t = (static_cast<float>(i) + 0.35f) / static_cast<float>(sparkCount);
+            const float wave = std::sin((t + progress) * TwoPi * 1.7f);
+            const V2 sparkPos = root + forward * (length * t) + side * (wave * width * 0.42f);
+            const float sparkSize = (visual.charged ? 0.34f : 0.24f) * baseScale * (1.0f - 0.35f * t);
+            DrawSprite2D(L"effect_sword_particle", sparkPos, { sparkSize, sparkSize }, visual.angle + t * TwoPi, WithAlpha((i & 1) ? Gold : Cream, 0.82f * fade), 0.030f);
+        }
     }
     for (const auto& p : players_)
     {
@@ -1549,19 +1750,24 @@ void SweetsApp::DrawDebugHud()
         << L"戦闘目的 " << encounter.name << L"  特殊 " << EliteEnemyCount() << L"  ボス雑魚 " << BossAddCount() << L"\n"
         << L"ウェーブ " << wave_ << L"  敵 " << enemies_.size() << L"\n"
         << L"弾 自機/敵 " << playerShots << L"/" << enemyBullets << L"\n"
-        << L"描画 2D  スプライト " << spriteLibrary_.Count() << L"\n"
+        << L"描画/ルール " << (Use3DRules() ? L"3D" : L"2D") << L"  スプライト " << spriteLibrary_.Count() << L"\n"
         << L"BGM " << static_cast<int>(audio_.CurrentTrack()) << L"  音量 " << static_cast<int>(audio_.Volume() * 100.0f) << L"%\n"
         << L"TAA " << (debug_.taa ? L"ON" : L"OFF") << L"  加算RT " << (debug_.additiveView ? L"表示" : L"合成") << L"\n"
         << L"F1で閉じる";
     ss << L"\nロード " << static_cast<int>(bootLoadElapsed_ * 100.0f) / 100.0f << L"s  " << LoadPhaseName(loadPhase_) << L"\n"
         << L"最終 " << lastLoadStep_ << L"\n"
         << L"音声 " << audio_.StreamStatus() << L"\n";
+    ss << L"Effekseer sword " << (effekseer_.HasEffect(L"sword_slash") ? L"OK" : L"NG") << L"\n";
+    if (!effekseer_.LastError().empty())
+    {
+        ss << L"Effekseer " << effekseer_.LastError() << L"\n";
+    }
     const std::wstring text = ss.str();
     textBrush_->SetColor(D2D1::ColorF(0.82f, 1.0f, 0.90f, 0.96f));
     d2dContext_->DrawTextW(text.c_str(), static_cast<UINT32>(text.size()), smallFormat_.Get(),
         D2D1::RectF(panelLeft + 18.0f, 18.0f, panelRight - 16.0f, 236.0f), textBrush_.Get());
 
-    const std::array<const wchar_t*, 11> labels{
+    const std::array<const wchar_t*, 12> labels{
         L"TAA",
         L"加算RT",
         L"当たり判定",
@@ -1572,13 +1778,14 @@ void SweetsApp::DrawDebugHud()
         L"EX解禁",
         L"敵弾消去",
         L"シェーダー再読込",
-        L"1F進行"
+        L"1F進行",
+        L"2D/3D切替"
     };
     const float left = static_cast<float>(width_) - 342.0f;
     const float buttonW = 148.0f;
     const float buttonH = 30.0f;
     const float gap = 10.0f;
-    const float top = 248.0f;
+    const float top = 286.0f;
     for (int i = 0; i < static_cast<int>(labels.size()); ++i)
     {
         const int col = i % 2;
@@ -1590,6 +1797,7 @@ void SweetsApp::DrawDebugHud()
         if (i == 1) on = debug_.additiveView;
         if (i == 2) on = debug_.overlays;
         if (i == 3) on = debug_.invincible;
+        if (i == 11) on = Use3DRules();
         const bool hover = PointInRect(mouseX_, mouseY_, x, y, x + buttonW, y + buttonH);
         const D2D1_RECT_F rect = D2D1::RectF(x, y, x + buttonW, y + buttonH);
         textBrush_->SetColor(on ? D2D1::ColorF(0.18f, 0.32f, 0.38f, 0.98f) : (hover ? D2D1::ColorF(0.28f, 0.28f, 0.32f, 0.98f) : D2D1::ColorF(0.12f, 0.12f, 0.15f, 0.96f)));
@@ -2133,12 +2341,44 @@ void SweetsApp::DrawPickupShape(const Pickup& p)
     }
 }
 
+void SweetsApp::DrawPickupShape3D(const Pickup& p)
+{
+    DrawPickupShape(p);
+}
+
 void SweetsApp::DrawSector(const Slash& s)
 {
     const float alpha = ClampFloat(s.ttl / s.life, 0.0f, 1.0f) * 0.60f;
+    if (s.visualMode == SlashVisualMode::Hidden)
+    {
+        return;
+    }
+
     const V2 center = s.pos + FromAngle(s.angle) * (s.range * 0.45f);
+    if (s.visualMode == SlashVisualMode::Line)
+    {
+        DrawSprite2D(L"2d_shot_player", center, { s.range * 0.20f, s.range * 1.75f }, s.angle - Pi * 0.5f, WithAlpha(s.color, alpha), 0.08f);
+        return;
+    }
+
     DrawSprite2D(L"2d_slash", center, { s.range * 1.65f, s.range * 0.92f }, s.angle, WithAlpha(s.color, alpha), 0.08f);
     spriteRenderer_.DrawArc(s.pos, s.range * 0.60f, s.range * 0.34f, s.angle, s.arc, WithAlpha(Cream, alpha * 0.58f), 0.07f, 32);
+}
+
+void SweetsApp::DrawSector3D(const Slash& s)
+{
+    if (s.visualMode == SlashVisualMode::Hidden) return;
+    const float alpha = ClampFloat(s.ttl / s.life, 0.0f, 1.0f) * 0.55f;
+    const V2 center = s.pos + FromAngle(s.angle) * (s.range * 0.42f);
+    DrawMesh(wedgeMesh_,
+        XMMatrixScaling(s.range * 0.82f, 1.0f, s.range * 0.82f) *
+        XMMatrixRotationY(-s.angle) *
+        XMMatrixTranslation(center.x, s.height, center.z),
+        WithAlpha(s.color, alpha));
+    DrawMesh(ringMesh_,
+        XMMatrixScaling(s.range * 0.60f, 1.0f, s.range * 0.60f) *
+        XMMatrixTranslation(s.pos.x, s.height + 0.015f, s.pos.z),
+        WithAlpha(Cream, alpha * 0.28f));
 }
 
 void SweetsApp::DrawUltimatePreview(const Player& p, int ownerIndex)
@@ -2203,6 +2443,33 @@ V2 SweetsApp::ScreenToWorld(float sx, float sy) const
 {
     const float nx = (2.0f * sx / std::max(1u, width_)) - 1.0f;
     const float ny = 1.0f - (2.0f * sy / std::max(1u, height_));
+    if (Use3DRules())
+    {
+        const XMMATRIX view = XMMatrixLookAtLH(
+            XMVectorSet(0.0f, 15.8f, -17.8f, 1.0f),
+            XMVectorSet(0.0f, 0.0f, 0.8f, 1.0f),
+            XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
+        const XMMATRIX proj = XMMatrixPerspectiveFovLH(
+            XMConvertToRadians(48.0f),
+            static_cast<float>(std::max(1u, width_)) / std::max(1.0f, static_cast<float>(height_)),
+            0.1f,
+            80.0f);
+        const XMMATRIX inv = XMMatrixInverse(nullptr, view * proj);
+        XMVECTOR nearP = XMVector3TransformCoord(XMVectorSet(nx, ny, 0.0f, 1.0f), inv);
+        XMVECTOR farP = XMVector3TransformCoord(XMVectorSet(nx, ny, 1.0f, 1.0f), inv);
+        XMVECTOR dir = XMVector3Normalize(farP - nearP);
+        const float nearY = XMVectorGetY(nearP);
+        const float dirY = XMVectorGetY(dir);
+        float t = 0.0f;
+        if (std::fabs(dirY) > 0.0001f)
+        {
+            t = -nearY / dirY;
+        }
+        XMVECTOR hit = nearP + dir * std::max(0.0f, t);
+        V2 out{ XMVectorGetX(hit), XMVectorGetZ(hit) };
+        ClampInside(out, 0.0f);
+        return out;
+    }
     V2 out{ nx * GameplayHalfWidth(width_, height_), ny * GameplayHalfHeight() };
     ClampInside(out, 0.0f);
     return out;

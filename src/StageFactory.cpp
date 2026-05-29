@@ -39,6 +39,7 @@ void SweetsApp::BuildStage()
         o.hp = 140.0f;
         o.color = color;
         o.reflectPower = kind == 1 ? 1.35f : 1.0f;
+        SyncObstacle3D(o);
         obstacles_.push_back(o);
     };
 
@@ -92,6 +93,7 @@ void SweetsApp::BuildStage()
             o.color = Mint;
             o.moving = true;
             o.vel = FromAngle(a + Pi * 0.5f) * 0.75f;
+            SyncObstacle3D(o);
             obstacles_.push_back(o);
         }
     }
@@ -130,7 +132,7 @@ void SweetsApp::UpdateStage(float dt)
         {
             for (auto& p : players_)
             {
-                if (p.active && !p.downed && Len(p.pos - o.pos) < p.radius + o.radius)
+                if (p.active && !p.downed && RuleCircleHit(p.pos, PlayerBodyY, p.radius, o.pos, o.height, o.radius))
                 {
                     ResolvePlayerHit(p, 8.0f * dt, AngleOf(p.pos - o.pos));
                 }
@@ -147,6 +149,7 @@ void SweetsApp::UpdateStage(float dt)
                 o.pos = n * maxR;
                 o.vel -= n * (2.0f * Dot(o.vel, n));
             }
+            SyncObstacle3D(o);
         }
     }
 

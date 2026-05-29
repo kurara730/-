@@ -486,8 +486,8 @@ bool SweetsApp::HandleDebugClick(float sx, float sy)
     const float buttonW = 148.0f;
     const float buttonH = 30.0f;
     const float gap = 10.0f;
-    const float top = 178.0f;
-    for (int i = 0; i < 11; ++i)
+    const float top = 286.0f;
+    for (int i = 0; i < 12; ++i)
     {
         const int col = i % 2;
         const int row = i / 2;
@@ -593,6 +593,9 @@ void SweetsApp::ExecuteDebugAction(int action)
         {
             screen_ = Screen::Paused;
         }
+        break;
+    case 11:
+        SetGameplayDimension(gameplayDimension_ == GameplayDimension::TwoD ? GameplayDimension::ThreeD : GameplayDimension::TwoD);
         break;
     default:
         break;
@@ -926,5 +929,146 @@ void SweetsApp::ClampInside(V2& p, float radius) const
     {
         p = p / d * maxR;
     }
+}
+
+void SweetsApp::ClampInside(V3& p, float radius) const
+{
+    V2 xz{ p.x, p.z };
+    ClampInside(xz, radius);
+    p.x = xz.x;
+    p.z = xz.z;
+    p.y = ClampFloat(p.y, GameplayYMin, GameplayYMax);
+}
+
+bool SweetsApp::Use3DRules() const
+{
+#if defined(_DEBUG)
+    return gameplayDimension_ == GameplayDimension::ThreeD;
+#else
+    return false;
+#endif
+}
+
+V3 SweetsApp::Grounded3D(V2 pos, float y) const
+{
+    return { pos.x, ClampFloat(y, GameplayYMin, GameplayYMax), pos.z };
+}
+
+void SweetsApp::SyncPlayer3D(Player& p)
+{
+    p.pos3 = Grounded3D(p.pos, PlayerBodyY);
+    p.vel3 = Grounded3D(p.vel, 0.0f);
+    p.dashVel3 = Grounded3D(p.dashVel, 0.0f);
+}
+
+void SweetsApp::SyncEnemy3D(Enemy& e)
+{
+    e.height = ClampFloat(e.height <= 0.0f ? EnemyBodyY : e.height, EnemyBodyY, GameplayYMax);
+    e.pos3 = Grounded3D(e.pos, e.height);
+    e.vel3 = Grounded3D(e.vel, 0.0f);
+}
+
+void SweetsApp::SyncBoss3D(Boss& b)
+{
+    b.height = ClampFloat(b.height <= 0.0f ? BossBodyY : b.height, BossBodyY, GameplayYMax);
+    b.pos3 = Grounded3D(b.pos, b.height);
+    b.vel3 = Grounded3D(b.vel, 0.0f);
+}
+
+void SweetsApp::SyncShot3D(Shot& s)
+{
+    s.height = ClampFloat(s.height <= 0.0f ? ShotBodyY : s.height, 0.10f, GameplayYMax);
+    s.pos3 = Grounded3D(s.pos, s.height);
+    s.vel3 = Grounded3D(s.vel, 0.0f);
+}
+
+void SweetsApp::SyncPickup3D(Pickup& p)
+{
+    p.height = ClampFloat(p.height <= 0.0f ? PickupBodyY : p.height, PickupBodyY, GameplayYMax);
+    p.pos3 = Grounded3D(p.pos, p.height);
+}
+
+void SweetsApp::SyncObstacle3D(Obstacle& o)
+{
+    o.height = ClampFloat(o.height <= 0.0f ? ObstacleBodyY : o.height, ObstacleBodyY, GameplayYMax);
+    o.pos3 = Grounded3D(o.pos, o.height);
+    o.vel3 = Grounded3D(o.vel, 0.0f);
+}
+
+void SweetsApp::SyncSlash3D(Slash& s)
+{
+    s.height = ClampFloat(s.height <= 0.0f ? 0.74f : s.height, 0.10f, GameplayYMax);
+    s.pos3 = Grounded3D(s.pos, s.height);
+}
+
+void SweetsApp::SyncAll3DState()
+{
+    for (auto& p : players_) SyncPlayer3D(p);
+    for (auto& e : enemies_) SyncEnemy3D(e);
+    SyncBoss3D(boss_);
+    for (auto& s : shots_) SyncShot3D(s);
+    for (auto& p : pickups_) SyncPickup3D(p);
+    for (auto& o : obstacles_) SyncObstacle3D(o);
+    for (auto& s : slashes_) SyncSlash3D(s);
+    for (auto& p : particles_)
+    {
+        p.pos3 = Grounded3D(p.pos, p.y);
+        p.vel3 = Grounded3D(p.vel, p.vy);
+    }
+    for (auto& pulse : effectPulses_) pulse.pos3 = Grounded3D(pulse.pos, pulse.y);
+    for (auto& visual : swordEffectVisuals_) visual.pos3 = Grounded3D(visual.pos, visual.height);
+}
+
+void SweetsApp::SetGameplayDimension(GameplayDimension dimension)
+{
+#if defined(_DEBUG)
+    if (gameplayDimension_ == dimension) return;
+    gameplayDimension_ = dimension;
+    SyncAll3DState();
+    message_ = dimension == GameplayDimension::ThreeD ? L"DEBUG: 座標/ルール 3D" : L"DEBUG: 座標/ルール 2D";
+    messageT_ = 1.6f;
+    if (screen_ == Screen::Playing || screen_ == Screen::HiddenBoss || screen_ == Screen::Paused)
+    {
+        RestartCurrentRun();
+    }
+#else
+    (void)dimension;
+#endif
+}
+
+float SweetsApp::RuleDistance(V2 a, float ay, V2 b, float by) const
+{
+    if (!Use3DRules()) return Len(a - b);
+    return Len(Grounded3D(a, ay) - Grounded3D(b, by));
+}
+
+bool SweetsApp::RuleCircleHit(V2 a, float ay, float ar, V2 b, float by, float br) const
+{
+    return RuleDistance(a, ay, b, by) < ar + br;
+}
+
+float SweetsApp::RuleDistance(const Shot& s, const Player& p) const
+{
+    return RuleDistance(s.pos, s.height, p.pos, PlayerBodyY);
+}
+
+float SweetsApp::RuleDistance(const Shot& s, const Enemy& e) const
+{
+    return RuleDistance(s.pos, s.height, e.pos, e.height);
+}
+
+float SweetsApp::RuleDistance(const Shot& s, const Boss& b) const
+{
+    return RuleDistance(s.pos, s.height, b.pos, b.height);
+}
+
+float SweetsApp::RuleDistance(const Player& p, const Enemy& e) const
+{
+    return RuleDistance(p.pos, PlayerBodyY, e.pos, e.height);
+}
+
+float SweetsApp::RuleDistance(const Player& p, const Pickup& item) const
+{
+    return RuleDistance(p.pos, PlayerBodyY, item.pos, item.height);
 }
 

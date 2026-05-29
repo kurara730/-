@@ -41,6 +41,14 @@ constexpr Color Red{ 1.0f, 0.24f, 0.22f, 1.0f };
 constexpr int FinalWave = 12;
 constexpr float HiddenBossDurationSeconds = 137.14f;
 constexpr int HiddenBossBulletCap = 420;
+constexpr float GameplayYMin = 0.0f;
+constexpr float GameplayYMax = 3.2f;
+constexpr float PlayerBodyY = 0.24f;
+constexpr float EnemyBodyY = 0.32f;
+constexpr float BossBodyY = 0.62f;
+constexpr float ShotBodyY = 0.34f;
+constexpr float PickupBodyY = 0.34f;
+constexpr float ObstacleBodyY = 0.28f;
 
 struct DifficultyDef
 {
@@ -71,6 +79,13 @@ struct V2
     float z = 0.0f;
 };
 
+struct V3
+{
+    float x = 0.0f;
+    float y = 0.0f;
+    float z = 0.0f;
+};
+
 inline V2 operator+(V2 a, V2 b) { return { a.x + b.x, a.z + b.z }; }
 inline V2 operator-(V2 a, V2 b) { return { a.x - b.x, a.z - b.z }; }
 inline V2 operator*(V2 a, float s) { return { a.x * s, a.z * s }; }
@@ -78,6 +93,14 @@ inline V2 operator/(V2 a, float s) { return { a.x / s, a.z / s }; }
 inline V2& operator+=(V2& a, V2 b) { a.x += b.x; a.z += b.z; return a; }
 inline V2& operator-=(V2& a, V2 b) { a.x -= b.x; a.z -= b.z; return a; }
 inline V2& operator*=(V2& a, float s) { a.x *= s; a.z *= s; return a; }
+
+inline V3 operator+(V3 a, V3 b) { return { a.x + b.x, a.y + b.y, a.z + b.z }; }
+inline V3 operator-(V3 a, V3 b) { return { a.x - b.x, a.y - b.y, a.z - b.z }; }
+inline V3 operator*(V3 a, float s) { return { a.x * s, a.y * s, a.z * s }; }
+inline V3 operator/(V3 a, float s) { return { a.x / s, a.y / s, a.z / s }; }
+inline V3& operator+=(V3& a, V3 b) { a.x += b.x; a.y += b.y; a.z += b.z; return a; }
+inline V3& operator-=(V3& a, V3 b) { a.x -= b.x; a.y -= b.y; a.z -= b.z; return a; }
+inline V3& operator*=(V3& a, float s) { a.x *= s; a.y *= s; a.z *= s; return a; }
 
 inline float Dot(V2 a, V2 b) { return a.x * b.x + a.z * b.z; }
 inline float LenSq(V2 a) { return Dot(a, a); }
@@ -91,6 +114,26 @@ inline V2 Normalize(V2 a)
 inline V2 FromAngle(float a) { return { std::cos(a), std::sin(a) }; }
 inline float AngleOf(V2 v) { return std::atan2(v.z, v.x); }
 inline float ClampFloat(float v, float lo, float hi) { return std::max(lo, std::min(hi, v)); }
+
+inline float Dot(V3 a, V3 b) { return a.x * b.x + a.y * b.y + a.z * b.z; }
+inline float LenSq(V3 a) { return Dot(a, a); }
+inline float Len(V3 a) { return std::sqrt(LenSq(a)); }
+inline V3 Normalize(V3 a)
+{
+    const float l = Len(a);
+    if (l <= 0.0001f) return {};
+    return a / l;
+}
+inline V3 ToV3(V2 xz, float y) { return { xz.x, y, xz.z }; }
+inline V2 ToV2(V3 xyz) { return { xyz.x, xyz.z }; }
+inline V3 FromYaw(float yaw, float y = 0.0f) { return { std::cos(yaw), y, std::sin(yaw) }; }
+inline float DistanceSqXZ(V3 a, V3 b) { return LenSq(ToV2(a) - ToV2(b)); }
+
+enum class GameplayDimension
+{
+    TwoD,
+    ThreeD
+};
 
 inline Color WithAlpha(Color c, float a)
 {
@@ -313,6 +356,9 @@ struct Player
     V2 pos{};
     V2 vel{};
     V2 dashVel{};
+    V3 pos3{};
+    V3 vel3{};
+    V3 dashVel3{};
     float radius = 0.42f;
     float hitboxRadius = 0.13f;
     float grazeRadius = 0.62f;
@@ -365,6 +411,9 @@ struct Enemy
 {
     V2 pos{};
     V2 vel{};
+    V3 pos3{};
+    V3 vel3{};
+    float height = EnemyBodyY;
     float radius = 0.38f;
     float hp = 20.0f;
     float maxHp = 20.0f;
@@ -389,6 +438,9 @@ struct Boss
 {
     V2 pos{};
     V2 vel{};
+    V3 pos3{};
+    V3 vel3{};
+    float height = BossBodyY;
     float radius = 1.15f;
     float hp = 800.0f;
     float maxHp = 800.0f;
@@ -413,6 +465,9 @@ struct Shot
 {
     V2 pos{};
     V2 vel{};
+    V3 pos3{};
+    V3 vel3{};
+    float height = ShotBodyY;
     float radius = 0.12f;
     float damage = 10.0f;
     float ttl = 2.0f;
@@ -433,9 +488,18 @@ struct Shot
     Color color = Cream;
 };
 
+enum class SlashVisualMode
+{
+    Sector,
+    Hidden,
+    Line
+};
+
 struct Slash
 {
     V2 pos{};
+    V3 pos3{};
+    float height = 0.74f;
     float angle = 0.0f;
     float arc = 1.30f;
     float range = 1.9f;
@@ -443,12 +507,15 @@ struct Slash
     float life = 0.18f;
     float damage = 35.0f;
     Color color = Choco;
+    SlashVisualMode visualMode = SlashVisualMode::Sector;
     bool hitBoss = false;
 };
 
 struct Pickup
 {
     V2 pos{};
+    V3 pos3{};
+    float height = PickupBodyY;
     float radius = 0.28f;
     float ttl = 14.0f;
     int type = 0;
@@ -459,13 +526,16 @@ struct Pickup
 struct Obstacle
 {
     V2 pos{};
+    V3 pos3{};
     float radius = 0.65f;
+    float height = ObstacleBodyY;
     float hp = 120.0f;
     float ttl = -1.0f;
     float reflectPower = 1.0f;
     int kind = 0;
     int ownerIndex = -1;
     V2 vel{};
+    V3 vel3{};
     Color color = Choco;
     bool moving = false;
     bool cheeseWall = false;
@@ -476,6 +546,8 @@ struct Particle
 {
     V2 pos{};
     V2 vel{};
+    V3 pos3{};
+    V3 vel3{};
     float y = 0.2f;
     float vy = 1.0f;
     float ttl = 0.4f;
@@ -485,10 +557,25 @@ struct Particle
 struct EffectPulse
 {
     V2 pos{};
+    V3 pos3{};
     float startRadius = 0.6f;
     float endRadius = 2.0f;
     float ttl = 0.32f;
     float life = 0.32f;
     float y = 0.22f;
     Color color = Cream;
+};
+
+struct SwordEffectVisual
+{
+    V2 pos{};
+    V3 pos3{};
+    float angle = 0.0f;
+    float scale = 1.0f;
+    float range = 2.0f;
+    float arc = 1.35f;
+    float height = 0.56f;
+    float ttl = 0.20f;
+    float life = 0.20f;
+    bool charged = false;
 };

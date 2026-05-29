@@ -105,6 +105,11 @@ void SweetsApp::SpawnEnemy()
         e.atk *= 0.90f;
     }
     e.maxHp = e.hp;
+    if (Use3DRules())
+    {
+        e.height = (e.type == EnemyType::Teleport || e.type == EnemyType::Mirror) ? 0.82f : EnemyBodyY;
+    }
+    SyncEnemy3D(e);
     enemies_.push_back(e);
 }
 
@@ -124,6 +129,7 @@ void SweetsApp::SpawnBoss()
     boss_.type = (wave_ / 3) % 6;
     boss_.bossType = static_cast<BossType>(boss_.type);
     boss_.phase = 1;
+    SyncBoss3D(boss_);
 }
 
 void SweetsApp::UpdateEnemies(float dt)
@@ -142,7 +148,7 @@ void SweetsApp::UpdateEnemies(float dt)
         Player* targetPlayer = FindNearestPlayer(e.pos);
         if (!targetPlayer) continue;
         V2 toP = targetPlayer->pos - e.pos;
-        const float d = Len(toP);
+        const float d = RuleDistance(e.pos, e.height, targetPlayer->pos, PlayerBodyY);
         const V2 n = Normalize(toP);
         e.face = AngleOf(toP);
 
@@ -154,7 +160,7 @@ void SweetsApp::UpdateEnemies(float dt)
             {
                 for (auto& other : enemies_)
                 {
-                    if (!other.dead && Len(other.pos - e.pos) < 3.6f)
+                    if (!other.dead && RuleDistance(other.pos, other.height, e.pos, e.height) < 3.6f)
                     {
                         other.hp = std::min(other.maxHp, other.hp + 12.0f + wave_ * 0.8f);
                         other.flash = 0.08f;
@@ -170,7 +176,7 @@ void SweetsApp::UpdateEnemies(float dt)
             e.vel = (d < 4.6f ? n * -1.0f : n * 0.20f) * e.speed * slowMul;
             for (auto& other : enemies_)
             {
-                if (!other.dead && Len(other.pos - e.pos) < 3.1f)
+                if (!other.dead && RuleDistance(other.pos, other.height, e.pos, e.height) < 3.1f)
                 {
                     other.barrierT = std::max(other.barrierT, 0.20f);
                 }
@@ -198,6 +204,7 @@ void SweetsApp::UpdateEnemies(float dt)
             {
                 e.pos = targetPlayer->pos + FromAngle(Rand(0.0f, TwoPi)) * Rand(3.8f, 6.8f);
                 ClampInside(e.pos, e.radius);
+                SyncEnemy3D(e);
                 Burst(e.pos, Grape, 18);
                 e.teleportCd = Rand(2.0f, 3.2f);
             }
@@ -227,22 +234,24 @@ void SweetsApp::UpdateEnemies(float dt)
 
         e.pos += e.vel * dt;
         ClampInside(e.pos, e.radius);
+        SyncEnemy3D(e);
 
         for (const auto& o : obstacles_)
         {
             V2 push = e.pos - o.pos;
-            const float l = Len(push);
+            const float l = RuleDistance(e.pos, e.height, o.pos, o.height);
             const float minD = e.radius + o.radius;
             if (l > 0.0001f && l < minD)
             {
-                e.pos = o.pos + push / l * minD;
+                e.pos = o.pos + Normalize(push) * minD;
+                SyncEnemy3D(e);
             }
         }
 
         for (auto& p : players_)
         {
             if (!p.active || p.downed || p.dashT <= 0.0f) continue;
-            if (Len(p.pos - e.pos) < p.radius + e.radius + 0.1f)
+            if (RuleDistance(p, e) < p.radius + e.radius + 0.1f)
             {
                 DamageEnemy(e, 58.0f + p.level * 8.0f, p.pos, 2.5f, true, p.index);
             }
@@ -254,7 +263,7 @@ void SweetsApp::UpdateEnemies(float dt)
             {
                 for (auto& p : players_)
                 {
-                    if (p.active && !p.downed && Len(p.pos - e.pos) < 2.2f)
+                    if (p.active && !p.downed && RuleDistance(p, e) < 2.2f)
                     {
                         ResolvePlayerHit(p, e.atk * 2.2f, AngleOf(p.pos - e.pos));
                     }
@@ -281,11 +290,12 @@ void SweetsApp::UpdateBoss(float dt)
     Player* targetPlayer = FindNearestPlayer(boss_.pos);
     if (!targetPlayer) return;
     const V2 toP = targetPlayer->pos - boss_.pos;
-    const float d = Len(toP);
+    const float d = RuleDistance(boss_.pos, boss_.height, targetPlayer->pos, PlayerBodyY);
     const V2 n = Normalize(toP);
     boss_.vel = n * boss_.speed * (slowT_ > 0.0f ? 0.55f : 1.0f);
     boss_.pos += boss_.vel * dt;
     ClampInside(boss_.pos, boss_.radius);
+    SyncBoss3D(boss_);
 
     if (boss_.bossType == BossType::GravityPudding)
     {
@@ -294,6 +304,7 @@ void SweetsApp::UpdateBoss(float dt)
             if (!p.active || p.downed) continue;
             const V2 pull = boss_.pos - p.pos;
             p.pos += Normalize(pull) * dt * (Len(pull) < 6.5f ? 1.1f : 0.25f);
+            SyncPlayer3D(p);
         }
     }
 
@@ -317,6 +328,7 @@ void SweetsApp::UpdateBoss(float dt)
             mirror.kind = static_cast<int>(mirror.type);
             mirror.pos = boss_.pos + FromAngle(Rand(0.0f, TwoPi)) * 2.2f;
             ClampInside(mirror.pos, 0.5f);
+            mirror.height = Use3DRules() ? 0.82f : EnemyBodyY;
             mirror.radius = 0.38f;
             mirror.hp = (28.0f + wave_ * 6.0f) * CurrentDifficulty().enemyHpMul;
             mirror.maxHp = mirror.hp;
@@ -325,6 +337,7 @@ void SweetsApp::UpdateBoss(float dt)
             mirror.score = 350;
             mirror.color = Cream;
             mirror.shootCd = 1.1f;
+            SyncEnemy3D(mirror);
             enemies_.push_back(mirror);
         }
         if (boss_.telegraphField)
@@ -336,6 +349,7 @@ void SweetsApp::UpdateBoss(float dt)
             field.ttl = 3.0f;
             field.color = Red;
             field.damageField = true;
+            SyncObstacle3D(field);
             obstacles_.push_back(field);
         }
         if (attack == 0)
@@ -419,6 +433,7 @@ void SweetsApp::UpdateBoss(float dt)
         pulse.life = tuning.bossTelegraphTime;
         pulse.y = 0.22f;
         pulse.color = attack == 0 ? Grape : (attack == 1 ? Red : (attack == 2 ? Gold : Mint));
+        pulse.pos3 = Grounded3D(pulse.pos, pulse.y);
         effectPulses_.push_back(pulse);
         switch (attack)
         {
@@ -464,6 +479,8 @@ void SweetsApp::DamageEnemy(Enemy& e, float dmg, V2 from, float knock, bool refl
     e.flash = 0.12f;
     V2 push = Normalize(e.pos - from);
     e.pos += push * (0.08f * knock);
+    ClampInside(e.pos, e.radius);
+    SyncEnemy3D(e);
     if (e.hp <= 0.0f && !e.dead)
     {
         e.dead = true;
@@ -510,6 +527,7 @@ void SweetsApp::DamageEnemy(Enemy& e, float dmg, V2 from, float knock, bool refl
                 child.atk = 5.0f;
                 child.score = 70;
                 child.color = Gold;
+                SyncEnemy3D(child);
                 enemies_.push_back(child);
             }
         }
@@ -517,7 +535,7 @@ void SweetsApp::DamageEnemy(Enemy& e, float dmg, V2 from, float knock, bool refl
         {
             for (auto& p : players_)
             {
-                if (p.active && !p.downed && Len(p.pos - e.pos) < 2.0f)
+                if (p.active && !p.downed && RuleDistance(p, e) < 2.0f)
                 {
                     ResolvePlayerHit(p, e.atk * 1.3f, AngleOf(p.pos - e.pos));
                 }

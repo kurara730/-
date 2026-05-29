@@ -25,6 +25,7 @@ public:
     void Draw(const DirectX::XMMATRIX& viewProjection);
 
     bool Available() const;
+    bool HasEffect(const std::wstring& id) const;
     const std::wstring& LastError() const { return lastError_; }
 
 private:

@@ -99,6 +99,12 @@
     <None Include="assets\audio\Lonery boy.wav"><Filter>Assets</Filter></None>
     <None Include="assets\audio\ruins.mp3"><Filter>Assets</Filter></None>
     <None Include="assets\effects\sword_slash.efkefc"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\sword\sword_slash.efkefc"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\sword\Sword9.efkproj"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\sword\Texture\AuroraRing.png"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\sword\Texture\Line01.png"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\sword\Texture\Particle01.png"><Filter>Assets</Filter></None>
+    <None Include="assets\effects\sword\Texture\Thunder1.png"><Filter>Assets</Filter></None>
     <None Include="assets\effects\ult_cheese.efkefc"><Filter>Assets</Filter></None>
     <None Include="assets\effects\ult_chocolate.efkefc"><Filter>Assets</Filter></None>
     <None Include="assets\effects\ult_roll.efkefc"><Filter>Assets</Filter></None>

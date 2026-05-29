@@ -32,6 +32,7 @@ void SweetsApp::ApplyLoadout(Player& p, int loadoutIndex, int playerIndex, bool 
 
     const float a = TwoPi * static_cast<float>(playerIndex) / MaxPlayers + Pi * 0.25f;
     p.pos = playerIndex == 0 ? V2{ 0.0f, 3.6f } : FromAngle(a) * 2.6f;
+    SyncPlayer3D(p);
 }
 
 void SweetsApp::UpdateCoopPlayers(float dt)
@@ -93,6 +94,7 @@ void SweetsApp::UpdateGamepadPlayer(Player& p, int playerIndex, float dt)
         p.pos += p.vel * dt;
     }
     ClampInside(p.pos, p.radius);
+    SyncPlayer3D(p);
 
     V2 aim{ NormalizeThumb(state.Gamepad.sThumbRX), NormalizeThumb(state.Gamepad.sThumbRY) };
     if (LenSq(aim) < 0.05f)
@@ -130,14 +132,14 @@ void SweetsApp::UpdateAiPlayer(Player& p, int playerIndex, float dt)
 {
     V2 target = FindNearestEnemyOrBoss(p.pos);
     V2 toTarget = target - p.pos;
-    const float d = Len(toTarget);
+    const float d = RuleDistance(p.pos, PlayerBodyY, target, EnemyBodyY);
     V2 move{};
 
     for (const auto& other : players_)
     {
         if (other.active && other.downed)
         {
-            const float rd = Len(other.pos - p.pos);
+            const float rd = RuleDistance(other.pos, PlayerBodyY, p.pos, PlayerBodyY);
             if (rd < 5.8f)
             {
                 move = Normalize(other.pos - p.pos);
@@ -156,7 +158,7 @@ void SweetsApp::UpdateAiPlayer(Player& p, int playerIndex, float dt)
     for (const auto& s : shots_)
     {
         if (!s.enemy) continue;
-        const float bd = Len(s.pos - p.pos);
+        const float bd = RuleDistance(s, p);
         if (bd < 1.25f)
         {
             move += Normalize(p.pos - s.pos) * (1.25f - bd) * 2.0f;
@@ -167,6 +169,7 @@ void SweetsApp::UpdateAiPlayer(Player& p, int playerIndex, float dt)
     p.vel = Normalize(move) * p.speed * 0.72f;
     p.pos += p.vel * dt;
     ClampInside(p.pos, p.radius);
+    SyncPlayer3D(p);
 
     if (d > 0.001f) p.face = AngleOf(toTarget);
     if (p.fireCd <= 0.0f && d < 9.5f)
@@ -188,7 +191,7 @@ void SweetsApp::TryRevivePlayers(float dt)
         for (const auto& helper : players_)
         {
             if (!helper.active || helper.downed) continue;
-            if (Len(helper.pos - downed.pos) < 1.15f)
+            if (RuleDistance(helper.pos, PlayerBodyY, downed.pos, PlayerBodyY) < 1.15f)
             {
                 helperNear = true;
                 break;

@@ -102,6 +102,10 @@ void SweetsApp::LoadGameplayAssets()
     addSprite(L"2d_shot_enemy", L"assets/textures/2d/shot_enemy.png");
     addSprite(L"2d_slash", L"assets/textures/2d/slash.png");
     addSprite(L"2d_obstacle_wall", L"assets/textures/2d/obstacle_wall.png");
+    addSprite(L"effect_sword_thunder", L"assets/effects/sword/Texture/Thunder1.png");
+    addSprite(L"effect_sword_line", L"assets/effects/sword/Texture/Line01.png");
+    addSprite(L"effect_sword_particle", L"assets/effects/sword/Texture/Particle01.png");
+    addSprite(L"effect_sword_ring", L"assets/effects/sword/Texture/AuroraRing.png");
     addSprite(L"2d_pickup_attack", L"assets/textures/2d/pickup_attack.png");
     addSprite(L"2d_pickup_slow", L"assets/textures/2d/pickup_slow.png");
     addSprite(L"2d_pickup_invincible", L"assets/textures/2d/pickup_invincible.png");
@@ -126,7 +130,21 @@ void SweetsApp::LoadEffectAssets()
         effekseer_.Initialize(device_.Get(), context_.Get());
     }
 
-    effekseer_.LoadEffect(L"sword_slash", L"assets/effects/sword_slash.efkefc", 3.0f);
+    effekseer_.LoadEffect(L"sword_slash", L"assets/effects/sword/sword_slash.efkefc", 3.0f);
+#if defined(_DEBUG)
+    {
+        std::wstring message = L"SweetsActionDX11: sword_slash Effekseer ";
+        message += effekseer_.HasEffect(L"sword_slash") ? L"loaded" : L"not loaded";
+        if (!effekseer_.LastError().empty())
+        {
+            message += L" (";
+            message += effekseer_.LastError();
+            message += L")";
+        }
+        message += L"\n";
+        OutputDebugStringW(message.c_str());
+    }
+#endif
     effekseer_.LoadEffect(L"ult_shortcake", L"assets/effects/ult_shortcake.efkefc", 4.0f);
     effekseer_.LoadEffect(L"ult_chocolate", L"assets/effects/ult_chocolate.efkefc", 4.0f);
     effekseer_.LoadEffect(L"ult_cheese", L"assets/effects/ult_cheese.efkefc", 4.0f);
