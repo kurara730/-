@@ -9,6 +9,7 @@ enum class Screen
     BootLoading,
     GameplayLoading,
     Title,
+    Settings,
     CharacterSelect,
     DifficultySelect,
     Playing,

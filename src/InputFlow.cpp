@@ -1,4 +1,5 @@
 #include "SweetsApp.h"
+#include "DataTables.h"
 
 #include <algorithm>
 
@@ -80,6 +81,13 @@ void SweetsApp::OnKeyDown(WPARAM key)
             screen_ = Screen::Credits;
             return;
         }
+        if (key == VK_ESCAPE)
+        {
+            pauseMenuIndex_ = 2;
+            draggingVolume_ = -1;
+            screen_ = Screen::Settings;
+            return;
+        }
         if (key == VK_UP || key == 'W')
         {
             titleMenuIndex_ = (titleMenuIndex_ + 2) % 3;
@@ -101,6 +109,38 @@ void SweetsApp::OnKeyDown(WPARAM key)
         if (key == VK_RETURN || key == VK_SPACE)
         {
             StartSelectedTitleItem();
+        }
+        return;
+    }
+
+    if (screen_ == Screen::Settings)
+    {
+        if (key == VK_ESCAPE || key == VK_BACK || key == VK_RETURN || key == VK_SPACE || key == 'P')
+        {
+            SaveSettings();
+            draggingVolume_ = -1;
+            screen_ = Screen::Title;
+            return;
+        }
+        if (key == VK_UP || key == 'W')
+        {
+            pauseMenuIndex_ = (pauseMenuIndex_ <= 2) ? 5 : pauseMenuIndex_ - 1;
+            return;
+        }
+        if (key == VK_DOWN || key == 'S')
+        {
+            pauseMenuIndex_ = (pauseMenuIndex_ >= 5) ? 2 : pauseMenuIndex_ + 1;
+            return;
+        }
+        if (key == VK_LEFT || key == 'A')
+        {
+            SetVolumeSlider(pauseMenuIndex_ - 2, VolumeSliderValue(pauseMenuIndex_ - 2) - 0.05f, true);
+            return;
+        }
+        if (key == VK_RIGHT || key == 'D')
+        {
+            SetVolumeSlider(pauseMenuIndex_ - 2, VolumeSliderValue(pauseMenuIndex_ - 2) + 0.05f, true);
+            return;
         }
         return;
     }
@@ -273,7 +313,7 @@ bool SweetsApp::HandleDebugClick(float sx, float sy)
     const float buttonH = 30.0f;
     const float gap = 10.0f;
     const float top = 286.0f;
-    for (int i = 0; i < 12; ++i)
+    for (int i = 0; i < 13; ++i)
     {
         const int col = i % 2;
         const int row = i / 2;
@@ -383,6 +423,11 @@ void SweetsApp::ExecuteDebugAction(int action)
     case 11:
         SetGameplayDimension(gameplayDimension_ == GameplayDimension::TwoD ? GameplayDimension::ThreeD : GameplayDimension::TwoD);
         break;
+    case 12:
+        LoadCharacterTableFromCsv();
+        message_ = L"DEBUG: データ再読込";
+        messageT_ = 1.4f;
+        break;
     default:
         break;
     }
@@ -455,6 +500,35 @@ bool SweetsApp::HandlePauseDrag(float sx, float sy)
     const float sliderLeft = left + 170.0f;
     const float sliderRight = left + panelW - 48.0f;
     SetVolumeSlider(draggingVolume_, (sx - sliderLeft) / (sliderRight - sliderLeft), false);
+    return true;
+}
+
+// タイトル画面から開く音量設定。スライダーのX座標は Pause と同じなので、
+// ドラッグ処理は HandlePauseDrag をそのまま再利用できる(Yは無視されるため)。
+bool SweetsApp::HandleSettingsClick(float sx, float sy)
+{
+    const float panelW = 480.0f;
+    const float panelH = 300.0f;
+    const float left = (static_cast<float>(width_) - panelW) * 0.5f;
+    const float top = (static_cast<float>(height_) - panelH) * 0.5f;
+    if (!PointInRect(sx, sy, left, top, left + panelW, top + panelH))
+    {
+        return false;
+    }
+
+    const float sliderLeft = left + 170.0f;
+    const float sliderRight = left + panelW - 48.0f;
+    for (int i = 0; i < 4; ++i)
+    {
+        const float y = top + 110.0f + i * 44.0f;
+        if (PointInRect(sx, sy, sliderLeft - 8.0f, y - 12.0f, sliderRight + 8.0f, y + 16.0f))
+        {
+            pauseMenuIndex_ = i + 2;
+            draggingVolume_ = i;
+            SetVolumeSlider(i, (sx - sliderLeft) / (sliderRight - sliderLeft), true);
+            return true;
+        }
+    }
     return true;
 }
 

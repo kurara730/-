@@ -19,6 +19,7 @@ add_executable(SweetsActionDX11 WIN32
     src/CombatEffects.cpp
     src/CombatLoop.cpp
     src/CoopController.cpp
+    src/DataTables.cpp
     src/DimensionRules.cpp
     src/EffekseerSystem.cpp
     src/EnemyController.cpp
@@ -42,6 +43,7 @@ add_executable(SweetsActionDX11 WIN32
     src/AudioSystem.h
     src/AssetLoaders.h
     src/AssetCatalog.h
+    src/DataTables.h
     src/EffekseerSystem.h
     src/GameDefs.h
     src/GameMath.h
@@ -116,6 +118,7 @@ add_executable(SweetsActionDX11 WIN32
     assets/effects/Textures/Aura06_T.png
     assets/effects/Textures/Normal01.png
     assets/video/README_video.md
+    assets/data/characters.csv
 )
 
 target_compile_features(SweetsActionDX11 PRIVATE cxx_std_17)
