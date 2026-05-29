@@ -63,7 +63,8 @@ enum class TitleMenuItem
 {
     Story,
     Endless,
-    Credits
+    Credits,
+    Settings
 };
 
 enum class GameOverChoice

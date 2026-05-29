@@ -62,6 +62,7 @@ add_executable(SweetsActionDX11 WIN32
     assets/shaders/basic_lit.hlsl
     assets/shaders/effect_additive.hlsl
     assets/shaders/postprocess.hlsl
+    assets/shaders/bloom.hlsl
     assets/shaders/sprite_unlit.hlsl
     assets/textures/title.jpg
     assets/textures/2d/player_shortcake.png
@@ -173,6 +174,7 @@ endif()
 set_source_files_properties(assets/shaders/basic_lit.hlsl PROPERTIES VS_TOOL_OVERRIDE "None")
 set_source_files_properties(assets/shaders/effect_additive.hlsl PROPERTIES VS_TOOL_OVERRIDE "None")
 set_source_files_properties(assets/shaders/postprocess.hlsl PROPERTIES VS_TOOL_OVERRIDE "None")
+set_source_files_properties(assets/shaders/bloom.hlsl PROPERTIES VS_TOOL_OVERRIDE "None")
 set_source_files_properties(assets/shaders/sprite_unlit.hlsl PROPERTIES VS_TOOL_OVERRIDE "None")
 
 add_custom_command(TARGET SweetsActionDX11 POST_BUILD

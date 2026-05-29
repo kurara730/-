@@ -112,6 +112,7 @@ void SweetsApp::PresentFrame()
     DrawScene();
     effekseer_.Draw(view_ * proj_);
     DrawAdditiveScene();
+    RenderBloom();
     CompositeScene();
     DrawHud();
     swapChain_->Present(1, 0);
@@ -491,6 +492,70 @@ void SweetsApp::DrawAdditiveScene()
     spriteCanvas_.End();
 }
 
+void SweetsApp::RenderBloom()
+{
+    if (!bloomRtvA_ || !bloomRtvB_ || !bloomVs_ || !bloomPrefilterPs_ || !bloomBlurPs_ || !additiveSrv_ || !bloomCB_)
+    {
+        return;
+    }
+
+    float blendFactor[4]{ 0, 0, 0, 0 };
+    context_->OMSetBlendState(nullptr, blendFactor, 0xffffffff);
+    context_->IASetInputLayout(nullptr);
+    context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    context_->VSSetShader(bloomVs_.Get(), nullptr, 0);
+    context_->RSSetState(rasterState_.Get());
+    ID3D11SamplerState* sampler = postSampler_.Get();
+    context_->PSSetSamplers(0, 1, &sampler);
+
+    D3D11_VIEWPORT vp{};
+    vp.Width = static_cast<float>(bloomWidth_);
+    vp.Height = static_cast<float>(bloomHeight_);
+    vp.MinDepth = 0.0f;
+    vp.MaxDepth = 1.0f;
+    context_->RSSetViewports(1, &vp);
+
+    const float invW = bloomWidth_ ? 1.0f / static_cast<float>(bloomWidth_) : 0.0f;
+    const float invH = bloomHeight_ ? 1.0f / static_cast<float>(bloomHeight_) : 0.0f;
+    ID3D11Buffer* bcb = bloomCB_.Get();
+    context_->PSSetConstantBuffers(0, 1, &bcb);
+    ID3D11ShaderResourceView* nullSrv[1] = { nullptr };
+
+    auto runPass = [&](ID3D11PixelShader* ps, ID3D11ShaderResourceView* src, ID3D11RenderTargetView* dst, const BloomCB& cbData)
+    {
+        context_->PSSetShaderResources(0, 1, nullSrv); // 入力に使う前に出力バインドを解除
+        ID3D11RenderTargetView* rtv = dst;
+        context_->OMSetRenderTargets(1, &rtv, nullptr);
+        context_->UpdateSubresource(bloomCB_.Get(), 0, nullptr, &cbData, 0, 0);
+        context_->PSSetShader(ps, nullptr, 0);
+        context_->PSSetShaderResources(0, 1, &src);
+        context_->Draw(3, 0);
+        context_->PSSetShaderResources(0, 1, nullSrv);
+    };
+
+    // 1) 明るい部分を抽出して半解像度のAへ
+    BloomCB pre{};
+    pre.texel = XMFLOAT4(invW, invH, 0.0f, 0.0f);
+    pre.params = XMFLOAT4(0.55f, 0.45f, 1.0f, 0.0f); // しきい値 / ソフトニー / 強度
+    runPass(bloomPrefilterPs_.Get(), additiveSrv_.Get(), bloomRtvA_.Get(), pre);
+
+    // 2) 分離ガウスブラー(横→縦)を2回繰り返して広く滑らかに
+    for (int i = 0; i < 2; ++i)
+    {
+        BloomCB h{};
+        h.texel = XMFLOAT4(invW, invH, 1.0f, 0.0f);
+        h.params = pre.params;
+        runPass(bloomBlurPs_.Get(), bloomSrvA_.Get(), bloomRtvB_.Get(), h);
+
+        BloomCB v{};
+        v.texel = XMFLOAT4(invW, invH, 0.0f, 1.0f);
+        v.params = pre.params;
+        runPass(bloomBlurPs_.Get(), bloomSrvB_.Get(), bloomRtvA_.Get(), v);
+    }
+    // 結果は bloomSrvA_ に残る
+    context_->PSSetShaderResources(0, 1, nullSrv);
+}
+
 void SweetsApp::CompositeScene()
 {
     if (!resolvedRtv_ || !postVs_ || !postPs_ || !sceneColorSrv_ || !additiveSrv_ || !historySrv_)
@@ -502,6 +567,15 @@ void SweetsApp::CompositeScene()
     context_->ClearRenderTargetView(resolvedRtv_.Get(), clear);
     ID3D11RenderTargetView* rtv = resolvedRtv_.Get();
     context_->OMSetRenderTargets(1, &rtv, nullptr);
+
+    // ブルームで半解像度に変更したビューポートを全解像度へ戻す
+    D3D11_VIEWPORT vp{};
+    vp.Width = static_cast<float>(width_);
+    vp.Height = static_cast<float>(height_);
+    vp.MinDepth = 0.0f;
+    vp.MaxDepth = 1.0f;
+    context_->RSSetViewports(1, &vp);
+
     float blendFactor[4]{ 0,0,0,0 };
     context_->OMSetBlendState(nullptr, blendFactor, 0xffffffff);
     context_->IASetInputLayout(nullptr);
@@ -517,16 +591,18 @@ void SweetsApp::CompositeScene()
 #else
     post.params = XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f);
 #endif
+    // params2: x=ブルーム強度, y=ビネット, z=トーンマッピング有効, w=未使用
+    post.params2 = XMFLOAT4(0.75f, 0.28f, 1.0f, 0.0f);
     context_->UpdateSubresource(postCB_.Get(), 0, nullptr, &post, 0, 0);
     ID3D11Buffer* pcb = postCB_.Get();
     context_->PSSetConstantBuffers(0, 1, &pcb);
-    ID3D11ShaderResourceView* srvs[3] = { sceneColorSrv_.Get(), additiveSrv_.Get(), historySrv_.Get() };
-    context_->PSSetShaderResources(0, 3, srvs);
+    ID3D11ShaderResourceView* srvs[4] = { sceneColorSrv_.Get(), additiveSrv_.Get(), historySrv_.Get(), bloomSrvA_.Get() };
+    context_->PSSetShaderResources(0, 4, srvs);
     ID3D11SamplerState* sampler = postSampler_.Get();
     context_->PSSetSamplers(0, 1, &sampler);
     context_->Draw(3, 0);
-    ID3D11ShaderResourceView* nullSrvs[3] = { nullptr, nullptr, nullptr };
-    context_->PSSetShaderResources(0, 3, nullSrvs);
+    ID3D11ShaderResourceView* nullSrvs[4] = { nullptr, nullptr, nullptr, nullptr };
+    context_->PSSetShaderResources(0, 4, nullSrvs);
 
     if (historyTex_ && resolvedTex_)
     {

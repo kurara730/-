@@ -327,13 +327,13 @@ void SweetsApp::DrawHud()
         d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), titleFormat_.Get(),
             D2D1::RectF(38.0f, 34.0f, dividerX - 22.0f, 92.0f), textBrush_.Get());
 
-        const std::array<const wchar_t*, 3> items{ L"Story", L"Endless", L"Credits" };
+        const std::array<const wchar_t*, 4> items{ L"Story", L"Endless", L"Credits", L"設定 (音量)" };
         const float itemW = 248.0f;
         const float itemH = 58.0f;
         const float gap = 12.0f;
         const float menuX = 42.0f;
         const float menuTop = std::max(112.0f, static_cast<float>(height_) * 0.18f);
-        for (int i = 0; i < 3; ++i)
+        for (int i = 0; i < 4; ++i)
         {
             const float y = menuTop + i * (itemH + gap);
             const D2D1_RECT_F rect = D2D1::RectF(menuX, y, menuX + itemW, y + itemH);
@@ -359,9 +359,9 @@ void SweetsApp::DrawHud()
         DrawTitleMediaFrame(D2D1::RectF(mediaLeft, mediaTop, mediaRight, mediaBottom));
 
         textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.90f));
-        const wchar_t* hint = L"Story / Endless / Credits を選択";
+        const wchar_t* hint = L"↑↓/クリックで選択、Enterで決定";
         d2dContext_->DrawTextW(hint, static_cast<UINT32>(wcslen(hint)), smallFormat_.Get(),
-            D2D1::RectF(40.0f, menuTop + itemH * 3.0f + gap * 3.0f + 8.0f, dividerX - 18.0f, static_cast<float>(height_) - 24.0f), textBrush_.Get());
+            D2D1::RectF(40.0f, menuTop + itemH * 4.0f + gap * 4.0f + 8.0f, dividerX - 18.0f, static_cast<float>(height_) - 24.0f), textBrush_.Get());
 
         DrawScreenFlashOverlay();
         DrawDebugHud();
@@ -391,14 +391,14 @@ void SweetsApp::DrawHud()
         d2dContext_->DrawTextW(start, static_cast<UINT32>(wcslen(start)), hudFormat_.Get(),
             D2D1::RectF(0, static_cast<float>(height_) * 0.31f, static_cast<float>(width_), static_cast<float>(height_) * 0.38f), textBrush_.Get());
 
-        const std::array<const wchar_t*, 3> items{ L"Story", L"Endless", L"Credits" };
+        const std::array<const wchar_t*, 4> items{ L"Story", L"Endless", L"Credits", L"設定" };
         const float itemW = 190.0f;
         const float itemH = 42.0f;
         const float gap = 14.0f;
-        const float totalW = itemW * 3.0f + gap * 2.0f;
+        const float totalW = itemW * 4.0f + gap * 3.0f;
         const float startX = (static_cast<float>(width_) - totalW) * 0.5f;
         const float menuTop = static_cast<float>(height_) * 0.39f;
-        for (int i = 0; i < 3; ++i)
+        for (int i = 0; i < 4; ++i)
         {
             const float x = startX + i * (itemW + gap);
             const bool selected = i == titleMenuIndex_;
@@ -647,8 +647,8 @@ void SweetsApp::DrawPauseMenu()
     textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.70f));
     d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
 
-    const float panelW = 480.0f;
-    const float panelH = 450.0f;
+    const float panelW = 420.0f;
+    const float panelH = 392.0f;
     const float left = (static_cast<float>(width_) - panelW) * 0.5f;
     const float top = (static_cast<float>(height_) - panelH) * 0.5f;
     const D2D1_RECT_F panel = D2D1::RectF(left, top, left + panelW, top + panelH);
@@ -659,17 +659,17 @@ void SweetsApp::DrawPauseMenu()
 
     hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
     textBrush_->SetColor(D2D1::ColorF(1.0f, 0.86f, 0.36f, 1.0f));
-    const wchar_t* title = L"Pause";
+    const wchar_t* title = L"ポーズ";
     d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), hudFormat_.Get(),
         D2D1::RectF(left, top + 22.0f, left + panelW, top + 58.0f), textBrush_.Get());
 
-    const std::array<const wchar_t*, 2> buttons{ L"Resume", L"Title" };
-    const float buttonW = 190.0f;
-    const float buttonH = 42.0f;
+    const std::array<const wchar_t*, 4> buttons{ L"続ける", L"リスタート", L"音量設定", L"タイトルに戻る" };
+    const float buttonW = panelW - 88.0f;
+    const float buttonH = 50.0f;
     const float buttonX = left + 44.0f;
-    for (int i = 0; i < 2; ++i)
+    for (int i = 0; i < 4; ++i)
     {
-        const float y = top + 76.0f + i * 56.0f;
+        const float y = top + 80.0f + i * 62.0f;
         const bool selected = pauseMenuIndex_ == i;
         const D2D1_RECT_F rect = D2D1::RectF(buttonX, y, buttonX + buttonW, y + buttonH);
         const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
@@ -680,65 +680,16 @@ void SweetsApp::DrawPauseMenu()
         d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), active ? 2.5f : 1.0f);
         textBrush_->SetColor(OldSelectText(active));
         d2dContext_->DrawTextW(buttons[i], static_cast<UINT32>(wcslen(buttons[i])), hudFormat_.Get(),
-            D2D1::RectF(rect.left, rect.top + 9.0f, rect.right, rect.bottom), textBrush_.Get());
+            D2D1::RectF(rect.left, rect.top + 12.0f, rect.right, rect.bottom), textBrush_.Get());
     }
 
-    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.88f));
+    const wchar_t* hint = L"Escでタイトル / Pで再開";
+    d2dContext_->DrawTextW(hint, static_cast<UINT32>(wcslen(hint)), smallFormat_.Get(),
+        D2D1::RectF(left, top + panelH - 36.0f, left + panelW, top + panelH - 12.0f), textBrush_.Get());
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
-    const std::array<const wchar_t*, 4> labels{ L"Master", L"BGM", L"SE", L"UI" };
-    const float sliderLeft = left + 170.0f;
-    const float sliderRight = left + panelW - 48.0f;
-    for (int i = 0; i < 4; ++i)
-    {
-        const float y = top + 196.0f + i * 38.0f;
-        const bool selected = pauseMenuIndex_ == i + 2;
-        textBrush_->SetColor(selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.92f));
-        d2dContext_->DrawTextW(labels[i], static_cast<UINT32>(wcslen(labels[i])), smallFormat_.Get(),
-            D2D1::RectF(left + 48.0f, y - 10.0f, left + 152.0f, y + 14.0f), textBrush_.Get());
-        textBrush_->SetColor(D2D1::ColorF(0.24f, 0.11f, 0.17f, 0.94f));
-        d2dContext_->FillRectangle(D2D1::RectF(sliderLeft, y, sliderRight, y + 8.0f), textBrush_.Get());
-        const float value = VolumeSliderValue(i);
-        textBrush_->SetColor(D2D1::ColorF(0.65f, 0.88f, 1.0f, 0.95f));
-        d2dContext_->FillRectangle(D2D1::RectF(sliderLeft, y, sliderLeft + (sliderRight - sliderLeft) * value, y + 8.0f), textBrush_.Get());
-        textBrush_->SetColor(selected ? D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f) : D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f));
-        const float knob = sliderLeft + (sliderRight - sliderLeft) * value;
-        d2dContext_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(knob, y + 4.0f), 7.0f, 7.0f), textBrush_.Get());
-        std::wostringstream pct;
-        pct << static_cast<int>(value * 100.0f + 0.5f) << L"%";
-        const std::wstring pctText = pct.str();
-        d2dContext_->DrawTextW(pctText.c_str(), static_cast<UINT32>(pctText.size()), smallFormat_.Get(),
-            D2D1::RectF(sliderRight + 10.0f, y - 10.0f, left + panelW - 8.0f, y + 14.0f), textBrush_.Get());
-    }
-
-    const float aimTop = top + 348.0f;
-    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.92f));
-    const wchar_t* aimLabel = L"攻撃方向";
-    d2dContext_->DrawTextW(aimLabel, static_cast<UINT32>(wcslen(aimLabel)), smallFormat_.Get(),
-        D2D1::RectF(left + 48.0f, aimTop + 6.0f, left + 132.0f, aimTop + 32.0f), textBrush_.Get());
-    const float aimButtonW = 104.0f;
-    const float aimButtonH = 32.0f;
-    const float aimStartX = left + 138.0f;
-    for (int i = 0; i < 3; ++i)
-    {
-        const AimMode mode = static_cast<AimMode>(i);
-        const float x = aimStartX + i * (aimButtonW + 10.0f);
-        const D2D1_RECT_F rect = D2D1::RectF(x, aimTop, x + aimButtonW, aimTop + aimButtonH);
-        const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
-        const bool active = aimMode_ == mode || hover;
-        textBrush_->SetColor(OldSelectFill(active));
-        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get());
-        textBrush_->SetColor(OldSelectStroke(active));
-        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get(), active ? 2.2f : 1.0f);
-        const wchar_t* label = AimModeName(mode);
-        textBrush_->SetColor(OldSelectText(active));
-        d2dContext_->DrawTextW(label, static_cast<UINT32>(wcslen(label)), smallFormat_.Get(),
-            D2D1::RectF(rect.left, rect.top + 7.0f, rect.right, rect.bottom), textBrush_.Get());
-    }
-
-    const wchar_t* aimHint = L"初期値は移動方向。マウス照準や近い敵オートにも切替できます。";
-    textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.86f));
-    d2dContext_->DrawTextW(aimHint, static_cast<UINT32>(wcslen(aimHint)), smallFormat_.Get(),
-        D2D1::RectF(left + 48.0f, aimTop + 42.0f, left + panelW - 48.0f, aimTop + 66.0f), textBrush_.Get());
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 
 void SweetsApp::DrawSettingsMenu()
@@ -748,7 +699,7 @@ void SweetsApp::DrawSettingsMenu()
     d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
 
     const float panelW = 480.0f;
-    const float panelH = 300.0f;
+    const float panelH = 400.0f;
     const float left = (static_cast<float>(width_) - panelW) * 0.5f;
     const float top = (static_cast<float>(height_) - panelH) * 0.5f;
 
@@ -760,7 +711,7 @@ void SweetsApp::DrawSettingsMenu()
 
     hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
     textBrush_->SetColor(D2D1::ColorF(1.0f, 0.86f, 0.36f, 1.0f));
-    const wchar_t* title = L"音量設定";
+    const wchar_t* title = L"設定";
     d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), hudFormat_.Get(),
         D2D1::RectF(left, top + 22.0f, left + panelW, top + 58.0f), textBrush_.Get());
 
@@ -791,11 +742,37 @@ void SweetsApp::DrawSettingsMenu()
             D2D1::RectF(sliderRight + 10.0f, y - 10.0f, left + panelW - 8.0f, y + 14.0f), textBrush_.Get());
     }
 
+    // 攻撃方向(照準モード)。マウスクリックで選択(ゲーム中は T キーでも切替可)。
+    const float aimTop = top + 110.0f + 4 * 44.0f + 8.0f;
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.92f));
+    const wchar_t* aimLabel = L"攻撃方向";
+    d2dContext_->DrawTextW(aimLabel, static_cast<UINT32>(wcslen(aimLabel)), smallFormat_.Get(),
+        D2D1::RectF(left + 48.0f, aimTop + 6.0f, left + 132.0f, aimTop + 32.0f), textBrush_.Get());
+    const float aimButtonW = 104.0f;
+    const float aimButtonH = 32.0f;
+    const float aimStartX = left + 138.0f;
+    for (int i = 0; i < 3; ++i)
+    {
+        const AimMode mode = static_cast<AimMode>(i);
+        const float x = aimStartX + i * (aimButtonW + 10.0f);
+        const D2D1_RECT_F rect = D2D1::RectF(x, aimTop, x + aimButtonW, aimTop + aimButtonH);
+        const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
+        const bool active = aimMode_ == mode || hover;
+        textBrush_->SetColor(OldSelectFill(active));
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get());
+        textBrush_->SetColor(OldSelectStroke(active));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get(), active ? 2.2f : 1.0f);
+        const wchar_t* label = AimModeName(mode);
+        textBrush_->SetColor(OldSelectText(active));
+        d2dContext_->DrawTextW(label, static_cast<UINT32>(wcslen(label)), smallFormat_.Get(),
+            D2D1::RectF(rect.left, rect.top + 7.0f, rect.right, rect.bottom), textBrush_.Get());
+    }
+
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
     textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f));
-    const wchar_t* hint = L"← → / ドラッグで調整   Esc または Enter で戻る";
+    const wchar_t* hint = L"音量:←→/ドラッグ   攻撃方向:クリック   Esc/Enterで戻る";
     d2dContext_->DrawTextW(hint, static_cast<UINT32>(wcslen(hint)), smallFormat_.Get(),
-        D2D1::RectF(left, top + panelH - 42.0f, left + panelW, top + panelH - 14.0f), textBrush_.Get());
+        D2D1::RectF(left, top + panelH - 40.0f, left + panelW, top + panelH - 12.0f), textBrush_.Get());
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 
