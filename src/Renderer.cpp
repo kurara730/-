@@ -122,7 +122,15 @@ void SweetsApp::CreateDevice()
 
     UINT flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT;
 #if defined(_DEBUG)
-    flags |= D3D11_CREATE_DEVICE_DEBUG;
+    wchar_t enableDebugLayer[8]{};
+    const DWORD debugLayerLen = GetEnvironmentVariableW(
+        L"SWEETS_D3D_DEBUG",
+        enableDebugLayer,
+        static_cast<DWORD>(sizeof(enableDebugLayer) / sizeof(enableDebugLayer[0])));
+    if (debugLayerLen > 0 && enableDebugLayer[0] != L'0')
+    {
+        flags |= D3D11_CREATE_DEVICE_DEBUG;
+    }
 #endif
     std::array<D3D_FEATURE_LEVEL, 3> levels{
         D3D_FEATURE_LEVEL_11_1,

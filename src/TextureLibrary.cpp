@@ -97,6 +97,10 @@ void TextureLibrary::LoadAll(ID3D11Device* device)
 
     for (auto& pair : textures_)
     {
+        if (pair.second.shaderResource)
+        {
+            continue;
+        }
         LoadTextureWic(device, factory.Get(), pair.second);
     }
 }
