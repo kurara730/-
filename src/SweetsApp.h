@@ -166,6 +166,7 @@ private:
     void DrawScreenFlashOverlay();
     void DrawCharacterSelect();
     void DrawPauseMenu();
+    void DrawSettingsMenu();
     void DrawVideoScreen();
     void DrawTitleMediaFrame(const D2D1_RECT_F& rect);
     void DrawBitmapCover(ID2D1Bitmap1* bitmap, const D2D1_RECT_F& rect, float opacity);
@@ -201,6 +202,7 @@ private:
     void ActivatePauseMenuItem();
     bool HandlePauseClick(float sx, float sy);
     bool HandlePauseDrag(float sx, float sy);
+    bool HandleSettingsClick(float sx, float sy);
     void SetAimMode(AimMode mode, bool save);
     void SetVolumeSlider(int index, float value, bool save);
     float VolumeSliderValue(int index) const;

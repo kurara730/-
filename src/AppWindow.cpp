@@ -131,7 +131,7 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         {
             return 0;
         }
-        if (screen_ == Screen::Paused && HandlePauseDrag(mouseX_, mouseY_))
+        if ((screen_ == Screen::Paused || screen_ == Screen::Settings) && HandlePauseDrag(mouseX_, mouseY_))
         {
             return 0;
         }
@@ -145,6 +145,11 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             return 0;
         }
         if (screen_ == Screen::Paused && HandlePauseClick(mouseX_, mouseY_))
+        {
+            SetCapture(hwnd);
+            return 0;
+        }
+        if (screen_ == Screen::Settings && HandleSettingsClick(mouseX_, mouseY_))
         {
             SetCapture(hwnd);
             return 0;

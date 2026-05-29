@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <string>
 
 #include "GameDefs.h"
 #include "GameMath.h"
@@ -34,9 +35,9 @@ inline const std::array<WeaponDef, 4> Weapons{ {
 
 struct LoadoutPreset
 {
-    const wchar_t* name;
-    const wchar_t* role;
-    const wchar_t* summary;
+    std::wstring name;
+    std::wstring role;
+    std::wstring summary;
     Weapon weapon;
     CharacterType character;
     float maxHp;
@@ -47,7 +48,8 @@ struct LoadoutPreset
     Color color;
 };
 
-inline const std::array<LoadoutPreset, 4> Loadouts{ {
+// CSV(assets/data/characters.csv)で実行時に上書き可能。詳細は DataTables.h を参照。
+inline std::array<LoadoutPreset, 4> Loadouts{ {
     { L"ショート", L"速度 / 連射", L"追尾弾と分裂弾で攻める", Weapon::Strawberry, CharacterType::Shortcake, 92.0f, 6.15f, 0.92f, 0.82f, 18.0f, Berry },
     { L"チョコ", L"体力 / 近接", L"近距離で広く薙ぎ払う", Weapon::Chocolate, CharacterType::Chocolate, 145.0f, 4.55f, 1.10f, 1.06f, 8.0f, Choco },
     { L"チーズ", L"火力 / 反射壁", L"壁で敵弾を跳ね返す", Weapon::Cheese, CharacterType::Cheese, 112.0f, 4.95f, 1.28f, 1.14f, 12.0f, Gold },
