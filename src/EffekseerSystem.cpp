@@ -187,10 +187,10 @@ bool EffekseerSystem::Play(const std::wstring& id, V2 position, float y, float r
     const auto found = impl_->effects.find(id);
     if (found == impl_->effects.end() || !found->second) return false;
 
-    const Effekseer::Handle handle = impl_->manager->Play(found->second, position.x, y, position.z);
+    const Effekseer::Handle handle = impl_->manager->Play(found->second, position.x, position.z, y);
     if (handle < 0) return false;
 
-    impl_->manager->SetRotation(handle, 0.0f, rotationY, 0.0f);
+    impl_->manager->SetRotation(handle, 0.0f, 0.0f, rotationY);
     impl_->manager->SetScale(handle, scale, scale, scale);
     return true;
 #else

@@ -23,6 +23,7 @@ add_executable(SweetsActionDX11 WIN32
     src/ReflectionSystem.cpp
     src/Renderer.cpp
     src/SpriteLibrary.cpp
+    src/SpriteRenderer.cpp
     src/StageFactory.cpp
     src/SweetsApp.cpp
     src/TextureLibrary.cpp
@@ -36,6 +37,7 @@ add_executable(SweetsActionDX11 WIN32
     src/ModelLibrary.h
     src/ReflectionSystem.h
     src/SpriteLibrary.h
+    src/SpriteRenderer.h
     src/StageFactory.h
     src/SweetsApp.h
     src/TextureLibrary.h
@@ -46,6 +48,34 @@ add_executable(SweetsActionDX11 WIN32
     assets/shaders/postprocess.hlsl
     assets/shaders/sprite_unlit.hlsl
     assets/textures/title.jpg
+    assets/textures/2d/player_shortcake.png
+    assets/textures/2d/player_chocolate.png
+    assets/textures/2d/player_cheese.png
+    assets/textures/2d/player_roll.png
+    assets/textures/2d/enemy_normal.png
+    assets/textures/2d/enemy_shield.png
+    assets/textures/2d/enemy_split.png
+    assets/textures/2d/enemy_healer.png
+    assets/textures/2d/enemy_barrier.png
+    assets/textures/2d/enemy_mirror.png
+    assets/textures/2d/enemy_mine.png
+    assets/textures/2d/enemy_teleport.png
+    assets/textures/2d/boss_normal.png
+    assets/textures/2d/boss_hidden.png
+    assets/textures/2d/shot_player.png
+    assets/textures/2d/shot_enemy.png
+    assets/textures/2d/slash.png
+    assets/textures/2d/obstacle_wall.png
+    assets/textures/2d/pickup_attack.png
+    assets/textures/2d/pickup_slow.png
+    assets/textures/2d/pickup_invincible.png
+    assets/textures/2d/pickup_magnet.png
+    assets/textures/2d/pickup_bomb.png
+    assets/textures/2d/pickup_heal.png
+    assets/textures/2d/pickup_ult.png
+    assets/textures/2d/pickup_spread.png
+    assets/textures/2d/pickup_speed.png
+    assets/textures/2d/pickup_score.png
     assets/audio/233_BPM163.mp3
     assets/audio/333_BPM177.mp3
     assets/audio/ruins.mp3

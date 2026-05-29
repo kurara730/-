@@ -1,6 +1,6 @@
 cbuffer SpriteFrameCB : register(b0)
 {
-    float4x4 viewProj;
+    row_major float4x4 viewProj;
 };
 
 Texture2D spriteTex : register(t0);
@@ -33,4 +33,3 @@ float4 PSMain(VSOut input) : SV_TARGET
 {
     return spriteTex.Sample(spriteSampler, input.uv) * input.color;
 }
-

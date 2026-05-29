@@ -24,6 +24,7 @@
 #include "GameTypes.h"
 #include "ModelLibrary.h"
 #include "SpriteLibrary.h"
+#include "SpriteRenderer.h"
 #include "TextureLibrary.h"
 #include "VideoSystem.h"
 
@@ -110,6 +111,10 @@ private:
     void SpawnEnemyShot(V2 pos, float angle, float speed, float damage, float radius, Color color, float ttl = 5.0f, float angularVel = 0.0f, float accel = 0.0f);
     int ScaledBulletCount(int base) const;
     const DifficultyDef& CurrentDifficulty() const;
+    EncounterProfile CurrentEncounterProfile() const;
+    const EncounterTuning& CurrentEncounterTuning() const;
+    int EliteEnemyCount() const;
+    int BossAddCount() const;
     void LoadProgress();
     void SaveProgress();
     int DifficultyOptionCount() const;
@@ -146,6 +151,7 @@ private:
     void DrawPickupShape(const Pickup& p);
     void DrawSector(const Slash& s);
     void DrawUltimatePreview(const Player& p, int ownerIndex);
+    void DrawSprite2D(const std::wstring& spriteId, V2 pos, V2 size, float rotation, Color tint, float depth = 0.5f);
     V2 ScreenToWorld(float sx, float sy) const;
 
     void OnKeyDown(WPARAM key);
@@ -231,6 +237,7 @@ private:
     Mesh ringMesh_;
     Mesh cubeMesh_;
     Mesh wedgeMesh_;
+    SpriteRenderer spriteRenderer_;
 
     XMMATRIX view_{ XMMatrixIdentity() };
     XMMATRIX proj_{ XMMatrixIdentity() };

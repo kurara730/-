@@ -2,6 +2,7 @@
 
 #include <DirectXMath.h>
 
+#include <cstddef>
 #include <string>
 #include <unordered_map>
 
@@ -18,6 +19,7 @@ class SpriteLibrary
 public:
     void Register(std::wstring id, std::wstring textureId, DirectX::XMFLOAT4 uv = { 0.0f, 0.0f, 1.0f, 1.0f });
     const SpriteAsset* Find(const std::wstring& id) const;
+    size_t Count() const { return sprites_.size(); }
 
 private:
     std::unordered_map<std::wstring, SpriteAsset> sprites_;

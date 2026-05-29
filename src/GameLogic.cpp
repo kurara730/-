@@ -2,6 +2,17 @@
 #include "ReflectionSystem.h"
 #include "StageFactory.h"
 
+namespace
+{
+bool IsEliteType(EnemyType type)
+{
+    return type == EnemyType::Healer
+        || type == EnemyType::Barrier
+        || type == EnemyType::Mirror
+        || type == EnemyType::Teleport;
+}
+}
+
 void SweetsApp::ResetGame()
 {
     ApplyLoadout(players_[0], loadoutIndex_, 0, false);
@@ -156,12 +167,14 @@ void SweetsApp::StartWave()
         SpawnBoss();
         remainingToSpawn_ = 0;
         spawnTimer_ = 1.8f;
+        pickupTimer_ = Rand(6.0f, 8.0f);
         message_ = L"ボスウェーブ";
     }
     else
     {
-        remainingToSpawn_ = 5 + wave_ * 2;
+        remainingToSpawn_ = 7 + wave_ * 3;
         spawnTimer_ = 0.2f;
+        pickupTimer_ = Rand(1.8f, 3.0f);
         std::wostringstream ss;
         ss << L"ウェーブ開始 - " << StageName(stage_);
         message_ = ss.str();
@@ -178,8 +191,14 @@ void SweetsApp::ClearWave()
         if (bossWave_) GrantBossSkill(p);
         if (!p.downed)
         {
-            p.hp = std::min(p.maxHp, p.hp + (bossWave_ ? 35.0f : 18.0f));
-            p.ult = std::min(100.0f, p.ult + (bossWave_ ? 30.0f : 12.0f));
+            p.hp = std::min(p.maxHp, p.hp + (bossWave_ ? 50.0f : 14.0f));
+            p.ult = std::min(100.0f, p.ult + (bossWave_ ? 45.0f : 10.0f));
+            if (bossWave_)
+            {
+                p.bombs = std::min(5, p.bombs + 1);
+                p.fever = 100.0f;
+                p.feverT = std::max(p.feverT, 6.0f);
+            }
         }
     }
     if (wave_ >= FinalWave && gameMode_ == GameMode::Story)
@@ -506,7 +525,7 @@ void SweetsApp::UpdatePlaying(float dt)
         {
             SpawnEnemy();
             --remainingToSpawn_;
-            spawnTimer_ = (bossWave_ ? Rand(1.4f, 2.4f) : Rand(0.55f, 1.15f)) * CurrentDifficulty().spawnIntervalMul;
+            spawnTimer_ = (bossWave_ ? Rand(1.4f, 2.4f) : Rand(0.38f, 0.82f)) * CurrentDifficulty().spawnIntervalMul;
         }
     }
 
@@ -517,10 +536,11 @@ void SweetsApp::UpdatePlaying(float dt)
     particles_.erase(std::remove_if(particles_.begin(), particles_.end(), [](const Particle& p) { return p.ttl <= 0.0f || p.y < -0.1f; }), particles_.end());
 
     pickupTimer_ -= dt;
-    if (pickupTimer_ <= 0.0f && pickups_.size() < 3)
+    const EncounterTuning& tuning = CurrentEncounterTuning();
+    if (pickupTimer_ <= 0.0f && pickups_.size() < static_cast<size_t>(tuning.pickupMax))
     {
         SpawnPickup();
-        pickupTimer_ = Rand(6.0f, 10.0f);
+        pickupTimer_ = Rand(tuning.pickupIntervalMin, tuning.pickupIntervalMax);
     }
 
     if (!boss_.active && remainingToSpawn_ <= 0 && enemies_.empty())
@@ -957,6 +977,11 @@ void SweetsApp::SpawnEnemyShot(V2 pos, float angle, float speed, float damage, f
         const DifficultyDef& diff = CurrentDifficulty();
         speed *= diff.bulletSpeedMul;
         radius *= diff.enemyShotRadiusMul;
+        if (CurrentEncounterProfile() == EncounterProfile::MobRelease)
+        {
+            speed *= 0.92f;
+            damage *= 0.82f;
+        }
     }
 
     Shot s{};
@@ -1116,9 +1141,48 @@ const DifficultyDef& SweetsApp::CurrentDifficulty() const
     return DifficultyDefs[static_cast<int>(difficulty_)];
 }
 
+EncounterProfile SweetsApp::CurrentEncounterProfile() const
+{
+    if (screen_ == Screen::HiddenBoss || screen_ == Screen::HiddenBossIntro || boss_.bossType == BossType::HiddenBoss)
+    {
+        return EncounterProfile::HiddenBossSurvival;
+    }
+    if (bossWave_ || (boss_.active && screen_ == Screen::Playing))
+    {
+        return EncounterProfile::BossSkillCheck;
+    }
+    return EncounterProfile::MobRelease;
+}
+
+const EncounterTuning& SweetsApp::CurrentEncounterTuning() const
+{
+    return EncounterTunings[static_cast<size_t>(CurrentEncounterProfile())];
+}
+
+int SweetsApp::EliteEnemyCount() const
+{
+    return static_cast<int>(std::count_if(enemies_.begin(), enemies_.end(), [](const Enemy& e)
+    {
+        return !e.dead && IsEliteType(e.type);
+    }));
+}
+
+int SweetsApp::BossAddCount() const
+{
+    return static_cast<int>(std::count_if(enemies_.begin(), enemies_.end(), [](const Enemy& e)
+    {
+        return !e.dead;
+    }));
+}
+
 int SweetsApp::ScaledBulletCount(int base) const
 {
-    return std::max(1, static_cast<int>(std::round(base * CurrentDifficulty().bulletCountMul)));
+    float count = static_cast<float>(base) * CurrentDifficulty().bulletCountMul;
+    if (CurrentEncounterProfile() == EncounterProfile::MobRelease)
+    {
+        count *= 0.72f;
+    }
+    return std::max(1, static_cast<int>(std::round(count)));
 }
 
 int SweetsApp::DifficultyOptionCount() const

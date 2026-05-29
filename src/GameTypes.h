@@ -211,6 +211,33 @@ enum class Difficulty
     Lunatic
 };
 
+enum class EncounterProfile
+{
+    MobRelease,
+    BossSkillCheck,
+    HiddenBossSurvival
+};
+
+struct EncounterTuning
+{
+    const wchar_t* name;
+    float mobHpMul;
+    float mobShotCooldownMul;
+    int mobEliteCap;
+    float pickupIntervalMin;
+    float pickupIntervalMax;
+    int pickupMax;
+    int bossAddCap;
+    float bossTelegraphTime;
+    float bossShotRestMul;
+};
+
+inline const std::array<EncounterTuning, 3> EncounterTunings{ {
+    { L"雑魚解放", 0.80f, 1.35f, 2, 4.5f, 7.0f, 5, 0, 0.0f, 1.00f },
+    { L"ボス試練", 1.00f, 1.00f, 2, 8.0f, 12.0f, 3, 2, 0.50f, 1.15f },
+    { L"隠し耐久", 1.00f, 1.00f, 0, 10.0f, 14.0f, 1, 0, 0.0f, 1.00f },
+} };
+
 struct DebugState
 {
     bool hud = false;
@@ -368,10 +395,16 @@ struct Boss
     float speed = 1.4f;
     float atk = 12.0f;
     float attackCd = 1.2f;
+    float telegraphT = 0.0f;
+    float telegraphLife = 0.0f;
     float spin = 0.0f;
     float flash = 0.0f;
     int phase = 1;
     int type = 0;
+    int telegraphAttack = -1;
+    bool telegraphAdd = false;
+    bool telegraphMirror = false;
+    bool telegraphField = false;
     BossType bossType = BossType::Demon;
     bool active = false;
 };

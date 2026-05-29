@@ -3,6 +3,7 @@
 #include <d3d11.h>
 #include <wrl/client.h>
 
+#include <cstddef>
 #include <string>
 #include <unordered_map>
 
@@ -23,6 +24,7 @@ public:
     void Register(std::wstring id, std::wstring path);
     void LoadAll(ID3D11Device* device);
     const TextureAsset* Find(const std::wstring& id) const;
+    size_t Count() const { return textures_.size(); }
 
 private:
     std::unordered_map<std::wstring, TextureAsset> textures_;

@@ -1,11 +1,59 @@
 #include "SweetsApp.h"
 
+namespace
+{
+bool IsEliteTypeLocal(EnemyType type)
+{
+    return type == EnemyType::Healer
+        || type == EnemyType::Barrier
+        || type == EnemyType::Mirror
+        || type == EnemyType::Teleport;
+}
+}
+
 void SweetsApp::SpawnEnemy()
 {
     Enemy e{};
     const int maxKind = std::min(7, wave_ / 2 + 1);
-    e.kind = RandInt(0, maxKind);
-    e.type = static_cast<EnemyType>(e.kind);
+    const EncounterProfile profile = CurrentEncounterProfile();
+    const EncounterTuning& tuning = CurrentEncounterTuning();
+    auto allowed = [&](EnemyType type)
+    {
+        return static_cast<int>(type) <= maxKind;
+    };
+    auto pickMobType = [&]()
+    {
+        const bool eliteCapped = EliteEnemyCount() >= tuning.mobEliteCap;
+        const int roll = RandInt(0, 99);
+        EnemyType type = EnemyType::Normal;
+        if (roll < 42) type = EnemyType::Normal;
+        else if (roll < 66) type = EnemyType::Split;
+        else if (roll < 82) type = EnemyType::Mine;
+        else if (roll < 90) type = EnemyType::Shield;
+        else if (roll < 94) type = EnemyType::Healer;
+        else if (roll < 97) type = EnemyType::Barrier;
+        else if (roll < 99) type = EnemyType::Mirror;
+        else type = EnemyType::Teleport;
+
+        if (!allowed(type) || (eliteCapped && IsEliteTypeLocal(type)))
+        {
+            const int simple = RandInt(0, 2);
+            type = simple == 0 ? EnemyType::Normal : (simple == 1 ? EnemyType::Split : EnemyType::Mine);
+            if (!allowed(type)) type = EnemyType::Normal;
+        }
+        return type;
+    };
+    auto pickBossAddType = [&]()
+    {
+        const int roll = RandInt(0, 99);
+        if (roll < 50) return EnemyType::Normal;
+        if (roll < 78 && allowed(EnemyType::Split)) return EnemyType::Split;
+        if (roll < 94 && allowed(EnemyType::Mine)) return EnemyType::Mine;
+        return allowed(EnemyType::Shield) ? EnemyType::Shield : EnemyType::Normal;
+    };
+
+    e.type = profile == EncounterProfile::MobRelease ? pickMobType() : pickBossAddType();
+    e.kind = static_cast<int>(e.type);
     e.pos = RandInArena(0.8f);
     if (Len(e.pos) < 7.0f)
     {
@@ -42,6 +90,20 @@ void SweetsApp::SpawnEnemy()
     const DifficultyDef& diff = CurrentDifficulty();
     e.hp *= diff.enemyHpMul;
     e.atk *= diff.enemyAtkMul;
+    if (profile == EncounterProfile::MobRelease)
+    {
+        e.hp *= tuning.mobHpMul;
+        e.atk *= 0.88f;
+        if (IsEliteTypeLocal(e.type))
+        {
+            e.shootCd += Rand(0.4f, 0.9f);
+        }
+    }
+    else if (profile == EncounterProfile::BossSkillCheck)
+    {
+        e.hp *= 0.85f;
+        e.atk *= 0.90f;
+    }
     e.maxHp = e.hp;
     enemies_.push_back(e);
 }
@@ -67,6 +129,9 @@ void SweetsApp::SpawnBoss()
 void SweetsApp::UpdateEnemies(float dt)
 {
     const float slowMul = slowT_ > 0.0f ? 0.45f : 1.0f;
+    const float shotCooldownMul = CurrentEncounterProfile() == EncounterProfile::MobRelease
+        ? CurrentEncounterTuning().mobShotCooldownMul
+        : 1.0f;
     for (auto& e : enemies_)
     {
         if (e.dead) continue;
@@ -96,7 +161,7 @@ void SweetsApp::UpdateEnemies(float dt)
                     }
                 }
                 Burst(e.pos, Mint, 10);
-                e.shootCd = 2.0f * CurrentDifficulty().spawnIntervalMul;
+                e.shootCd = 2.0f * CurrentDifficulty().spawnIntervalMul * (shotCooldownMul > 1.0f ? 1.15f : 1.0f);
             }
         }
         else if (e.type == EnemyType::Barrier)
@@ -118,7 +183,7 @@ void SweetsApp::UpdateEnemies(float dt)
                     const float a = e.face + TwoPi * i / static_cast<float>(bullets);
                     SpawnEnemyShot(e.pos + FromAngle(a) * (e.radius + 0.15f), a, 3.1f + wave_ * 0.08f, e.atk * 0.70f, 0.085f, Sky, 5.0f);
                 }
-                e.shootCd = 1.8f * CurrentDifficulty().spawnIntervalMul;
+                e.shootCd = 1.8f * CurrentDifficulty().spawnIntervalMul * shotCooldownMul;
             }
         }
         else if (e.type == EnemyType::Mirror || e.type == EnemyType::Teleport)
@@ -147,7 +212,7 @@ void SweetsApp::UpdateEnemies(float dt)
                     const float curve = e.type == EnemyType::Teleport ? ((i % 2 == 0) ? 0.35f : -0.35f) : 0.0f;
                     SpawnEnemyShot(e.pos + FromAngle(a) * (e.radius + 0.2f), a, 4.8f + wave_ * 0.16f, e.atk, 0.105f, e.type == EnemyType::Teleport ? Grape : Cream, 5.2f, curve, 0.08f);
                 }
-                e.shootCd = (e.type == EnemyType::Teleport ? 1.45f : 1.05f) * CurrentDifficulty().spawnIntervalMul;
+                e.shootCd = (e.type == EnemyType::Teleport ? 1.45f : 1.05f) * CurrentDifficulty().spawnIntervalMul * shotCooldownMul;
             }
         }
         else if (e.type == EnemyType::Mine)
@@ -237,15 +302,15 @@ void SweetsApp::UpdateBoss(float dt)
         ResolvePlayerHit(*targetPlayer, boss_.atk, AngleOf(toP));
     }
 
-    boss_.attackCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
-    if (boss_.attackCd <= 0.0f)
+    const EncounterTuning& tuning = CurrentEncounterTuning();
+    auto fireBossAttack = [&]()
     {
-        const int attack = RandInt(0, 2 + boss_.phase / 2);
-        if ((boss_.bossType == BossType::DonutKing || boss_.bossType == BossType::DemonParfait) && enemies_.size() < 4)
+        const int attack = std::max(0, boss_.telegraphAttack);
+        if (boss_.telegraphAdd && BossAddCount() < tuning.bossAddCap)
         {
             SpawnEnemy();
         }
-        if ((boss_.bossType == BossType::MirrorMacaron || boss_.bossType == BossType::DemonParfait) && enemies_.size() < 3 && Rand(0.0f, 1.0f) < 0.35f)
+        if (boss_.telegraphMirror && BossAddCount() < tuning.bossAddCap)
         {
             Enemy mirror{};
             mirror.type = EnemyType::Mirror;
@@ -253,7 +318,7 @@ void SweetsApp::UpdateBoss(float dt)
             mirror.pos = boss_.pos + FromAngle(Rand(0.0f, TwoPi)) * 2.2f;
             ClampInside(mirror.pos, 0.5f);
             mirror.radius = 0.38f;
-            mirror.hp = (35.0f + wave_ * 8.0f) * CurrentDifficulty().enemyHpMul;
+            mirror.hp = (28.0f + wave_ * 6.0f) * CurrentDifficulty().enemyHpMul;
             mirror.maxHp = mirror.hp;
             mirror.speed = 1.5f;
             mirror.atk = boss_.atk * 0.5f;
@@ -262,7 +327,7 @@ void SweetsApp::UpdateBoss(float dt)
             mirror.shootCd = 1.1f;
             enemies_.push_back(mirror);
         }
-        if ((boss_.bossType == BossType::TerritoryCake || boss_.bossType == BossType::DemonParfait) && Rand(0.0f, 1.0f) < 0.22f)
+        if (boss_.telegraphField)
         {
             Obstacle field{};
             field.pos = targetPlayer->pos + FromAngle(Rand(0.0f, TwoPi)) * Rand(0.5f, 2.0f);
@@ -287,14 +352,14 @@ void SweetsApp::UpdateBoss(float dt)
         else if (attack == 1)
         {
             const float base = AngleOf(toP);
-            const int lanes = ScaledBulletCount(3 + boss_.phase * 2);
+            const int lanes = std::max(2, ScaledBulletCount(3 + boss_.phase * 2));
             for (int i = 0; i < lanes; ++i)
             {
                 const float a = base + (static_cast<float>(i) / (lanes - 1) - 0.5f) * 0.58f;
                 SpawnEnemyShot(boss_.pos + FromAngle(a) * (boss_.radius + 0.2f), a, 3.8f + boss_.phase * 0.42f, boss_.atk * 0.85f, 0.095f, Red, 3.8f, 0.0f, -0.05f);
             }
         }
-        else
+        else if (attack == 2)
         {
             const int count = ScaledBulletCount(10 + boss_.phase * 3);
             for (int i = 0; i < count; ++i)
@@ -305,7 +370,7 @@ void SweetsApp::UpdateBoss(float dt)
                 SpawnEnemyShot(boss_.pos + FromAngle(a) * (boss_.radius + 0.15f), a, speed, boss_.atk * 0.60f, 0.082f, Gold, 5.6f, curve, 0.05f);
             }
         }
-        if (boss_.phase >= 3)
+        else
         {
             const int petals = ScaledBulletCount(6 + boss_.phase * 2);
             for (int i = 0; i < petals; ++i)
@@ -314,7 +379,61 @@ void SweetsApp::UpdateBoss(float dt)
                 SpawnEnemyShot(boss_.pos + FromAngle(a) * (boss_.radius + 0.2f), a, 2.0f + boss_.phase * 0.18f, boss_.atk * 0.45f, 0.072f, Mint, 5.5f, -0.10f, 0.06f);
             }
         }
-        boss_.attackCd = std::max(0.75f, (2.15f - boss_.phase * 0.12f - wave_ * 0.008f) * CurrentDifficulty().spawnIntervalMul);
+
+        boss_.telegraphAttack = -1;
+        boss_.telegraphAdd = false;
+        boss_.telegraphMirror = false;
+        boss_.telegraphField = false;
+        boss_.attackCd = std::max(0.95f, (2.15f - boss_.phase * 0.12f - wave_ * 0.008f) * CurrentDifficulty().spawnIntervalMul * tuning.bossShotRestMul);
+    };
+
+    if (boss_.telegraphT > 0.0f)
+    {
+        boss_.telegraphT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        if (boss_.telegraphT <= 0.0f)
+        {
+            fireBossAttack();
+        }
+        return;
+    }
+
+    boss_.attackCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+    if (boss_.attackCd <= 0.0f)
+    {
+        const int attack = RandInt(0, boss_.phase >= 3 ? 3 : 2);
+        const bool addBoss = boss_.bossType == BossType::DonutKing || boss_.bossType == BossType::DemonParfait;
+        const bool mirrorBoss = boss_.bossType == BossType::MirrorMacaron || boss_.bossType == BossType::DemonParfait;
+        const bool territoryBoss = boss_.bossType == BossType::TerritoryCake || boss_.bossType == BossType::DemonParfait;
+        boss_.telegraphAttack = attack;
+        boss_.telegraphAdd = addBoss && BossAddCount() < tuning.bossAddCap;
+        boss_.telegraphMirror = mirrorBoss && BossAddCount() < tuning.bossAddCap && Rand(0.0f, 1.0f) < 0.25f;
+        boss_.telegraphField = territoryBoss && Rand(0.0f, 1.0f) < 0.22f;
+        boss_.telegraphLife = tuning.bossTelegraphTime;
+        boss_.telegraphT = tuning.bossTelegraphTime;
+        boss_.flash = std::max(boss_.flash, tuning.bossTelegraphTime);
+        EffectPulse pulse{};
+        pulse.pos = boss_.pos;
+        pulse.startRadius = boss_.radius * 1.1f;
+        pulse.endRadius = boss_.radius * (2.6f + 0.2f * boss_.phase);
+        pulse.ttl = tuning.bossTelegraphTime;
+        pulse.life = tuning.bossTelegraphTime;
+        pulse.y = 0.22f;
+        pulse.color = attack == 0 ? Grape : (attack == 1 ? Red : (attack == 2 ? Gold : Mint));
+        effectPulses_.push_back(pulse);
+        switch (attack)
+        {
+        case 0: message_ = L"ボス予兆: 放射弾"; break;
+        case 1: message_ = L"ボス予兆: 狙い撃ち"; break;
+        case 2: message_ = L"ボス予兆: 回転弾"; break;
+        default: message_ = L"ボス予兆: 曲がる弾"; break;
+        }
+        if (boss_.telegraphAdd || boss_.telegraphMirror) message_ += L" + 召喚";
+        if (boss_.telegraphField) message_ += L" + 領域";
+        messageT_ = tuning.bossTelegraphTime + 0.55f;
+        if (boss_.telegraphT <= 0.0f)
+        {
+            fireBossAttack();
+        }
     }
 }
 
@@ -358,9 +477,10 @@ void SweetsApp::DamageEnemy(Enemy& e, float dmg, V2 from, float knock, bool refl
             messageT_ = 1.2f;
         }
         owner.kills++;
-        owner.ult = std::min(100.0f, owner.ult + 7.0f);
-        owner.xp++;
-        owner.fever = std::min(100.0f, owner.fever + 9.0f);
+        const bool mobRelease = CurrentEncounterProfile() == EncounterProfile::MobRelease;
+        owner.ult = std::min(100.0f, owner.ult + (mobRelease ? 8.5f : 5.0f));
+        owner.xp += mobRelease ? 2 : 1;
+        owner.fever = std::min(100.0f, owner.fever + (mobRelease ? 14.0f : 7.0f));
         if (owner.fever >= 100.0f)
         {
             owner.feverT = 8.0f;
@@ -429,6 +549,11 @@ void SweetsApp::DamageBoss(float dmg, bool reflected, int ownerIndex)
     {
         boss_.phase = nextPhase;
         boss_.attackCd = 0.9f;
+        boss_.telegraphT = 0.0f;
+        boss_.telegraphAttack = -1;
+        boss_.telegraphAdd = false;
+        boss_.telegraphMirror = false;
+        boss_.telegraphField = false;
         Burst(boss_.pos, Red, 50);
     }
     if (boss_.hp <= 0.0f)
@@ -440,6 +565,12 @@ void SweetsApp::DamageBoss(float dmg, bool reflected, int ownerIndex)
             if (p.active)
             {
                 p.ult = std::min(100.0f, p.ult + 35.0f);
+                if (!p.downed)
+                {
+                    p.hp = std::min(p.maxHp, p.hp + 35.0f);
+                    p.fever = 100.0f;
+                    p.feverT = std::max(p.feverT, 5.0f);
+                }
             }
         }
         Burst(boss_.pos, Gold, 90);

@@ -48,6 +48,63 @@ bool PointInRect(float sx, float sy, float left, float top, float right, float b
 {
     return sx >= left && sx <= right && sy >= top && sy <= bottom;
 }
+
+float GameplayHalfHeight()
+{
+    return 11.5f;
+}
+
+float GameplayHalfWidth(UINT width, UINT height)
+{
+    const float aspect = static_cast<float>(std::max(1u, width)) / std::max(1.0f, static_cast<float>(height));
+    return GameplayHalfHeight() * aspect;
+}
+
+const wchar_t* CharacterSpriteId(CharacterType type)
+{
+    switch (type)
+    {
+    case CharacterType::Chocolate: return L"2d_player_chocolate";
+    case CharacterType::Cheese: return L"2d_player_cheese";
+    case CharacterType::Roll: return L"2d_player_roll";
+    case CharacterType::Shortcake:
+    default: return L"2d_player_shortcake";
+    }
+}
+
+const wchar_t* EnemySpriteId(EnemyType type)
+{
+    switch (type)
+    {
+    case EnemyType::Shield: return L"2d_enemy_shield";
+    case EnemyType::Split: return L"2d_enemy_split";
+    case EnemyType::Healer: return L"2d_enemy_healer";
+    case EnemyType::Barrier: return L"2d_enemy_barrier";
+    case EnemyType::Mirror: return L"2d_enemy_mirror";
+    case EnemyType::Mine: return L"2d_enemy_mine";
+    case EnemyType::Teleport: return L"2d_enemy_teleport";
+    case EnemyType::Normal:
+    default: return L"2d_enemy_normal";
+    }
+}
+
+const wchar_t* PickupSpriteId(PickupType type)
+{
+    switch (type)
+    {
+    case PickupType::Slow: return L"2d_pickup_slow";
+    case PickupType::Invincible: return L"2d_pickup_invincible";
+    case PickupType::Magnet: return L"2d_pickup_magnet";
+    case PickupType::BombDamage: return L"2d_pickup_bomb";
+    case PickupType::Heal: return L"2d_pickup_heal";
+    case PickupType::UltFull: return L"2d_pickup_ult";
+    case PickupType::Spread: return L"2d_pickup_spread";
+    case PickupType::Speed: return L"2d_pickup_speed";
+    case PickupType::ScoreDouble: return L"2d_pickup_score";
+    case PickupType::Attack:
+    default: return L"2d_pickup_attack";
+    }
+}
 }
 
 void SweetsApp::CreateDevice()
@@ -362,6 +419,12 @@ void SweetsApp::CreateShadersAndStates()
     sd.AddressW = D3D11_TEXTURE_ADDRESS_CLAMP;
     sd.MaxLOD = D3D11_FLOAT32_MAX;
     ThrowIfFailed(device_->CreateSamplerState(&sd, &postSampler_), "Create post sampler");
+
+    const std::wstring spritePath = FindAssetFile(L"assets/shaders/sprite_unlit.hlsl");
+    if (!spriteRenderer_.Initialize(device_.Get(), context_.Get(), spritePath))
+    {
+        OutputDebugStringW(L"SweetsActionDX11: sprite renderer initialization failed. Gameplay uses 2D shape fallbacks where possible.\n");
+    }
 }
 
 Mesh SweetsApp::CreateMesh(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices)
@@ -557,17 +620,16 @@ void SweetsApp::DrawScene()
     vp.MaxDepth = 1.0f;
     context_->RSSetViewports(1, &vp);
 
-    XMVECTOR eye = XMVectorSet(cameraPos_.x, cameraPos_.y, cameraPos_.z, 1.0f);
-    XMVECTOR at = XMVectorSet(0.0f, 0.0f, 0.0f, 1.0f);
-    XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
-    view_ = XMMatrixLookAtLH(eye, at, up);
-    proj_ = XMMatrixPerspectiveFovLH(XMConvertToRadians(45.0f), std::max(0.1f, static_cast<float>(width_) / height_), 0.1f, 100.0f);
+    const float halfH = GameplayHalfHeight();
+    const float halfW = GameplayHalfWidth(width_, height_);
+    view_ = XMMatrixIdentity();
+    proj_ = XMMatrixOrthographicOffCenterLH(-halfW, halfW, -halfH, halfH, 0.0f, 10.0f);
 #if defined(_DEBUG)
     if (debug_.taa)
     {
         const int frame = (debug_.taaFrame % 8) + 1;
-        const float jitterX = (Halton(frame, 2) - 0.5f) / std::max(1.0f, static_cast<float>(width_));
-        const float jitterY = (Halton(frame, 3) - 0.5f) / std::max(1.0f, static_cast<float>(height_));
+        const float jitterX = (Halton(frame, 2) - 0.5f) * 2.0f / std::max(1.0f, static_cast<float>(width_));
+        const float jitterY = (Halton(frame, 3) - 0.5f) * 2.0f / std::max(1.0f, static_cast<float>(height_));
         proj_ = proj_ * XMMatrixTranslation(jitterX, jitterY, 0.0f);
     }
 #endif
@@ -580,81 +642,75 @@ void SweetsApp::DrawScene()
 
     ID3D11RenderTargetView* rtv = sceneTarget;
     context_->OMSetRenderTargets(1, &rtv, dsv_.Get());
-    context_->OMSetDepthStencilState(depthState_.Get(), 0);
-    float blendFactor[4]{ 0,0,0,0 };
-    context_->OMSetBlendState(alphaBlend_.Get(), blendFactor, 0xffffffff);
-    context_->IASetInputLayout(inputLayout_.Get());
-    context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    context_->VSSetShader(vs_.Get(), nullptr, 0);
-    context_->PSSetShader(ps_.Get(), nullptr, 0);
-    ID3D11Buffer* frameCb = frameCB_.Get();
-    ID3D11Buffer* objectCb = objectCB_.Get();
-    context_->VSSetConstantBuffers(0, 1, &frameCb);
-    context_->VSSetConstantBuffers(1, 1, &objectCb);
-    context_->PSSetConstantBuffers(0, 1, &frameCb);
-    context_->PSSetConstantBuffers(1, 1, &objectCb);
-    context_->RSSetState(rasterState_.Get());
+    spriteRenderer_.Begin(view_ * proj_, false);
 
-    DrawMesh(floorMesh_, XMMatrixScaling(ArenaRadius, 1.0f, ArenaRadius), WithAlpha(Rose, 0.88f));
-    DrawMesh(ringMesh_, XMMatrixScaling(ArenaRadius, 1.0f, ArenaRadius) * XMMatrixTranslation(0, 0.04f, 0), Gold);
+    spriteRenderer_.DrawCircle({ 0.0f, 0.0f }, ArenaRadius + 1.3f, WithAlpha(Rose, 0.24f), 0.95f, 96);
+    spriteRenderer_.DrawCircle({ 0.0f, 0.0f }, ArenaRadius, WithAlpha({ 0.18f, 0.07f, 0.12f, 1.0f }, 0.92f), 0.94f, 96);
+    spriteRenderer_.DrawRing({ 0.0f, 0.0f }, ArenaRadius, 0.16f, WithAlpha(Gold, 0.76f), 0.20f, 128);
+    spriteRenderer_.DrawRing({ 0.0f, 0.0f }, ArenaRadius * 0.68f, 0.035f, WithAlpha(Cream, 0.18f), 0.30f, 96);
+    spriteRenderer_.DrawRing({ 0.0f, 0.0f }, ArenaRadius * 0.36f, 0.035f, WithAlpha(Cream, 0.13f), 0.30f, 72);
 
     for (const auto& o : obstacles_)
     {
         if (o.damageField)
         {
-            DrawMesh(ringMesh_, XMMatrixScaling(o.radius, 1.0f, o.radius) *
-                XMMatrixTranslation(o.pos.x, 0.09f, o.pos.z), WithAlpha(Red, 0.65f));
+            spriteRenderer_.DrawRing(o.pos, o.radius, 0.18f, WithAlpha(Red, 0.68f), 0.32f);
         }
         else
         {
-            DrawCylinder(o.pos, o.radius, o.cheeseWall ? 0.82f : 0.55f, o.color);
+            const float size = o.radius * (o.cheeseWall ? 2.35f : 2.05f);
+            DrawSprite2D(L"2d_obstacle_wall", o.pos, { size, size }, o.ttl * 0.35f, WithAlpha(o.color, 0.92f), 0.38f);
+            spriteRenderer_.DrawRing(o.pos, o.radius, 0.08f, WithAlpha(Cream, 0.28f), 0.36f);
         }
     }
     for (const auto& p : pickups_)
     {
-        DrawPickupShape(p);
+        const float bob = 1.0f + 0.10f * std::sin(gameTime_ * 5.0f + p.pos.x);
+        DrawSprite2D(PickupSpriteId(p.pickupType), p.pos, { p.radius * 2.8f * bob, p.radius * 2.8f * bob }, gameTime_ * 1.6f, p.color, 0.34f);
+        spriteRenderer_.DrawRing(p.pos, p.radius * 1.55f, 0.045f, WithAlpha(p.color, 0.46f), 0.37f, 40);
     }
     for (const auto& s : shots_)
     {
-        const float y = s.enemy ? 0.24f : 0.28f;
-        DrawSphere(s.pos, y, s.radius, s.color);
+        const wchar_t* id = s.enemy ? L"2d_shot_enemy" : L"2d_shot_player";
+        const float size = s.radius * (s.enemy ? 3.35f : 3.05f) * (s.charged ? 1.55f : 1.0f);
+        DrawSprite2D(id, s.pos, { size, size }, AngleOf(s.vel), s.color, s.enemy ? 0.25f : 0.24f);
         if (s.enemy)
         {
-            DrawMesh(ringMesh_, XMMatrixScaling(s.radius * 1.65f, 1.0f, s.radius * 1.65f) *
-                XMMatrixTranslation(s.pos.x, 0.08f, s.pos.z), WithAlpha(Cream, 0.35f));
+            spriteRenderer_.DrawRing(s.pos, s.radius * 1.75f, 0.035f, WithAlpha(Cream, 0.35f), 0.27f, 24);
         }
         else if (s.reflected)
         {
-            DrawMesh(ringMesh_, XMMatrixScaling(s.radius * (2.0f + 0.3f * s.reflectedCount), 1.0f, s.radius * (2.0f + 0.3f * s.reflectedCount)) *
-                XMMatrixTranslation(s.pos.x, 0.08f, s.pos.z), WithAlpha(Gold, 0.45f));
+            spriteRenderer_.DrawRing(s.pos, s.radius * (2.0f + 0.35f * s.reflectedCount), 0.045f, WithAlpha(Gold, 0.52f), 0.26f, 28);
         }
     }
     for (const auto& e : enemies_)
     {
-        const VisualRole role = (e.type == EnemyType::Teleport || e.type == EnemyType::Mirror || e.type == EnemyType::Barrier) ? VisualRole::EnemyShooter : (e.type == EnemyType::Mine ? VisualRole::EnemyHeavy : VisualRole::EnemyRunner);
-        const Color baseColor = assetCatalog_.Get(role).fallbackColor;
-        Color c = e.flash > 0.0f ? Cream : Color{
-            (e.color.r + baseColor.r) * 0.5f,
-            (e.color.g + baseColor.g) * 0.5f,
-            (e.color.b + baseColor.b) * 0.5f,
-            e.color.a
-        };
+        Color c = e.flash > 0.0f ? Cream : e.color;
         if (e.barrierT > 0.0f) c = Sky;
-        DrawSphere(e.pos, e.radius, e.radius, c);
+        DrawSprite2D(EnemySpriteId(e.type), e.pos, { e.radius * 2.45f, e.radius * 2.45f }, e.face, c, 0.22f);
         if (e.type == EnemyType::Teleport || e.type == EnemyType::Mirror || e.type == EnemyType::Barrier)
         {
             const Player* target = FindNearestPlayer(e.pos);
             const float face = target ? AngleOf(target->pos - e.pos) : e.face;
-            DrawSphere(e.pos + FromAngle(face) * 0.30f, e.radius + 0.05f, 0.13f, Red);
+            DrawSprite2D(L"2d_shot_enemy", e.pos + FromAngle(face) * (e.radius * 0.68f), { e.radius * 0.55f, e.radius * 0.55f }, face, Red, 0.21f);
         }
     }
     if (boss_.active)
     {
-        const Color bossBase = assetCatalog_.Get(VisualRole::Boss).fallbackColor;
-        Color c = boss_.flash > 0.0f ? Cream : (boss_.bossType == BossType::HiddenBoss ? Grape : (boss_.bossType == BossType::DonutKing ? Sky : (boss_.bossType == BossType::MirrorMacaron ? Gold : bossBase)));
-        DrawSphere(boss_.pos, boss_.radius, boss_.radius, c);
-        DrawMesh(ringMesh_, XMMatrixScaling(boss_.radius * 1.35f, 1.0f, boss_.radius * 1.35f) *
-            XMMatrixTranslation(boss_.pos.x, 0.08f, boss_.pos.z), WithAlpha(Red, 0.45f));
+        Color c = boss_.flash > 0.0f ? Cream : (boss_.bossType == BossType::HiddenBoss ? Grape : (boss_.bossType == BossType::DonutKing ? Sky : (boss_.bossType == BossType::MirrorMacaron ? Gold : Rose)));
+        DrawSprite2D(boss_.bossType == BossType::HiddenBoss ? L"2d_boss_hidden" : L"2d_boss_normal", boss_.pos, { boss_.radius * 2.85f, boss_.radius * 2.85f }, boss_.spin * 0.35f, c, 0.18f);
+        spriteRenderer_.DrawRing(boss_.pos, boss_.radius * 1.42f, 0.10f, WithAlpha(Red, 0.45f), 0.19f, 72);
+        if (boss_.telegraphT > 0.0f && boss_.telegraphLife > 0.0f)
+        {
+            const float t = 1.0f - ClampFloat(boss_.telegraphT / boss_.telegraphLife, 0.0f, 1.0f);
+            const Color telegraph = boss_.telegraphAttack == 0 ? Grape : (boss_.telegraphAttack == 1 ? Red : (boss_.telegraphAttack == 2 ? Gold : Mint));
+            spriteRenderer_.DrawRing(boss_.pos, boss_.radius * (1.75f + t * 1.15f), 0.12f, WithAlpha(telegraph, 0.72f), 0.16f, 96);
+            spriteRenderer_.DrawRing(boss_.pos, boss_.radius * (2.45f + t * 0.65f), 0.05f, WithAlpha(Cream, 0.48f), 0.15f, 96);
+            if (boss_.telegraphAdd || boss_.telegraphMirror || boss_.telegraphField)
+            {
+                spriteRenderer_.DrawRing(boss_.pos, boss_.radius * (3.10f + t * 0.55f), 0.045f, WithAlpha(Sky, 0.42f), 0.15f, 96);
+            }
+        }
     }
 
     for (const auto& s : slashes_)
@@ -678,30 +734,27 @@ void SweetsApp::DrawScene()
             bodyColor = WithAlpha(bodyColor, 0.42f);
             faceColor = WithAlpha(faceColor, 0.45f);
         }
-        DrawSphere(p.pos, p.radius, p.radius, bodyColor);
-        DrawCylinder(p.pos + FromAngle(p.face) * 0.43f, 0.08f, 0.28f, faceColor);
+        DrawSprite2D(CharacterSpriteId(p.character), p.pos, { p.radius * 2.45f, p.radius * 2.45f }, p.face - Pi * 0.5f, bodyColor, 0.14f);
+        DrawSprite2D(L"2d_shot_player", p.pos + FromAngle(p.face) * (p.radius * 0.88f), { p.radius * 0.55f, p.radius * 0.55f }, p.face, faceColor, 0.13f);
         if ((p.focus || screen_ == Screen::HiddenBoss) && !p.downed)
         {
-            DrawSphere(p.pos, 0.50f, p.hitboxRadius, Red);
-            DrawMesh(ringMesh_, XMMatrixScaling(p.grazeRadius, 1.0f, p.grazeRadius) *
-                XMMatrixTranslation(p.pos.x, 0.10f, p.pos.z), WithAlpha(Sky, p.grazeFlash > 0.0f ? 0.70f : 0.30f));
+            spriteRenderer_.DrawCircle(p.pos, p.hitboxRadius, Red, 0.11f, 20);
+            spriteRenderer_.DrawRing(p.pos, p.grazeRadius, 0.045f, WithAlpha(Sky, p.grazeFlash > 0.0f ? 0.70f : 0.30f), 0.12f, 48);
         }
         if (p.shieldT > 0.0f)
         {
-            DrawMesh(ringMesh_, XMMatrixScaling(p.radius * 2.1f, 1.0f, p.radius * 2.1f) *
-                XMMatrixTranslation(p.pos.x, 0.13f, p.pos.z), WithAlpha(Sky, 0.45f));
+            spriteRenderer_.DrawRing(p.pos, p.radius * 2.1f, 0.10f, WithAlpha(Sky, 0.45f), 0.12f, 64);
         }
         if (p.bombT > 0.0f)
         {
             const float t = p.bombT / 1.8f;
-            DrawMesh(ringMesh_, XMMatrixScaling(1.5f + (1.0f - t) * 5.8f, 1.0f, 1.5f + (1.0f - t) * 5.8f) *
-                XMMatrixTranslation(p.pos.x, 0.15f, p.pos.z), WithAlpha(Sky, 0.55f * t));
+            spriteRenderer_.DrawRing(p.pos, 1.5f + (1.0f - t) * 5.8f, 0.16f, WithAlpha(Sky, 0.55f * t), 0.10f, 96);
         }
     }
 
     for (const auto& p : particles_)
     {
-        DrawSphere(p.pos, std::max(0.05f, p.y), 0.055f, WithAlpha(p.color, ClampFloat(p.ttl * 2.0f, 0.0f, 1.0f)));
+        spriteRenderer_.DrawCircle(p.pos, 0.055f + p.y * 0.04f, WithAlpha(p.color, ClampFloat(p.ttl * 2.0f, 0.0f, 1.0f)), 0.09f, 12);
     }
 
 #if defined(_DEBUG)
@@ -710,19 +763,17 @@ void SweetsApp::DrawScene()
         for (const auto& p : players_)
         {
             if (!p.active) continue;
-            DrawMesh(ringMesh_, XMMatrixScaling(p.hitboxRadius, 1.0f, p.hitboxRadius) *
-                XMMatrixTranslation(p.pos.x, 0.17f, p.pos.z), WithAlpha(Red, 0.85f));
-            DrawMesh(ringMesh_, XMMatrixScaling(p.grazeRadius, 1.0f, p.grazeRadius) *
-                XMMatrixTranslation(p.pos.x, 0.16f, p.pos.z), WithAlpha(Sky, 0.55f));
+            spriteRenderer_.DrawRing(p.pos, p.hitboxRadius, 0.03f, WithAlpha(Red, 0.85f), 0.06f, 28);
+            spriteRenderer_.DrawRing(p.pos, p.grazeRadius, 0.04f, WithAlpha(Sky, 0.55f), 0.07f, 48);
         }
         for (const auto& e : enemies_)
         {
             if (e.dead) continue;
-            DrawMesh(ringMesh_, XMMatrixScaling(e.radius, 1.0f, e.radius) *
-                XMMatrixTranslation(e.pos.x, 0.18f, e.pos.z), WithAlpha(Cream, 0.45f));
+            spriteRenderer_.DrawRing(e.pos, e.radius, 0.04f, WithAlpha(Cream, 0.45f), 0.08f, 40);
         }
     }
 #endif
+    spriteRenderer_.End();
 }
 
 void SweetsApp::DrawAdditiveScene()
@@ -733,25 +784,12 @@ void SweetsApp::DrawAdditiveScene()
 
     ID3D11RenderTargetView* rtv = additiveRtv_.Get();
     context_->OMSetRenderTargets(1, &rtv, dsv_.Get());
-    context_->OMSetDepthStencilState(depthState_.Get(), 0);
-    float blendFactor[4]{ 0,0,0,0 };
-    context_->OMSetBlendState(additiveBlend_.Get(), blendFactor, 0xffffffff);
-    context_->IASetInputLayout(inputLayout_.Get());
-    context_->IASetPrimitiveTopology(D3D11_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    context_->VSSetShader(vs_.Get(), nullptr, 0);
-    context_->PSSetShader(ps_.Get(), nullptr, 0);
-    ID3D11Buffer* frameCb = frameCB_.Get();
-    ID3D11Buffer* objectCb = objectCB_.Get();
-    context_->VSSetConstantBuffers(0, 1, &frameCb);
-    context_->VSSetConstantBuffers(1, 1, &objectCb);
-    context_->PSSetConstantBuffers(0, 1, &frameCb);
-    context_->PSSetConstantBuffers(1, 1, &objectCb);
-    context_->RSSetState(rasterState_.Get());
+    spriteRenderer_.Begin(view_ * proj_, true);
 
     for (const auto& s : shots_)
     {
         const float glow = s.enemy ? 2.1f : (s.reflected ? 2.8f : 1.7f);
-        DrawSphere(s.pos, s.enemy ? 0.25f : 0.30f, s.radius * glow, WithAlpha(s.color, s.enemy ? 0.42f : 0.55f));
+        spriteRenderer_.DrawCircle(s.pos, s.radius * glow, WithAlpha(s.color, s.enemy ? 0.42f : 0.55f), 0.06f, 24);
     }
     for (const auto& s : slashes_)
     {
@@ -763,11 +801,8 @@ void SweetsApp::DrawAdditiveScene()
         const float progress = ClampFloat(1.0f - pulse.ttl / life, 0.0f, 1.0f);
         const float fade = ClampFloat(pulse.ttl / life, 0.0f, 1.0f);
         const float radius = pulse.startRadius + (pulse.endRadius - pulse.startRadius) * progress;
-        const float lift = 0.02f * std::sin(progress * 3.14159265f);
-        DrawMesh(ringMesh_, XMMatrixScaling(radius, 1.0f, radius) *
-            XMMatrixTranslation(pulse.pos.x, pulse.y + lift, pulse.pos.z), WithAlpha(pulse.color, 0.88f * fade));
-        DrawMesh(ringMesh_, XMMatrixScaling(radius * 0.62f, 1.0f, radius * 0.62f) *
-            XMMatrixTranslation(pulse.pos.x, pulse.y + 0.03f + lift, pulse.pos.z), WithAlpha(Cream, 0.34f * fade));
+        spriteRenderer_.DrawRing(pulse.pos, radius, 0.15f + radius * 0.025f, WithAlpha(pulse.color, 0.88f * fade), 0.05f, 96);
+        spriteRenderer_.DrawRing(pulse.pos, radius * 0.62f, 0.09f, WithAlpha(Cream, 0.34f * fade), 0.04f, 72);
     }
     for (const auto& p : players_)
     {
@@ -775,19 +810,18 @@ void SweetsApp::DrawAdditiveScene()
         if (p.bombT > 0.0f)
         {
             const float t = p.bombT / 1.8f;
-            DrawMesh(ringMesh_, XMMatrixScaling(1.5f + (1.0f - t) * 5.8f, 1.0f, 1.5f + (1.0f - t) * 5.8f) *
-                XMMatrixTranslation(p.pos.x, 0.20f, p.pos.z), WithAlpha(Sky, 0.9f * t));
+            spriteRenderer_.DrawRing(p.pos, 1.5f + (1.0f - t) * 5.8f, 0.24f, WithAlpha(Sky, 0.9f * t), 0.04f, 120);
         }
         if (p.grazeFlash > 0.0f)
         {
-            DrawMesh(ringMesh_, XMMatrixScaling(p.grazeRadius, 1.0f, p.grazeRadius) *
-                XMMatrixTranslation(p.pos.x, 0.18f, p.pos.z), WithAlpha(Sky, 0.75f));
+            spriteRenderer_.DrawRing(p.pos, p.grazeRadius, 0.08f, WithAlpha(Sky, 0.75f), 0.04f, 64);
         }
     }
     for (const auto& p : particles_)
     {
-        DrawSphere(p.pos, std::max(0.05f, p.y), 0.10f, WithAlpha(p.color, ClampFloat(p.ttl * 2.5f, 0.0f, 1.0f)));
+        spriteRenderer_.DrawCircle(p.pos, 0.10f + p.y * 0.04f, WithAlpha(p.color, ClampFloat(p.ttl * 2.5f, 0.0f, 1.0f)), 0.04f, 16);
     }
+    spriteRenderer_.End();
 }
 
 void SweetsApp::CompositeScene()
@@ -1505,14 +1539,17 @@ void SweetsApp::DrawDebugHud()
 
     const int enemyBullets = static_cast<int>(std::count_if(shots_.begin(), shots_.end(), [](const Shot& s) { return s.enemy && !s.dead; }));
     const int playerShots = static_cast<int>(std::count_if(shots_.begin(), shots_.end(), [](const Shot& s) { return !s.enemy && !s.dead; }));
+    const EncounterTuning& encounter = CurrentEncounterTuning();
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     std::wostringstream ss;
     ss << L"デバッグパネル\n"
         << L"FPS " << static_cast<int>(debug_.fps) << L"  " << static_cast<int>(debug_.frameMs * 10.0f) / 10.0f << L" ms\n"
         << L"画面 " << static_cast<int>(screen_) << L"  モード " << static_cast<int>(gameMode_) << L"\n"
         << L"難易度 " << CurrentDifficulty().name << L"\n"
+        << L"戦闘目的 " << encounter.name << L"  特殊 " << EliteEnemyCount() << L"  ボス雑魚 " << BossAddCount() << L"\n"
         << L"ウェーブ " << wave_ << L"  敵 " << enemies_.size() << L"\n"
         << L"弾 自機/敵 " << playerShots << L"/" << enemyBullets << L"\n"
+        << L"描画 2D  スプライト " << spriteLibrary_.Count() << L"\n"
         << L"BGM " << static_cast<int>(audio_.CurrentTrack()) << L"  音量 " << static_cast<int>(audio_.Volume() * 100.0f) << L"%\n"
         << L"TAA " << (debug_.taa ? L"ON" : L"OFF") << L"  加算RT " << (debug_.additiveView ? L"表示" : L"合成") << L"\n"
         << L"F1で閉じる";
@@ -1522,7 +1559,7 @@ void SweetsApp::DrawDebugHud()
     const std::wstring text = ss.str();
     textBrush_->SetColor(D2D1::ColorF(0.82f, 1.0f, 0.90f, 0.96f));
     d2dContext_->DrawTextW(text.c_str(), static_cast<UINT32>(text.size()), smallFormat_.Get(),
-        D2D1::RectF(panelLeft + 18.0f, 18.0f, panelRight - 16.0f, 214.0f), textBrush_.Get());
+        D2D1::RectF(panelLeft + 18.0f, 18.0f, panelRight - 16.0f, 236.0f), textBrush_.Get());
 
     const std::array<const wchar_t*, 11> labels{
         L"TAA",
@@ -1541,7 +1578,7 @@ void SweetsApp::DrawDebugHud()
     const float buttonW = 148.0f;
     const float buttonH = 30.0f;
     const float gap = 10.0f;
-    const float top = 228.0f;
+    const float top = 248.0f;
     for (int i = 0; i < static_cast<int>(labels.size()); ++i)
     {
         const int col = i % 2;
@@ -1923,6 +1960,22 @@ void SweetsApp::DrawCoopSlotSelection()
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 
+void SweetsApp::DrawSprite2D(const std::wstring& spriteId, V2 pos, V2 size, float rotation, Color tint, float depth)
+{
+    const SpriteAsset* sprite = spriteLibrary_.Find(spriteId);
+    const TextureAsset* texture = sprite ? textureLibrary_.Find(sprite->textureId) : nullptr;
+    ID3D11ShaderResourceView* srv = texture ? texture->shaderResource.Get() : nullptr;
+    if (srv)
+    {
+        spriteRenderer_.DrawQuad(srv, pos, size, rotation, tint, depth);
+        return;
+    }
+
+    const float radius = std::max(size.x, size.z) * 0.5f;
+    spriteRenderer_.DrawCircle(pos, radius, tint, depth, 28);
+    spriteRenderer_.DrawRing(pos, radius, std::max(0.025f, radius * 0.12f), WithAlpha(Cream, tint.a * 0.35f), depth - 0.01f, 28);
+}
+
 void SweetsApp::DrawMesh(const Mesh& mesh, const XMMATRIX& world, Color tint)
 {
     ObjectCB object{};
@@ -2083,11 +2136,9 @@ void SweetsApp::DrawPickupShape(const Pickup& p)
 void SweetsApp::DrawSector(const Slash& s)
 {
     const float alpha = ClampFloat(s.ttl / s.life, 0.0f, 1.0f) * 0.60f;
-    DrawMesh(wedgeMesh_,
-        XMMatrixScaling(s.range, 1.0f, s.range) *
-        XMMatrixRotationY(-s.angle) *
-        XMMatrixTranslation(s.pos.x, 0.11f, s.pos.z),
-        WithAlpha(s.color, alpha));
+    const V2 center = s.pos + FromAngle(s.angle) * (s.range * 0.45f);
+    DrawSprite2D(L"2d_slash", center, { s.range * 1.65f, s.range * 0.92f }, s.angle, WithAlpha(s.color, alpha), 0.08f);
+    spriteRenderer_.DrawArc(s.pos, s.range * 0.60f, s.range * 0.34f, s.angle, s.arc, WithAlpha(Cream, alpha * 0.58f), 0.07f, 32);
 }
 
 void SweetsApp::DrawUltimatePreview(const Player& p, int ownerIndex)
@@ -2097,10 +2148,9 @@ void SweetsApp::DrawUltimatePreview(const Player& p, int ownerIndex)
         return;
     }
 
-    auto drawRing = [&](V2 center, float radius, Color color, float alpha, float y)
+    auto drawRing = [&](V2 center, float radius, Color color, float alpha)
     {
-        DrawMesh(ringMesh_, XMMatrixScaling(radius, 1.0f, radius) *
-            XMMatrixTranslation(center.x, y, center.z), WithAlpha(color, alpha));
+        spriteRenderer_.DrawRing(center, radius, 0.10f + radius * 0.015f, WithAlpha(color, alpha), 0.09f, 96);
     };
 
     const Color accent = Loadouts[static_cast<int>(p.character)].color;
@@ -2113,7 +2163,7 @@ void SweetsApp::DrawUltimatePreview(const Player& p, int ownerIndex)
     }
     if (comboReady)
     {
-        drawRing(p.pos, 2.4f, Gold, 0.35f, 0.19f);
+        drawRing(p.pos, 2.4f, Gold, 0.35f);
     }
 
     switch (p.weapon)
@@ -2121,49 +2171,39 @@ void SweetsApp::DrawUltimatePreview(const Player& p, int ownerIndex)
     case Weapon::Strawberry:
     {
         const V2 target = ownerIndex == 0 ? ScreenToWorld(mouseX_, mouseY_) : FindNearestEnemyOrBoss(p.pos);
-        drawRing(target, 3.4f, Berry, 0.62f, 0.18f);
-        drawRing(target, 1.7f, Cream, 0.32f, 0.19f);
-        DrawSphere(target, 0.18f, 0.11f, WithAlpha(Berry, 0.80f));
+        drawRing(target, 3.4f, Berry, 0.62f);
+        drawRing(target, 1.7f, Cream, 0.32f);
+        spriteRenderer_.DrawCircle(target, 0.11f, WithAlpha(Berry, 0.80f), 0.08f, 18);
         break;
     }
     case Weapon::Chocolate:
-        drawRing({ 0.0f, 0.0f }, ArenaRadius * 0.96f, Choco, 0.52f, 0.18f);
-        drawRing(p.pos, 3.2f, accent, 0.35f, 0.19f);
+        drawRing({ 0.0f, 0.0f }, ArenaRadius * 0.96f, Choco, 0.52f);
+        drawRing(p.pos, 3.2f, accent, 0.35f);
         break;
     case Weapon::Cheese:
-        drawRing(p.pos, 2.1f, Gold, 0.58f, 0.18f);
-        drawRing(p.pos, 3.0f, Cream, 0.28f, 0.19f);
+        drawRing(p.pos, 2.1f, Gold, 0.58f);
+        drawRing(p.pos, 3.0f, Cream, 0.28f);
         for (int i = 0; i < 8; ++i)
         {
             const float a = TwoPi * i / 8.0f;
-            DrawSphere(p.pos + FromAngle(a) * 2.1f, 0.24f, 0.08f, WithAlpha(Gold, 0.70f));
+            spriteRenderer_.DrawCircle(p.pos + FromAngle(a) * 2.1f, 0.08f, WithAlpha(Gold, 0.70f), 0.08f, 12);
         }
         break;
     case Weapon::Roll:
-        drawRing({ 0.0f, 0.0f }, ArenaRadius * 0.96f, Cream, 0.48f, 0.18f);
-        drawRing(p.pos, 4.4f, accent, 0.34f, 0.19f);
+        drawRing({ 0.0f, 0.0f }, ArenaRadius * 0.96f, Cream, 0.48f);
+        drawRing(p.pos, 4.4f, accent, 0.34f);
         break;
     default:
-        drawRing(p.pos, 3.2f, accent, 0.45f, 0.18f);
+        drawRing(p.pos, 3.2f, accent, 0.45f);
         break;
     }
 }
 
 V2 SweetsApp::ScreenToWorld(float sx, float sy) const
 {
-    const float px = (2.0f * sx / std::max(1u, width_)) - 1.0f;
-    const float py = 1.0f - (2.0f * sy / std::max(1u, height_));
-    XMMATRIX inv = XMMatrixInverse(nullptr, view_ * proj_);
-    XMVECTOR nearP = XMVector3TransformCoord(XMVectorSet(px, py, 0.0f, 1.0f), inv);
-    XMVECTOR farP = XMVector3TransformCoord(XMVectorSet(px, py, 1.0f, 1.0f), inv);
-    XMVECTOR dir = XMVector3Normalize(XMVectorSubtract(farP, nearP));
-
-    XMFLOAT3 n{};
-    XMFLOAT3 d{};
-    XMStoreFloat3(&n, nearP);
-    XMStoreFloat3(&d, dir);
-    const float t = std::fabs(d.y) > 0.0001f ? -n.y / d.y : 0.0f;
-    V2 out{ n.x + d.x * t, n.z + d.z * t };
+    const float nx = (2.0f * sx / std::max(1u, width_)) - 1.0f;
+    const float ny = 1.0f - (2.0f * sy / std::max(1u, height_));
+    V2 out{ nx * GameplayHalfWidth(width_, height_), ny * GameplayHalfHeight() };
     ClampInside(out, 0.0f);
     return out;
 }
