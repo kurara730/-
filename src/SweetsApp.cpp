@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <sstream>
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
@@ -83,17 +84,16 @@ bool SweetsApp::Initialize(HINSTANCE instance, int showCmd)
     CreateShadersAndStates();
     CreateRenderTargets();
     CreateMeshes();
-    effekseer_.Initialize(device_.Get(), context_.Get());
-    LoadAssets();
-    titleVideo_.Open(L"assets/video/title.mp4", true);
-    LoadProgress();
-    ApplyAudioVolume();
-    ResetGame();
-    screen_ = Screen::Title;
+    screen_ = Screen::BootLoading;
+    loadPhase_ = LoadPhase::Boot;
+    bootLoadElapsed_ = 0.0f;
+    loadPhaseElapsed_ = 0.0f;
+    lastLoadStep_ = L"Boot";
 
     ShowWindow(hwnd_, showCmd);
     UpdateWindow(hwnd_);
     lastTick_ = std::chrono::steady_clock::now();
+    Render();
     return true;
 }
 
@@ -136,6 +136,7 @@ int SweetsApp::Run()
 #else
         Update(dt);
 #endif
+        audio_.Update(dt);
         effekseer_.Update(dt);
         Render();
     }

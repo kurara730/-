@@ -24,12 +24,14 @@ public:
     bool Play(MusicTrack track, const std::wstring& relativePath, bool loop);
     bool PlayLoop(MusicTrack track, const std::wstring& relativePath);
     bool PlayOnce(MusicTrack track, const std::wstring& relativePath);
+    void Update(float dt);
     void Stop();
     void SetVolume(float volume);
     float Volume() const;
 
     MusicTrack CurrentTrack() const;
     float CurrentDurationSeconds() const;
+    std::wstring StreamStatus() const;
     const std::wstring& LastError() const;
 
 private:

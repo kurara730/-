@@ -12,23 +12,25 @@
 #include <array>
 #include <chrono>
 #include <cstring>
+#include <deque>
 #include <filesystem>
 #include <sstream>
-#include <unordered_map>
 #include <vector>
 
 using Microsoft::WRL::ComPtr;
 
 namespace
 {
-struct DecodedAudio
-{
-    std::vector<BYTE> format;
-    std::vector<BYTE> pcm;
-    float durationSeconds = 0.0f;
-};
-
 constexpr DWORD FirstAudioStream = static_cast<DWORD>(MF_SOURCE_READER_FIRST_AUDIO_STREAM);
+constexpr size_t TargetPacketBytes = 64u * 1024u;
+constexpr size_t MaxQueuedPackets = 4u;
+constexpr LONGLONG MediaFoundationTicksPerSecond = 10000000;
+
+struct StreamPacket
+{
+    std::vector<BYTE> bytes;
+    bool endOfStream = false;
+};
 
 std::wstring HrText(const wchar_t* prefix, HRESULT hr)
 {
@@ -115,22 +117,33 @@ struct AudioSystem::Impl
         return {};
     }
 
-    bool DecodeFile(const std::wstring& path, DecodedAudio& out)
+    bool OpenReader(const std::wstring& path)
     {
-        auto found = cache.find(path);
-        if (found != cache.end())
-        {
-            out = found->second;
-            return true;
-        }
+        reader.Reset();
+        activeFormat.clear();
+        activeDuration = 0.0f;
+        readerEnded = false;
 
-        ComPtr<IMFSourceReader> reader;
         HRESULT hr = MFCreateSourceReaderFromURL(path.c_str(), nullptr, &reader);
         if (FAILED(hr))
         {
             SetError(HrText(L"MFCreateSourceReaderFromURL", hr) + L": " + path);
             return false;
         }
+
+        reader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE);
+        reader->SetStreamSelection(FirstAudioStream, TRUE);
+
+        PROPVARIANT duration{};
+        PropVariantInit(&duration);
+        if (SUCCEEDED(reader->GetPresentationAttribute(static_cast<DWORD>(MF_SOURCE_READER_MEDIASOURCE), MF_PD_DURATION, &duration)))
+        {
+            if (duration.vt == VT_UI8 || duration.vt == VT_I8)
+            {
+                activeDuration = static_cast<float>(duration.uhVal.QuadPart) / static_cast<float>(MediaFoundationTicksPerSecond);
+            }
+        }
+        PropVariantClear(&duration);
 
         ComPtr<IMFMediaType> pcmType;
         hr = MFCreateMediaType(&pcmType);
@@ -166,29 +179,74 @@ struct AudioSystem::Impl
             return false;
         }
 
-        out.format.resize(waveSize);
-        std::memcpy(out.format.data(), wave, waveSize);
+        activeFormat.resize(waveSize);
+        std::memcpy(activeFormat.data(), wave, waveSize);
         CoTaskMemFree(wave);
+        return true;
+    }
 
-        for (;;)
+    bool Rewind()
+    {
+        if (!reader) return false;
+        PROPVARIANT pos{};
+        PropVariantInit(&pos);
+        pos.vt = VT_I8;
+        pos.hVal.QuadPart = 0;
+        const HRESULT hr = reader->SetCurrentPosition(GUID_NULL, pos);
+        PropVariantClear(&pos);
+        if (FAILED(hr))
+        {
+            SetError(HrText(L"SetCurrentPosition", hr));
+            return false;
+        }
+        readerEnded = false;
+        return true;
+    }
+
+    bool ReadPacket(StreamPacket& packet)
+    {
+        if (!reader || readerEnded) return false;
+
+        packet.bytes.clear();
+        packet.endOfStream = false;
+
+        for (int guard = 0; packet.bytes.size() < TargetPacketBytes && guard < 128; ++guard)
         {
             DWORD flags = 0;
             ComPtr<IMFSample> sample;
-            hr = reader->ReadSample(FirstAudioStream, 0, nullptr, &flags, nullptr, &sample);
+            HRESULT hr = reader->ReadSample(FirstAudioStream, 0, nullptr, &flags, nullptr, &sample);
             if (FAILED(hr))
             {
                 SetError(HrText(L"ReadSample", hr));
-                return false;
+                readerEnded = true;
+                packet.endOfStream = true;
+                return !packet.bytes.empty();
             }
-            if (flags & MF_SOURCE_READERF_ENDOFSTREAM) break;
-            if (!sample) continue;
+
+            if (flags & MF_SOURCE_READERF_ENDOFSTREAM)
+            {
+                if (currentLoop && Rewind())
+                {
+                    continue;
+                }
+                readerEnded = true;
+                packet.endOfStream = true;
+                break;
+            }
+
+            if (!sample)
+            {
+                continue;
+            }
 
             ComPtr<IMFMediaBuffer> buffer;
             hr = sample->ConvertToContiguousBuffer(&buffer);
             if (FAILED(hr))
             {
                 SetError(HrText(L"ConvertToContiguousBuffer", hr));
-                return false;
+                readerEnded = true;
+                packet.endOfStream = true;
+                return !packet.bytes.empty();
             }
 
             BYTE* data = nullptr;
@@ -198,28 +256,74 @@ struct AudioSystem::Impl
             if (FAILED(hr))
             {
                 SetError(HrText(L"IMFMediaBuffer::Lock", hr));
-                return false;
+                readerEnded = true;
+                packet.endOfStream = true;
+                return !packet.bytes.empty();
             }
-            const size_t oldSize = out.pcm.size();
-            out.pcm.resize(oldSize + currentLen);
-            std::memcpy(out.pcm.data() + oldSize, data, currentLen);
+            const size_t oldSize = packet.bytes.size();
+            packet.bytes.resize(oldSize + currentLen);
+            std::memcpy(packet.bytes.data() + oldSize, data, currentLen);
             buffer->Unlock();
         }
 
-        if (out.format.empty() || out.pcm.empty())
+        return !packet.bytes.empty();
+    }
+
+    void ReclaimConsumedPackets()
+    {
+        if (!sourceVoice)
         {
-            SetError(L"Decoded audio was empty: " + path);
+            queuedPackets.clear();
+            return;
+        }
+
+        XAUDIO2_VOICE_STATE state{};
+        sourceVoice->GetState(&state);
+        while (queuedPackets.size() > state.BuffersQueued)
+        {
+            queuedPackets.pop_front();
+        }
+    }
+
+    bool SubmitPacket(StreamPacket&& packet)
+    {
+        if (!sourceVoice || packet.bytes.empty()) return false;
+
+        queuedPackets.push_back(std::move(packet));
+        const StreamPacket& stored = queuedPackets.back();
+
+        XAUDIO2_BUFFER buffer{};
+        buffer.Flags = stored.endOfStream ? XAUDIO2_END_OF_STREAM : 0;
+        buffer.AudioBytes = static_cast<UINT32>(stored.bytes.size());
+        buffer.pAudioData = stored.bytes.data();
+
+        const HRESULT hr = sourceVoice->SubmitSourceBuffer(&buffer);
+        if (FAILED(hr))
+        {
+            queuedPackets.pop_back();
+            SetError(HrText(L"SubmitSourceBuffer", hr));
             return false;
         }
-
-        const auto* wf = reinterpret_cast<const WAVEFORMATEX*>(out.format.data());
-        if (wf->nAvgBytesPerSec > 0)
-        {
-            out.durationSeconds = static_cast<float>(out.pcm.size()) / static_cast<float>(wf->nAvgBytesPerSec);
-        }
-
-        cache[path] = out;
         return true;
+    }
+
+    void QueuePackets()
+    {
+        if (!sourceVoice || !reader) return;
+        ReclaimConsumedPackets();
+
+        while (queuedPackets.size() < MaxQueuedPackets && !readerEnded)
+        {
+            StreamPacket packet{};
+            if (!ReadPacket(packet))
+            {
+                break;
+            }
+            if (!SubmitPacket(std::move(packet)))
+            {
+                break;
+            }
+        }
     }
 
     bool Play(MusicTrack track, const std::wstring& relativePath, bool loop)
@@ -253,26 +357,22 @@ struct AudioSystem::Impl
             return false;
         }
 
-        DecodedAudio decoded;
-        if (!DecodeFile(path, decoded))
+        currentTrack = track;
+        currentPath = relativePath;
+        currentResolvedPath = path;
+        currentLoop = loop;
+
+        if (!OpenReader(path))
         {
-            currentTrack = track;
-            currentPath = relativePath;
-            currentLoop = loop;
             return false;
         }
-
-        activeAudio = std::move(decoded.pcm);
-        activeFormat = std::move(decoded.format);
-        activeDuration = decoded.durationSeconds;
 
         auto* wf = reinterpret_cast<WAVEFORMATEX*>(activeFormat.data());
         HRESULT hr = engine->CreateSourceVoice(&sourceVoice, wf);
         if (FAILED(hr))
         {
             SetError(HrText(L"CreateSourceVoice", hr));
-            activeAudio.clear();
-            activeFormat.clear();
+            Stop();
             currentTrack = track;
             currentPath = relativePath;
             currentLoop = loop;
@@ -280,36 +380,36 @@ struct AudioSystem::Impl
         }
         sourceVoice->SetVolume(volume);
 
-        XAUDIO2_BUFFER buffer{};
-        buffer.Flags = XAUDIO2_END_OF_STREAM;
-        buffer.AudioBytes = static_cast<UINT32>(activeAudio.size());
-        buffer.pAudioData = activeAudio.data();
-        if (loop)
+        QueuePackets();
+        if (queuedPackets.empty())
         {
-            buffer.LoopCount = XAUDIO2_LOOP_INFINITE;
-        }
-
-        hr = sourceVoice->SubmitSourceBuffer(&buffer);
-        if (FAILED(hr))
-        {
-            SetError(HrText(L"SubmitSourceBuffer", hr));
+            SetError(L"Audio stream produced no data: " + path);
             Stop();
+            currentTrack = track;
+            currentPath = relativePath;
+            currentLoop = loop;
             return false;
         }
+
         hr = sourceVoice->Start(0);
         if (FAILED(hr))
         {
             SetError(HrText(L"IXAudio2SourceVoice::Start", hr));
             Stop();
+            currentTrack = track;
+            currentPath = relativePath;
+            currentLoop = loop;
             return false;
         }
 
-        currentTrack = track;
-        currentPath = relativePath;
-        currentLoop = loop;
         startedAt = std::chrono::steady_clock::now();
         lastError.clear();
         return true;
+    }
+
+    void Update(float)
+    {
+        QueuePackets();
     }
 
     void SetVolume(float value)
@@ -330,12 +430,25 @@ struct AudioSystem::Impl
             sourceVoice->DestroyVoice();
             sourceVoice = nullptr;
         }
-        activeAudio.clear();
+        reader.Reset();
+        queuedPackets.clear();
         activeFormat.clear();
         activeDuration = 0.0f;
         currentTrack = MusicTrack::None;
         currentPath.clear();
+        currentResolvedPath.clear();
         currentLoop = false;
+        readerEnded = false;
+    }
+
+    std::wstring StreamStatus() const
+    {
+        std::wostringstream ss;
+        ss << (ready ? L"stream" : L"not-ready")
+            << L" q=" << queuedPackets.size()
+            << (currentLoop ? L" loop" : L" once");
+        if (readerEnded) ss << L" end";
+        return ss.str();
     }
 
     void SetError(const std::wstring& text)
@@ -349,14 +462,16 @@ struct AudioSystem::Impl
     bool initialized = false;
     bool ready = false;
     bool mfStarted = false;
+    bool readerEnded = false;
     ComPtr<IXAudio2> engine;
     IXAudio2MasteringVoice* masteringVoice = nullptr;
     IXAudio2SourceVoice* sourceVoice = nullptr;
-    std::unordered_map<std::wstring, DecodedAudio> cache;
-    std::vector<BYTE> activeAudio;
+    ComPtr<IMFSourceReader> reader;
+    std::deque<StreamPacket> queuedPackets;
     std::vector<BYTE> activeFormat;
     MusicTrack currentTrack = MusicTrack::None;
     std::wstring currentPath;
+    std::wstring currentResolvedPath;
     bool currentLoop = false;
     float activeDuration = 0.0f;
     float volume = 1.0f;
@@ -386,6 +501,11 @@ bool AudioSystem::PlayOnce(MusicTrack track, const std::wstring& relativePath)
     return impl_->Play(track, relativePath, false);
 }
 
+void AudioSystem::Update(float dt)
+{
+    impl_->Update(dt);
+}
+
 void AudioSystem::Stop()
 {
     impl_->Stop();
@@ -409,6 +529,11 @@ MusicTrack AudioSystem::CurrentTrack() const
 float AudioSystem::CurrentDurationSeconds() const
 {
     return impl_->activeDuration;
+}
+
+std::wstring AudioSystem::StreamStatus() const
+{
+    return impl_->StreamStatus();
 }
 
 const std::wstring& AudioSystem::LastError() const

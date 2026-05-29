@@ -52,6 +52,18 @@ void SweetsApp::ResetGame()
 
 void SweetsApp::StartGameWithDifficulty(bool hiddenBossPractice)
 {
+    if (!gameplayAssetsLoaded_ || !effectAssetsLoaded_)
+    {
+        pendingStartHiddenBossPractice_ = hiddenBossPractice;
+        gameplayLoadStep_ = 0;
+        loadPhase_ = LoadPhase::GameplayAssets;
+        loadPhaseElapsed_ = 0.0f;
+        lastLoadStep_ = L"Preparing gameplay assets";
+        screen_ = Screen::GameplayLoading;
+        return;
+    }
+
+    EnsureGameplayAssetsReady();
     gameMode_ = hiddenBossPractice ? GameMode::HiddenBossPractice : pendingGameMode_;
     hiddenBossPractice_ = gameMode_ == GameMode::HiddenBossPractice;
     if (!hiddenBossPractice_)
@@ -76,6 +88,7 @@ void SweetsApp::StartGameWithDifficulty(bool hiddenBossPractice)
 
 void SweetsApp::StartHiddenBoss()
 {
+    EnsureGameplayAssetsReady();
     PrepareHiddenBossResources();
     enemies_.clear();
     shots_.clear();
@@ -214,7 +227,15 @@ void SweetsApp::SpawnPickup()
 
 void SweetsApp::Update(float dt)
 {
-    if (screen_ == Screen::Title)
+    if (screen_ == Screen::BootLoading)
+    {
+        UpdateBootLoading(dt);
+    }
+    else if (screen_ == Screen::GameplayLoading)
+    {
+        UpdateGameplayLoading(dt);
+    }
+    else if (screen_ == Screen::Title)
     {
         UpdateTitle(dt);
     }
@@ -242,9 +263,108 @@ void SweetsApp::Update(float dt)
     UpdateAudioForScreen();
 }
 
+void SweetsApp::UpdateBootLoading(float dt)
+{
+    bootLoadElapsed_ += dt;
+    loadPhaseElapsed_ += dt;
+
+    switch (loadPhase_)
+    {
+    case LoadPhase::Boot:
+        AdvanceLoadPhase(LoadPhase::Renderer, L"Renderer initialized");
+        break;
+    case LoadPhase::Renderer:
+        LoadProgress();
+        ApplyAudioVolume();
+        AdvanceLoadPhase(LoadPhase::TitleAssets, L"Save data and settings loaded");
+        break;
+    case LoadPhase::TitleAssets:
+        LoadTitleAssets();
+        AdvanceLoadPhase(LoadPhase::Audio, L"Title assets loaded");
+        break;
+    case LoadPhase::Audio:
+        ApplyAudioVolume();
+        AdvanceLoadPhase(LoadPhase::Ready, L"Audio streaming ready");
+        break;
+    case LoadPhase::Ready:
+        AdvanceLoadPhase(LoadPhase::Done, L"Ready");
+        titleVideoAttempted_ = false;
+        titleVideoOpenDelay_ = 0.0f;
+        screen_ = Screen::Title;
+        break;
+    case LoadPhase::Done:
+    case LoadPhase::Count:
+    default:
+        screen_ = Screen::Title;
+        break;
+    }
+}
+
+void SweetsApp::AdvanceLoadPhase(LoadPhase nextPhase, std::wstring step)
+{
+    const size_t index = static_cast<size_t>(loadPhase_);
+    if (index < loadPhaseTimes_.size())
+    {
+        loadPhaseTimes_[index] += loadPhaseElapsed_;
+    }
+
+#if defined(_DEBUG)
+    std::wostringstream ss;
+    ss << L"[SweetsActionDX11 Load] " << LoadPhaseName(loadPhase_)
+        << L" " << loadPhaseElapsed_ << L"s: " << step << L"\n";
+    OutputDebugStringW(ss.str().c_str());
+#endif
+
+    loadPhase_ = nextPhase;
+    loadPhaseElapsed_ = 0.0f;
+    lastLoadStep_ = std::move(step);
+}
+
+void SweetsApp::UpdateGameplayLoading(float dt)
+{
+    loadPhaseElapsed_ += dt;
+
+    if (gameplayLoadStep_ == 0)
+    {
+        LoadGameplayAssets();
+        AdvanceLoadPhase(LoadPhase::Effects, L"Gameplay assets loaded");
+        gameplayLoadStep_ = 1;
+        return;
+    }
+    if (gameplayLoadStep_ == 1)
+    {
+        LoadEffectAssets();
+        AdvanceLoadPhase(LoadPhase::Ready, L"Effect assets loaded");
+        gameplayLoadStep_ = 2;
+        return;
+    }
+
+    StartGameWithDifficulty(pendingStartHiddenBossPractice_);
+}
+
 void SweetsApp::UpdateTitle(float dt)
 {
+    OpenTitleVideoIfReady(dt);
     titleVideo_.Update(dt);
+}
+
+void SweetsApp::OpenTitleVideoIfReady(float dt)
+{
+    if (!titleAssetsLoaded_ || titleVideoAttempted_)
+    {
+        return;
+    }
+    titleVideoOpenDelay_ += dt;
+    if (titleVideoOpenDelay_ < 0.35f)
+    {
+        return;
+    }
+
+    titleVideoAttempted_ = true;
+    if (!titleVideo_.Open(L"assets/video/title.mp4", true))
+    {
+        lastLoadWarning_ = titleVideo_.LastError();
+    }
 }
 
 void SweetsApp::UpdateEventVideo(float dt)

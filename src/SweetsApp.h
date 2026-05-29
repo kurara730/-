@@ -42,6 +42,10 @@ private:
     void CreateOffscreenTarget(ComPtr<ID3D11Texture2D>& texture, ComPtr<ID3D11RenderTargetView>& rtv, ComPtr<ID3D11ShaderResourceView>& srv, DXGI_FORMAT format);
     void CreateMeshes();
     void LoadAssets();
+    void LoadTitleAssets();
+    void LoadGameplayAssets();
+    void LoadEffectAssets();
+    void EnsureGameplayAssetsReady();
     Mesh CreateMesh(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices);
     void Resize(UINT w, UINT h);
 
@@ -74,7 +78,11 @@ private:
     void GrantBossSkill(Player& p);
 
     void Update(float dt);
+    void UpdateBootLoading(float dt);
+    void UpdateGameplayLoading(float dt);
     void UpdateTitle(float dt);
+    void OpenTitleVideoIfReady(float dt);
+    void AdvanceLoadPhase(LoadPhase nextPhase, std::wstring step);
     void UpdateDebugTiming(float dt);
     void UpdateClear(float dt);
     void UpdateHiddenBossIntro(float dt);
@@ -118,6 +126,7 @@ private:
     void CompositeScene();
     void DrawHud();
     void DrawDebugHud();
+    void DrawBootLoading();
     void DrawScreenFlashOverlay();
     void DrawCharacterSelect();
     void DrawPauseMenu();
@@ -235,7 +244,7 @@ private:
     float mouseX_ = 640.0f;
     float mouseY_ = 400.0f;
 
-    Screen screen_ = Screen::Title;
+    Screen screen_ = Screen::BootLoading;
     std::array<Player, MaxPlayers> players_{};
     Player& player_ = players_[0];
     Boss boss_;
@@ -272,9 +281,16 @@ private:
     GameMode pendingGameMode_ = GameMode::Story;
     GameOverChoice gameOverChoice_ = GameOverChoice::Retry;
     DebugState debug_;
+    LoadPhase loadPhase_ = LoadPhase::Boot;
     bool hiddenBossUnlocked_ = false;
     bool hiddenBossPractice_ = false;
     bool pendingHiddenBoss_ = false;
+    bool titleAssetsLoaded_ = false;
+    bool gameplayAssetsLoaded_ = false;
+    bool effectAssetsLoaded_ = false;
+    bool titleVideoAttempted_ = false;
+    bool pendingStartHiddenBossPractice_ = false;
+    int gameplayLoadStep_ = 0;
     bool eventVideoSkippable_ = true;
     bool bossWave_ = false;
     bool waveStarted_ = false;
@@ -292,6 +308,10 @@ private:
     int hiddenPatternStep_ = 0;
     int hiddenBossPhase_ = -1;
     float messageT_ = 0.0f;
+    float bootLoadElapsed_ = 0.0f;
+    float loadPhaseElapsed_ = 0.0f;
+    float titleVideoOpenDelay_ = 0.0f;
+    std::array<float, static_cast<size_t>(LoadPhase::Count)> loadPhaseTimes_{};
     float screenFlashT_ = 0.0f;
     float screenFlashLife_ = 0.01f;
     Color screenFlashColor_ = Cream;
@@ -303,6 +323,8 @@ private:
     uint64_t eventVideoSerial_ = 0;
     Screen eventVideoNextScreen_ = Screen::Title;
     std::wstring message_;
+    std::wstring lastLoadStep_ = L"Boot";
+    std::wstring lastLoadWarning_;
 
     std::mt19937 rng_{ std::random_device{}() };
     std::chrono::steady_clock::time_point lastTick_{};

@@ -137,6 +137,8 @@ struct ObjectCB
 
 enum class Screen
 {
+    BootLoading,
+    GameplayLoading,
     Title,
     CharacterSelect,
     DifficultySelect,
@@ -150,6 +152,35 @@ enum class Screen
     Video,
     GameOver
 };
+
+enum class LoadPhase
+{
+    Boot = 0,
+    Renderer,
+    TitleAssets,
+    Audio,
+    GameplayAssets,
+    Effects,
+    Ready,
+    Done,
+    Count
+};
+
+inline const wchar_t* LoadPhaseName(LoadPhase phase)
+{
+    switch (phase)
+    {
+    case LoadPhase::Boot: return L"Boot";
+    case LoadPhase::Renderer: return L"Renderer";
+    case LoadPhase::TitleAssets: return L"TitleAssets";
+    case LoadPhase::Audio: return L"Audio";
+    case LoadPhase::GameplayAssets: return L"GameplayAssets";
+    case LoadPhase::Effects: return L"Effects";
+    case LoadPhase::Ready: return L"Ready";
+    case LoadPhase::Done: return L"Done";
+    default: return L"Unknown";
+    }
+}
 
 enum class GameMode
 {

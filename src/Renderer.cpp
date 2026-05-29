@@ -203,7 +203,10 @@ void SweetsApp::CreateRenderTargets()
     d2dContext_->SetTarget(d2dTarget_.Get());
 
     ThrowIfFailed(d2dContext_->CreateSolidColorBrush(D2D1::ColorF(D2D1::ColorF::White), &textBrush_), "Create text brush");
-    LoadTitleImageBitmap();
+    if (titleAssetsLoaded_)
+    {
+        LoadTitleImageBitmap();
+    }
 }
 
 void SweetsApp::CreateOffscreenTarget(ComPtr<ID3D11Texture2D>& texture, ComPtr<ID3D11RenderTargetView>& rtv, ComPtr<ID3D11ShaderResourceView>& srv, DXGI_FORMAT format)
@@ -842,6 +845,19 @@ void SweetsApp::DrawHud()
     d2dContext_->BeginDraw();
     d2dContext_->SetTransform(D2D1::Matrix3x2F::Identity());
 
+    if (screen_ == Screen::BootLoading || screen_ == Screen::GameplayLoading)
+    {
+        DrawBootLoading();
+        DrawDebugHud();
+        const HRESULT hr = d2dContext_->EndDraw();
+        if (hr == D2DERR_RECREATE_TARGET)
+        {
+            ReleaseRenderTargets();
+            CreateRenderTargets();
+        }
+        return;
+    }
+
     textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f));
     std::wostringstream hud;
     hud << L"スコア " << score_
@@ -1111,6 +1127,67 @@ void SweetsApp::DrawScreenFlashOverlay()
     d2dContext_->FillRectangle(full, textBrush_.Get());
     textBrush_->SetColor(D2D1::ColorF(1.0f, 1.0f, 1.0f, alpha * 0.28f));
     d2dContext_->FillRectangle(full, textBrush_.Get());
+}
+
+void SweetsApp::DrawBootLoading()
+{
+    const float w = static_cast<float>(width_);
+    const float h = static_cast<float>(height_);
+    const float t = bootLoadElapsed_;
+
+    textBrush_->SetColor(D2D1::ColorF(0.045f, 0.018f, 0.035f, 1.0f));
+    d2dContext_->FillRectangle(D2D1::RectF(0.0f, 0.0f, w, h), textBrush_.Get());
+
+    titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f));
+    const wchar_t* title = screen_ == Screen::GameplayLoading ? L"Preparing Game" : L"Sweets Panic";
+    d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), titleFormat_.Get(),
+        D2D1::RectF(0.0f, h * 0.30f, w, h * 0.40f), textBrush_.Get());
+
+    std::wostringstream phase;
+    phase << L"Loading: " << LoadPhaseName(loadPhase_);
+    const std::wstring phaseText = phase.str();
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.95f));
+    d2dContext_->DrawTextW(phaseText.c_str(), static_cast<UINT32>(phaseText.size()), hudFormat_.Get(),
+        D2D1::RectF(0.0f, h * 0.43f, w, h * 0.49f), textBrush_.Get());
+
+    const float barW = std::min(520.0f, w * 0.56f);
+    const float barH = 12.0f;
+    const float barL = (w - barW) * 0.5f;
+    const float barT = h * 0.52f;
+    const float readyIndex = static_cast<float>(static_cast<int>(LoadPhase::Ready));
+    const float phaseIndex = static_cast<float>(std::min(static_cast<int>(loadPhase_), static_cast<int>(LoadPhase::Ready)));
+    const float pct = ClampFloat((phaseIndex + ClampFloat(loadPhaseElapsed_ * 2.0f, 0.0f, 0.85f)) / std::max(1.0f, readyIndex), 0.0f, 1.0f);
+    textBrush_->SetColor(D2D1::ColorF(0.18f, 0.08f, 0.12f, 1.0f));
+    d2dContext_->FillRectangle(D2D1::RectF(barL, barT, barL + barW, barT + barH), textBrush_.Get());
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.55f, 0.72f, 0.95f));
+    d2dContext_->FillRectangle(D2D1::RectF(barL, barT, barL + barW * pct, barT + barH), textBrush_.Get());
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, 0.88f));
+    d2dContext_->DrawRectangle(D2D1::RectF(barL, barT, barL + barW, barT + barH), textBrush_.Get(), 1.0f);
+
+    const float pulse = 0.5f + 0.5f * std::sin(t * 5.4f);
+    textBrush_->SetColor(D2D1::ColorF(0.30f, 0.60f, 1.0f, 0.25f + pulse * 0.35f));
+    d2dContext_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(w * 0.5f, h * 0.61f), 18.0f + pulse * 8.0f, 18.0f + pulse * 8.0f), textBrush_.Get(), 3.0f);
+
+    if (!lastLoadStep_.empty())
+    {
+        textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.90f));
+        d2dContext_->DrawTextW(lastLoadStep_.c_str(), static_cast<UINT32>(lastLoadStep_.size()), smallFormat_.Get(),
+            D2D1::RectF(w * 0.15f, h * 0.68f, w * 0.85f, h * 0.73f), textBrush_.Get());
+    }
+    if (!lastLoadWarning_.empty())
+    {
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.70f, 0.25f, 0.92f));
+        d2dContext_->DrawTextW(lastLoadWarning_.c_str(), static_cast<UINT32>(lastLoadWarning_.size()), smallFormat_.Get(),
+            D2D1::RectF(w * 0.12f, h * 0.76f, w * 0.88f, h * 0.82f), textBrush_.Get());
+    }
+
+    titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 
 void SweetsApp::DrawCredits()
@@ -1439,10 +1516,13 @@ void SweetsApp::DrawDebugHud()
         << L"BGM " << static_cast<int>(audio_.CurrentTrack()) << L"  音量 " << static_cast<int>(audio_.Volume() * 100.0f) << L"%\n"
         << L"TAA " << (debug_.taa ? L"ON" : L"OFF") << L"  加算RT " << (debug_.additiveView ? L"表示" : L"合成") << L"\n"
         << L"F1で閉じる";
+    ss << L"\nロード " << static_cast<int>(bootLoadElapsed_ * 100.0f) / 100.0f << L"s  " << LoadPhaseName(loadPhase_) << L"\n"
+        << L"最終 " << lastLoadStep_ << L"\n"
+        << L"音声 " << audio_.StreamStatus() << L"\n";
     const std::wstring text = ss.str();
     textBrush_->SetColor(D2D1::ColorF(0.82f, 1.0f, 0.90f, 0.96f));
     d2dContext_->DrawTextW(text.c_str(), static_cast<UINT32>(text.size()), smallFormat_.Get(),
-        D2D1::RectF(panelLeft + 18.0f, 18.0f, panelRight - 16.0f, 164.0f), textBrush_.Get());
+        D2D1::RectF(panelLeft + 18.0f, 18.0f, panelRight - 16.0f, 214.0f), textBrush_.Get());
 
     const std::array<const wchar_t*, 11> labels{
         L"TAA",
@@ -1461,7 +1541,7 @@ void SweetsApp::DrawDebugHud()
     const float buttonW = 148.0f;
     const float buttonH = 30.0f;
     const float gap = 10.0f;
-    const float top = 178.0f;
+    const float top = 228.0f;
     for (int i = 0; i < static_cast<int>(labels.size()); ++i)
     {
         const int col = i % 2;

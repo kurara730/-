@@ -34,6 +34,15 @@ std::wstring AssetPath(const wchar_t* relative)
 
 void SweetsApp::LoadAssets()
 {
+    LoadTitleAssets();
+    LoadGameplayAssets();
+    LoadEffectAssets();
+}
+
+void SweetsApp::LoadTitleAssets()
+{
+    if (titleAssetsLoaded_) return;
+
     textureLibrary_.Register(L"shortcake_icon", AssetPath(L"assets/textures/shortcake.png"));
     textureLibrary_.Register(L"chocolate_icon", AssetPath(L"assets/textures/chocolate.png"));
     textureLibrary_.Register(L"cheese_icon", AssetPath(L"assets/textures/cheese.png"));
@@ -49,13 +58,40 @@ void SweetsApp::LoadAssets()
     spriteLibrary_.Register(L"enemy_icon", L"enemy_icon");
     spriteLibrary_.Register(L"pickup_icon", L"pickup_icon");
 
+    LoadTitleImageBitmap();
+    titleAssetsLoaded_ = true;
+}
+
+void SweetsApp::LoadGameplayAssets()
+{
+    if (gameplayAssetsLoaded_) return;
+
     assetCatalog_.ReplaceTexture(VisualRole::Player, AssetPath(L"assets/textures/shortcake.png"));
     assetCatalog_.ReplaceTexture(VisualRole::EnemyRunner, AssetPath(L"assets/textures/enemy.png"));
     assetCatalog_.ReplaceTexture(VisualRole::Pickup, AssetPath(L"assets/textures/pickup.png"));
+
+    gameplayAssetsLoaded_ = true;
+}
+
+void SweetsApp::LoadEffectAssets()
+{
+    if (effectAssetsLoaded_) return;
+
+    if (!effekseer_.Available())
+    {
+        effekseer_.Initialize(device_.Get(), context_.Get());
+    }
 
     effekseer_.LoadEffect(L"sword_slash", L"assets/effects/sword_slash.efkefc", 3.0f);
     effekseer_.LoadEffect(L"ult_shortcake", L"assets/effects/ult_shortcake.efkefc", 4.0f);
     effekseer_.LoadEffect(L"ult_chocolate", L"assets/effects/ult_chocolate.efkefc", 4.0f);
     effekseer_.LoadEffect(L"ult_cheese", L"assets/effects/ult_cheese.efkefc", 4.0f);
     effekseer_.LoadEffect(L"ult_roll", L"assets/effects/ult_roll.efkefc", 4.0f);
+    effectAssetsLoaded_ = true;
+}
+
+void SweetsApp::EnsureGameplayAssetsReady()
+{
+    LoadGameplayAssets();
+    LoadEffectAssets();
 }
