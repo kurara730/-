@@ -266,6 +266,21 @@ void SweetsApp::DrawScene()
         }
         DrawSprite2D(CharacterSpriteId(p.character), p.pos, { p.radius * 2.45f, p.radius * 2.45f }, p.face - Pi * 0.5f, bodyColor, 0.14f);
         DrawSprite2D(L"2d_shot_player", p.pos + FromAngle(p.face) * (p.radius * 0.88f), { p.radius * 0.55f, p.radius * 0.55f }, p.face, faceColor, 0.13f);
+        if (p.charging && !p.downed)
+        {
+            // チャージ進行に応じて外側のリングが機体へ収束し、溜まり具合を可視化する。
+            const float chargeProgress = ClampFloat(p.chargeT / 0.55f, 0.0f, 1.0f);
+            const Color chargeColor = p.chargeReady ? Gold : playerColor;
+            const float outer = p.radius * (2.6f - 1.3f * chargeProgress);
+            spriteCanvas_.DrawRing(p.pos, outer, 0.05f + 0.07f * chargeProgress,
+                WithAlpha(chargeColor, 0.30f + 0.45f * chargeProgress), 0.125f, 48);
+            if (p.chargeReady)
+            {
+                // 発動可能になったら機体周りで脈動させ、撃てる合図を明確に出す。
+                const float pulse = 0.45f + 0.35f * std::sin(gameTime_ * 18.0f);
+                spriteCanvas_.DrawRing(p.pos, p.radius * 1.28f, 0.09f, WithAlpha(Cream, pulse), 0.122f, 48);
+            }
+        }
         if ((p.focus || screen_ == Screen::HiddenBoss) && !p.downed)
         {
             spriteCanvas_.DrawCircle(p.pos, p.hitboxRadius, Red, 0.11f, 20);
