@@ -127,6 +127,10 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_MOUSEMOVE:
         mouseX_ = static_cast<float>(GET_X_LPARAM(lp));
         mouseY_ = static_cast<float>(GET_Y_LPARAM(lp));
+        if (HandleDebugDrag(mouseX_, mouseY_))
+        {
+            return 0;
+        }
         if ((screen_ == Screen::Paused || screen_ == Screen::Settings) && HandlePauseDrag(mouseX_, mouseY_))
         {
             return 0;
@@ -137,6 +141,7 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         mouseY_ = static_cast<float>(GET_Y_LPARAM(lp));
         if (HandleDebugClick(mouseX_, mouseY_))
         {
+            SetCapture(hwnd);
             return 0;
         }
         if (screen_ == Screen::Paused && HandlePauseClick(mouseX_, mouseY_))
@@ -165,6 +170,18 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         {
             return 0;
         }
+        if (screen_ == Screen::Credits && SelectCreditsAt(mouseX_, mouseY_))
+        {
+            return 0;
+        }
+        if (screen_ == Screen::GameOver && SelectGameOverAt(mouseX_, mouseY_))
+        {
+            return 0;
+        }
+        if ((screen_ == Screen::Clear || screen_ == Screen::CompleteClear) && SelectClearAt(mouseX_, mouseY_))
+        {
+            return 0;
+        }
         mouseLeft_ = true;
         SetCapture(hwnd);
         return 0;
@@ -175,6 +192,7 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             SaveSettings();
         }
         draggingVolume_ = -1;
+        draggingDebugFx_ = -1;
         ReleaseCapture();
         return 0;
     case WM_RBUTTONDOWN:

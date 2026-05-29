@@ -108,6 +108,7 @@ struct Player
     bool focus = false;
     bool charging = false;
     bool chargeReady = false;
+    bool chargeFull = false;
     bool downed = false;
     bool alive = true;
 };
@@ -190,6 +191,7 @@ struct Shot
     bool grazed = false;
     bool reflected = false;
     bool charged = false;
+    bool hitBoss = false;
     Color color = Cream;
 };
 
@@ -257,6 +259,19 @@ struct Particle
     float vy = 1.0f;
     float ttl = 0.4f;
     Color color = Cream;
+};
+
+struct HiddenBossCore
+{
+    V2 pos{};
+    V3 pos3{};
+    float angle = 0.0f;
+    float orbitRadius = 2.7f;
+    float radius = 0.34f;
+    float hp = 220.0f;
+    float maxHp = 220.0f;
+    float flash = 0.0f;
+    bool active = false;
 };
 
 struct EffectPulse

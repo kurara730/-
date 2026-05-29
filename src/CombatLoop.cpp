@@ -2,6 +2,8 @@
 #include "ReflectionSystem.h"
 #include "StageFactory.h"
 
+#include <algorithm>
+
 namespace
 {
 bool IsEliteType(EnemyType type)
@@ -11,6 +13,40 @@ bool IsEliteType(EnemyType type)
         || type == EnemyType::Mirror
         || type == EnemyType::Teleport;
 }
+}
+
+void SweetsApp::ReflectEnemyShotsNear(V2 center, float radius, int ownerIndex, CharacterType source, Color color, float power)
+{
+    int reflected = 0;
+    for (auto& s : shots_)
+    {
+        if (!s.enemy || s.dead) continue;
+        if (RuleDistance(s.pos, s.height, center, ShotBodyY) > radius + s.radius) continue;
+        V2 n = s.pos - center;
+        if (LenSq(n) < 0.001f)
+        {
+            const Player& p = players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))];
+            n = FromAngle(p.face);
+        }
+        ApplyShotReflection(s, Normalize(n), power);
+        s.enemy = false;
+        s.ownerIndex = std::max(0, std::min(ownerIndex, MaxPlayers - 1));
+        s.sourceCharacter = source;
+        s.color = color;
+        s.damage *= 1.18f;
+        s.bounce = std::max(s.bounce, source == CharacterType::Roll ? 3 : 1);
+        SyncShot3D(s);
+        ++reflected;
+        Burst(s.pos, color, 8);
+    }
+    if (reflected > 0)
+    {
+        audio_.PlaySoundEffect(SoundEffect::Reflect);
+        AddScore(reflected * 24, &players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))]);
+        message_ = L"反射";
+        messageT_ = std::max(messageT_, 0.65f);
+        effectPulses_.push_back({ center, Grounded3D(center, 0.24f), radius * 0.55f, radius * 1.55f, 0.22f, 0.22f, 0.24f, color });
+    }
 }
 
 void SweetsApp::UpdateShots(float dt)
@@ -47,6 +83,17 @@ void SweetsApp::UpdateShots(float dt)
             s.height = ClampFloat(ShotBodyY + 0.26f * wave + 0.08f * static_cast<float>(s.reflectedCount), 0.16f, 1.15f);
         }
         SyncShot3D(s);
+        if (!s.enemy)
+        {
+            if (s.sourceCharacter == CharacterType::Shortcake && s.charged)
+            {
+                ReflectEnemyShotsNear(s.pos, s.radius + 0.70f, s.ownerIndex, CharacterType::Shortcake, Berry, 1.15f);
+            }
+            else if (s.sourceCharacter == CharacterType::Roll)
+            {
+                ReflectEnemyShotsNear(s.pos, s.radius + (s.charged ? 0.58f : 0.34f), s.ownerIndex, CharacterType::Roll, Cream, 1.12f);
+            }
+        }
         const float dist = Len(s.pos);
         if (dist > ArenaRadius - s.radius)
         {
@@ -124,6 +171,13 @@ void SweetsApp::UpdateShots(float dt)
         }
         else
         {
+            if (DamageHiddenBossCore(ReflectedDamage(s), s.pos, s.ownerIndex))
+            {
+                if (s.pierce > 0) --s.pierce;
+                else s.dead = true;
+            }
+            if (s.dead) continue;
+
             for (auto& e : enemies_)
             {
                 if (e.dead) continue;
@@ -141,10 +195,24 @@ void SweetsApp::UpdateShots(float dt)
                     break;
                 }
             }
-            if (!s.dead && boss_.active && RuleDistance(s, boss_) < s.radius + boss_.radius)
+            if (!s.dead && !s.hitBoss && boss_.active && RuleDistance(s, boss_) < s.radius + boss_.radius)
             {
                 if (s.charged && s.sourceCharacter == CharacterType::Shortcake && s.splitCount > 0) SpawnSplitShots(s, boss_.pos);
-                DamageBoss(ReflectedDamage(s), s.reflected, s.ownerIndex);
+                BossDamageKind kind = BossDamageKind::NormalShot;
+                if (s.reflected)
+                {
+                    kind = BossDamageKind::ReflectedShot;
+                }
+                else if (s.charged && s.sourceCharacter == CharacterType::Chocolate)
+                {
+                    kind = BossDamageKind::ChocolateCharge;
+                }
+                else if (s.charged)
+                {
+                    kind = BossDamageKind::ChargeShot;
+                }
+                DamageBoss(ReflectedDamage(s), kind, s.reflected, s.ownerIndex);
+                s.hitBoss = true;
                 if (s.pierce > 0) --s.pierce;
                 else s.dead = true;
             }
@@ -205,7 +273,7 @@ void SweetsApp::UpdatePickups(float dt)
                 break;
             case PickupType::BombDamage:
                 for (auto& e : enemies_) DamageEnemy(e, 95.0f + wave_ * 6.0f, p.pos, 2.0f, false, p.index);
-                if (boss_.active) DamageBoss(260.0f + wave_ * 18.0f, false, p.index);
+                if (boss_.active) DamageBoss(260.0f + wave_ * 18.0f, BossDamageKind::Bomb, false, p.index);
                 Burst(p.pos, Red, 60);
                 message_ = L"爆発アイテム";
                 break;

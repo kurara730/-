@@ -118,7 +118,12 @@ void SweetsApp::PlayCombatEffect(const std::wstring& id, V2 position, float y, f
     const bool ultimate = shortcake || chocolate || cheese || roll;
 
     const bool chargedSword = sword && scale >= 1.30f;
-    const float boostedScale = scale * (sword ? (chargedSword ? 2.35f : 1.85f) : (ultimate ? 2.5f : 1.8f));
+#if defined(_DEBUG)
+    const float effectFx = sword ? ClampFloat(debug_.swordFx, 0.0f, 2.0f) : (ultimate ? ClampFloat(debug_.ultimateFx, 0.0f, 2.0f) : 1.0f);
+#else
+    const float effectFx = 1.0f;
+#endif
+    const float boostedScale = scale * (sword ? (chargedSword ? 2.35f : 1.85f) : (ultimate ? 2.5f : 1.8f)) * effectFx;
     const bool played = effekseer_.Play(id, position, y, rotationY, boostedScale);
 
     auto addPulse = [&](float startRadius, float endRadius, float life, Color color, float pulseY)

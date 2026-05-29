@@ -111,7 +111,12 @@
     <None Include="assets\audio\233_BPM163.mp3"><Filter>Assets</Filter></None>
     <None Include="assets\audio\333_BPM177.mp3"><Filter>Assets</Filter></None>
     <None Include="assets\audio\Lonery boy.wav"><Filter>Assets</Filter></None>
+    <None Include="assets\audio\hidden_gauge1.mp3"><Filter>Assets</Filter></None>
+    <None Include="assets\audio\hidden_gauge2.mp3"><Filter>Assets</Filter></None>
+    <None Include="assets\audio\hidden_gauge3.mp3"><Filter>Assets</Filter></None>
     <None Include="assets\audio\ruins.mp3"><Filter>Assets</Filter></None>
+    <None Include="assets\audio\se\choco_slash.mp3"><Filter>Assets</Filter></None>
+    <None Include="assets\audio\se\ultimate_slash.mp3"><Filter>Assets</Filter></None>
     <None Include="assets\effects\sword_slash.efkefc"><Filter>Assets</Filter></None>
     <None Include="assets\effects\sword\sword_slash.efkefc"><Filter>Assets</Filter></None>
     <None Include="assets\effects\sword\Sword9.efkproj"><Filter>Assets</Filter></None>

@@ -3,6 +3,8 @@
 #include "ReflectionSystem.h"
 #include "StageFactory.h"
 
+#include <filesystem>
+
 namespace
 {
 bool IsEliteType(EnemyType type)
@@ -11,6 +13,29 @@ bool IsEliteType(EnemyType type)
         || type == EnemyType::Barrier
         || type == EnemyType::Mirror
         || type == EnemyType::Teleport;
+}
+
+bool AssetExists(const std::wstring& relativePath)
+{
+    namespace fs = std::filesystem;
+    const fs::path rel(relativePath);
+    std::array<fs::path, 5> candidates{};
+    candidates[0] = fs::current_path() / rel;
+
+    wchar_t modulePath[MAX_PATH]{};
+    GetModuleFileNameW(nullptr, modulePath, MAX_PATH);
+    const fs::path exeDir = fs::path(modulePath).parent_path();
+    candidates[1] = exeDir / rel;
+    candidates[2] = exeDir.parent_path() / rel;
+    candidates[3] = exeDir.parent_path().parent_path() / rel;
+    candidates[4] = rel;
+
+    for (const auto& path : candidates)
+    {
+        std::error_code ec;
+        if (fs::exists(path, ec)) return true;
+    }
+    return false;
 }
 }
 
@@ -56,6 +81,15 @@ void SweetsApp::ResetGame()
     hiddenPatternCd_ = 0.0f;
     hiddenPatternStep_ = 0;
     hiddenBossPhase_ = -1;
+    hiddenBossForm_ = 1;
+    hiddenBossGaugeHp_ = HiddenBossBaseGaugeHp;
+    hiddenBossTotalHp_ = HiddenBossBaseGaugeHp * HiddenBossGaugeCount;
+    hiddenBossCoreOpenT_ = 0.0f;
+    hiddenBossAuraBreakT_ = 0.0f;
+    hiddenBossReflectCount_ = 0;
+    hiddenBossCores_ = {};
+    hiddenBossPhaseIntroT_ = 0.0f;
+    hiddenBossPhaseIntroLife_ = 0.0f;
     pendingHiddenBoss_ = false;
     message_ = L"";
     messageT_ = 0.0f;
@@ -257,6 +291,9 @@ void SweetsApp::UpdateBootLoading(float dt)
         break;
     case LoadPhase::Audio:
         ApplyAudioVolume();
+        audio_.LoadSoundEffect(SoundEffect::ChocoSlash, L"assets/audio/se/choco_slash.mp3");
+        audio_.LoadSoundEffect(SoundEffect::UltimateSlash, L"assets/audio/se/ultimate_slash.mp3");
+        audio_.LoadSoundEffect(SoundEffect::Reflect, L"assets/audio/se/reflect.mp3");
         AdvanceLoadPhase(LoadPhase::Ready, L"Audio streaming ready");
         break;
     case LoadPhase::Ready:
@@ -386,8 +423,32 @@ void SweetsApp::UpdateAudioForScreen()
     case Screen::GameOver:
         audio_.PlayLoop(MusicTrack::GameOver, L"assets/audio/ruins.mp3");
         break;
+    case Screen::HiddenBossIntro:
+        audio_.PlayLoop(MusicTrack::HiddenBossGauge1, L"assets/audio/hidden_gauge1.mp3");
+        break;
     case Screen::HiddenBoss:
-        audio_.PlayOnce(MusicTrack::HiddenBoss, L"assets/audio/Lonery boy.wav");
+        if (hiddenBossForm_ <= 1)
+        {
+            audio_.PlayLoop(MusicTrack::HiddenBossGauge1, L"assets/audio/hidden_gauge1.mp3");
+        }
+        else if (hiddenBossForm_ == 2)
+        {
+            audio_.PlayLoop(MusicTrack::HiddenBossGauge2, L"assets/audio/hidden_gauge2.mp3");
+        }
+        else
+        {
+            audio_.PlayLoop(MusicTrack::HiddenBossGauge3, L"assets/audio/hidden_gauge3.mp3");
+        }
+        break;
+    case Screen::CompleteClear:
+        if (AssetExists(L"assets/audio/hidden_clear.mp3"))
+        {
+            audio_.PlayLoop(MusicTrack::HiddenBossClear, L"assets/audio/hidden_clear.mp3");
+        }
+        else
+        {
+            audio_.PlayLoop(MusicTrack::Title, L"assets/audio/333_BPM177.mp3");
+        }
         break;
     default:
         audio_.Stop();
@@ -398,6 +459,7 @@ void SweetsApp::UpdateAudioForScreen()
 void SweetsApp::ApplyAudioVolume()
 {
     audio_.SetVolume(ClampFloat(masterVolume_, 0.0f, 1.0f) * ClampFloat(bgmVolume_, 0.0f, 1.0f));
+    audio_.SetSoundVolume(ClampFloat(masterVolume_, 0.0f, 1.0f) * ClampFloat(seVolume_, 0.0f, 1.0f));
 }
 
 void SweetsApp::NormalizePlayerLifeStates()

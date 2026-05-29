@@ -68,6 +68,10 @@ void SweetsApp::UpdateCoopPlayers(float dt)
             p.ai = false;
             UpdateGamepadPlayer(p, i, dt);
         }
+        if (p.character == CharacterType::Roll && p.dashT > 0.0f)
+        {
+            ReflectEnemyShotsNear(p.pos, p.radius + 0.72f, i, CharacterType::Roll, Cream, 1.30f);
+        }
     }
 
     TryRevivePlayers(dt);
@@ -114,6 +118,7 @@ void SweetsApp::UpdateGamepadPlayer(Player& p, int playerIndex, float dt)
     {
         p.chargeT += dt;
         p.chargeReady = p.chargeT >= 0.55f;
+        p.chargeFull = p.chargeT >= 1.15f;
         p.charging = true;
     }
     else if (p.charging)
@@ -121,6 +126,7 @@ void SweetsApp::UpdateGamepadPlayer(Player& p, int playerIndex, float dt)
         if (p.chargeReady && p.chargeCd <= 0.0f) FireCharged(p, playerIndex, p.face, p.pos + FromAngle(p.face) * 3.0f);
         p.charging = false;
         p.chargeReady = false;
+        p.chargeFull = false;
         p.chargeT = 0.0f;
     }
 
@@ -230,6 +236,44 @@ bool SweetsApp::AllPlayersDown() const
         if (!p.downed && p.hp > 0.0f) return false;
     }
     return anyActive;
+}
+
+int SweetsApp::ActivePlayerCount() const
+{
+    int count = 0;
+    for (const auto& p : players_)
+    {
+        if (p.active) ++count;
+    }
+    return std::max(1, count);
+}
+
+float SweetsApp::MultiplayerHpMultiplier() const
+{
+    switch (std::min(4, ActivePlayerCount()))
+    {
+    case 2: return 1.35f;
+    case 3: return 1.65f;
+    case 4: return 1.90f;
+    default: return 1.0f;
+    }
+}
+
+float SweetsApp::HiddenBossLevelHpMultiplier() const
+{
+    if (hiddenBossPractice_) return 1.0f;
+    float totalLevel = 0.0f;
+    int count = 0;
+    for (const auto& p : players_)
+    {
+        if (!p.active) continue;
+        totalLevel += static_cast<float>(std::max(1, p.level));
+        ++count;
+    }
+    if (count <= 0) return 1.0f;
+    const float avgLevel = totalLevel / static_cast<float>(count);
+    const float bonusLevels = std::min(std::max(0.0f, avgLevel - 1.0f), 20.0f);
+    return std::min(1.7f, 1.0f + bonusLevels * 0.035f);
 }
 
 Player* SweetsApp::FindNearestPlayer(V2 pos)

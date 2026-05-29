@@ -122,4 +122,11 @@ struct DebugState
     float fpsAccum = 0.0f;
     int fpsFrames = 0;
     int taaFrame = 0;
+    float brightness = 1.0f;
+    float additiveFx = 1.0f;
+    float screenFlashFx = 1.0f;
+    float enemyBulletGlow = 1.0f;
+    float swordFx = 1.0f;
+    float ultimateFx = 1.0f;
+    float hiddenBossAuraFx = 1.0f;
 };

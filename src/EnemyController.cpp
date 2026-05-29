@@ -9,6 +9,44 @@ bool IsEliteTypeLocal(EnemyType type)
         || type == EnemyType::Mirror
         || type == EnemyType::Teleport;
 }
+
+float HiddenBossDamageMultiplier(BossDamageKind kind)
+{
+    switch (kind)
+    {
+    case BossDamageKind::ChargeShot: return 0.45f;
+    case BossDamageKind::ChocolateCharge: return 0.35f;
+    case BossDamageKind::Melee: return 0.75f;
+    case BossDamageKind::Bomb: return 0.65f;
+    case BossDamageKind::Ultimate: return 0.70f;
+    case BossDamageKind::ReflectedShot: return 1.10f;
+    case BossDamageKind::NormalShot:
+    default: return 1.0f;
+    }
+}
+
+float HiddenBossHitCap(float gaugeHp, BossDamageKind kind)
+{
+    switch (kind)
+    {
+    case BossDamageKind::Bomb:
+    case BossDamageKind::Ultimate:
+        return gaugeHp * 0.10f;
+    case BossDamageKind::ReflectedShot:
+        return gaugeHp * 0.07f;
+    case BossDamageKind::NormalShot:
+    case BossDamageKind::ChargeShot:
+    case BossDamageKind::ChocolateCharge:
+    case BossDamageKind::Melee:
+    default:
+        return gaugeHp * 0.045f;
+    }
+}
+
+bool IsChargeBossDamage(BossDamageKind kind)
+{
+    return kind == BossDamageKind::ChargeShot || kind == BossDamageKind::ChocolateCharge;
+}
 }
 
 void SweetsApp::SpawnEnemy()
@@ -89,6 +127,7 @@ void SweetsApp::SpawnEnemy()
     }
     const DifficultyDef& diff = CurrentDifficulty();
     e.hp *= diff.enemyHpMul;
+    e.hp *= MultiplayerHpMultiplier();
     e.atk *= diff.enemyAtkMul;
     if (profile == EncounterProfile::MobRelease)
     {
@@ -120,7 +159,7 @@ void SweetsApp::SpawnBoss()
     boss_.pos = { 0.0f, -1.2f };
     boss_.radius = 1.15f + 0.06f * static_cast<float>(wave_ / 3);
     const DifficultyDef& diff = CurrentDifficulty();
-    boss_.maxHp = (720.0f + wave_ * 260.0f) * diff.bossHpMul;
+    boss_.maxHp = (720.0f + wave_ * 260.0f) * diff.bossHpMul * MultiplayerHpMultiplier();
     boss_.hp = boss_.maxHp;
     boss_.speed = 1.2f + wave_ * 0.035f;
     boss_.atk = (13.0f + wave_ * 1.3f) * diff.enemyAtkMul;
@@ -330,7 +369,7 @@ void SweetsApp::UpdateBoss(float dt)
             ClampInside(mirror.pos, 0.5f);
             mirror.height = Use3DRules() ? 0.82f : EnemyBodyY;
             mirror.radius = 0.38f;
-            mirror.hp = (28.0f + wave_ * 6.0f) * CurrentDifficulty().enemyHpMul;
+            mirror.hp = (28.0f + wave_ * 6.0f) * CurrentDifficulty().enemyHpMul * MultiplayerHpMultiplier();
             mirror.maxHp = mirror.hp;
             mirror.speed = 1.5f;
             mirror.atk = boss_.atk * 0.5f;
@@ -521,7 +560,7 @@ void SweetsApp::DamageEnemy(Enemy& e, float dmg, V2 from, float knock, bool refl
                 child.kind = static_cast<int>(child.type);
                 child.pos = e.pos + FromAngle(Rand(0.0f, TwoPi)) * 0.45f;
                 child.radius = 0.25f;
-                child.hp = 12.0f + wave_ * 2.0f;
+                child.hp = (12.0f + wave_ * 2.0f) * MultiplayerHpMultiplier();
                 child.maxHp = child.hp;
                 child.speed = 2.8f;
                 child.atk = 5.0f;
@@ -547,16 +586,117 @@ void SweetsApp::DamageEnemy(Enemy& e, float dmg, V2 from, float knock, bool refl
 
 void SweetsApp::DamageBoss(float dmg)
 {
-    DamageBoss(dmg, false, 0);
+    DamageBoss(dmg, BossDamageKind::NormalShot, false, 0);
 }
 
 void SweetsApp::DamageBoss(float dmg, bool reflected, int ownerIndex)
 {
+    DamageBoss(dmg, reflected ? BossDamageKind::ReflectedShot : BossDamageKind::NormalShot, reflected, ownerIndex);
+}
+
+void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int ownerIndex)
+{
     if (!boss_.active) return;
     if (boss_.bossType == BossType::HiddenBoss)
     {
-        boss_.flash = 0.08f;
-        AddScore(reflected ? 18 : 9, &players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))]);
+        if (hiddenBossPhaseIntroT_ > 0.0f) return;
+        const int oldForm = hiddenBossForm_;
+        const bool isReflected = reflected || kind == BossDamageKind::ReflectedShot;
+        bool reducedByLock = false;
+        bool attackChance = false;
+        float appliedDmg = dmg * HiddenBossDamageMultiplier(kind);
+        if (hiddenBossForm_ == 1)
+        {
+            if (hiddenBossCoreOpenT_ > 0.0f)
+            {
+                attackChance = true;
+            }
+            else
+            {
+                reducedByLock = true;
+                appliedDmg *= 0.22f;
+            }
+        }
+        else if (hiddenBossForm_ == 2)
+        {
+            if (isReflected && hiddenBossAuraBreakT_ <= 0.0f)
+            {
+                ++hiddenBossReflectCount_;
+                Burst(boss_.pos, Gold, 18);
+                if (hiddenBossReflectCount_ >= HiddenBossReflectBreakCount)
+                {
+                    hiddenBossReflectCount_ = 0;
+                    hiddenBossAuraBreakT_ = 7.0f;
+                    for (auto& s : shots_) if (s.enemy) s.dead = true;
+                    screenFlashT_ = 0.22f;
+                    screenFlashLife_ = screenFlashT_;
+                    screenFlashColor_ = Gold;
+                    message_ = L"金色オーラ解除: 攻撃チャンス";
+                    messageT_ = 2.0f;
+                }
+            }
+            if (hiddenBossAuraBreakT_ > 0.0f)
+            {
+                attackChance = true;
+            }
+            else
+            {
+                reducedByLock = true;
+                appliedDmg *= isReflected ? 0.45f : 0.15f;
+            }
+        }
+        appliedDmg = std::min(appliedDmg, HiddenBossHitCap(hiddenBossGaugeHp_, kind == BossDamageKind::ReflectedShot || isReflected ? BossDamageKind::ReflectedShot : kind));
+        if (IsChargeBossDamage(kind) && messageT_ < 0.35f)
+        {
+            message_ = reducedByLock ? L"本体ダメージ軽減中" : (attackChance ? L"チャージ有効" : L"チャージ命中");
+            messageT_ = 0.75f;
+        }
+        boss_.hp -= appliedDmg;
+        boss_.flash = 0.15f;
+        Player& owner = players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))];
+        AddScore(static_cast<int>(appliedDmg * (isReflected ? 2.0f : 1.0f)), &owner);
+        if (boss_.hp <= 0.0f)
+        {
+            SaveProgress();
+            AddScore(50000 + (isReflected ? 5000 : 0), &owner);
+            shots_.clear();
+            Burst(boss_.pos, Gold, 160);
+            boss_.active = false;
+            screen_ = Screen::CompleteClear;
+            message_ = L"Complete Clear";
+            messageT_ = 999.0f;
+            return;
+        }
+
+        int nextForm = 1;
+        if (boss_.hp <= hiddenBossGaugeHp_) nextForm = 3;
+        else if (boss_.hp <= hiddenBossGaugeHp_ * 2.0f) nextForm = 2;
+        if (nextForm > oldForm)
+        {
+            const float boundaryHp = hiddenBossGaugeHp_ * static_cast<float>(HiddenBossGaugeCount - nextForm + 1);
+            boss_.hp = std::max(boss_.hp, boundaryHp);
+            hiddenBossForm_ = nextForm;
+            boss_.phase = nextForm;
+            hiddenBossPhase_ = nextForm - 1;
+            hiddenPatternStep_ = 0;
+            hiddenPatternCd_ = nextForm == 2 ? 1.25f : 0.85f;
+            hiddenBossCoreOpenT_ = 0.0f;
+            hiddenBossAuraBreakT_ = 0.0f;
+            hiddenBossReflectCount_ = 0;
+            hiddenBossCores_ = {};
+            hiddenBossPhaseIntroLife_ = nextForm == 2 ? 1.6f : 1.0f;
+            hiddenBossPhaseIntroT_ = hiddenBossPhaseIntroLife_;
+            for (auto& s : shots_)
+            {
+                if (s.enemy) s.dead = true;
+            }
+            Burst(boss_.pos, Gold, nextForm == 2 ? 130 : 170);
+            screenFlashT_ = nextForm == 2 ? 0.28f : 0.20f;
+            screenFlashLife_ = screenFlashT_;
+            screenFlashColor_ = Gold;
+            message_ = nextForm == 2 ? L"Hidden Boss Phase 2" : L"Hidden Boss Final Phase";
+            messageT_ = 1.8f;
+        }
         return;
     }
     boss_.hp -= dmg;
