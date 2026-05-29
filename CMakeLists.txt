@@ -14,18 +14,29 @@ add_executable(SweetsActionDX11 WIN32
     src/AssetLoaders.cpp
     src/AssetCatalog.cpp
     src/ChargeAttack.cpp
+    src/AppUtil.cpp
+    src/AppWindow.cpp
+    src/CombatEffects.cpp
+    src/CombatLoop.cpp
     src/CoopController.cpp
+    src/DimensionRules.cpp
     src/EffekseerSystem.cpp
     src/EnemyController.cpp
-    src/GameLogic.cpp
+    src/FrameView.cpp
+    src/GameFlow.cpp
+    src/GameplayView.cpp
+    src/GraphicsDevice.cpp
+    src/HiddenBossLogic.cpp
+    src/InputFlow.cpp
+    src/MediaView.cpp
+    src/MenuView.cpp
     src/ModelLibrary.cpp
     src/PlayerController.cpp
     src/ReflectionSystem.cpp
-    src/Renderer.cpp
+    src/SaveData.cpp
     src/SpriteLibrary.cpp
-    src/SpriteRenderer.cpp
+    src/SpriteCanvas.cpp
     src/StageFactory.cpp
-    src/SweetsApp.cpp
     src/TextureLibrary.cpp
     src/VideoSystem.cpp
     src/AudioSystem.h
@@ -33,11 +44,14 @@ add_executable(SweetsActionDX11 WIN32
     src/AssetCatalog.h
     src/EffekseerSystem.h
     src/GameDefs.h
+    src/GameMath.h
+    src/GameStateTypes.h
     src/GameTypes.h
+    src/GameUiTypes.h
     src/ModelLibrary.h
     src/ReflectionSystem.h
     src/SpriteLibrary.h
-    src/SpriteRenderer.h
+    src/SpriteCanvas.h
     src/StageFactory.h
     src/SweetsApp.h
     src/TextureLibrary.h

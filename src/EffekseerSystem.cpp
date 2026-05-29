@@ -94,7 +94,7 @@ struct EffekseerSystem::Impl
 {
 #if defined(SWEETS_USE_EFFEKSEER) && SWEETS_USE_EFFEKSEER
     Effekseer::ManagerRef manager;
-    EffekseerRendererDX11::RendererRef renderer;
+    EffekseerRendererDX11::RendererRef dx11Backend;
     Effekseer::Backend::GraphicsDeviceRef graphicsDevice;
     std::unordered_map<std::wstring, Effekseer::EffectRef> effects;
 #endif
@@ -117,24 +117,24 @@ bool EffekseerSystem::Initialize(ID3D11Device* device, ID3D11DeviceContext* cont
 
     impl_ = std::make_unique<Impl>();
     impl_->graphicsDevice = EffekseerRendererDX11::CreateGraphicsDevice(device, context);
-    impl_->renderer = EffekseerRendererDX11::Renderer::Create(impl_->graphicsDevice, 4096);
+    impl_->dx11Backend = EffekseerRendererDX11::Renderer::Create(impl_->graphicsDevice, 4096);
     impl_->manager = Effekseer::Manager::Create(4096);
 
-    if (!impl_->graphicsDevice || !impl_->renderer || !impl_->manager)
+    if (!impl_->graphicsDevice || !impl_->dx11Backend || !impl_->manager)
     {
         lastError_ = L"Effekseer: runtime initialization failed.";
         Shutdown();
         return false;
     }
 
-    impl_->manager->SetSpriteRenderer(impl_->renderer->CreateSpriteRenderer());
-    impl_->manager->SetRibbonRenderer(impl_->renderer->CreateRibbonRenderer());
-    impl_->manager->SetRingRenderer(impl_->renderer->CreateRingRenderer());
-    impl_->manager->SetTrackRenderer(impl_->renderer->CreateTrackRenderer());
-    impl_->manager->SetModelRenderer(impl_->renderer->CreateModelRenderer());
-    impl_->manager->SetTextureLoader(impl_->renderer->CreateTextureLoader());
-    impl_->manager->SetModelLoader(impl_->renderer->CreateModelLoader());
-    impl_->manager->SetMaterialLoader(impl_->renderer->CreateMaterialLoader());
+    impl_->manager->SetSpriteRenderer(impl_->dx11Backend->CreateSpriteRenderer());
+    impl_->manager->SetRibbonRenderer(impl_->dx11Backend->CreateRibbonRenderer());
+    impl_->manager->SetRingRenderer(impl_->dx11Backend->CreateRingRenderer());
+    impl_->manager->SetTrackRenderer(impl_->dx11Backend->CreateTrackRenderer());
+    impl_->manager->SetModelRenderer(impl_->dx11Backend->CreateModelRenderer());
+    impl_->manager->SetTextureLoader(impl_->dx11Backend->CreateTextureLoader());
+    impl_->manager->SetModelLoader(impl_->dx11Backend->CreateModelLoader());
+    impl_->manager->SetMaterialLoader(impl_->dx11Backend->CreateMaterialLoader());
     impl_->manager->SetCurveLoader(Effekseer::MakeRefPtr<Effekseer::CurveLoader>());
     return true;
 #else
@@ -217,14 +217,14 @@ void EffekseerSystem::Update(float dt)
 void EffekseerSystem::Draw(const DirectX::XMMATRIX& viewProjection)
 {
 #if defined(SWEETS_USE_EFFEKSEER) && SWEETS_USE_EFFEKSEER
-    if (!impl_ || !impl_->manager || !impl_->renderer) return;
+    if (!impl_ || !impl_->manager || !impl_->dx11Backend) return;
 
     Effekseer::Manager::DrawParameter params;
     params.ViewProjectionMatrix = ToEffekseerMatrix(viewProjection);
     params.ZNear = 0.1f;
     params.ZFar = 100.0f;
     impl_->manager->Draw(params);
-    impl_->renderer->ResetRenderState();
+    impl_->dx11Backend->ResetRenderState();
 #else
     (void)viewProjection;
 #endif
@@ -233,7 +233,7 @@ void EffekseerSystem::Draw(const DirectX::XMMATRIX& viewProjection)
 bool EffekseerSystem::Available() const
 {
 #if defined(SWEETS_USE_EFFEKSEER) && SWEETS_USE_EFFEKSEER
-    return impl_ && impl_->manager && impl_->renderer;
+    return impl_ && impl_->manager && impl_->dx11Backend;
 #else
     return false;
 #endif

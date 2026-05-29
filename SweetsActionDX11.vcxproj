@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|x64">
@@ -97,22 +97,33 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="src\AppUtil.cpp" />
+    <ClCompile Include="src\AppWindow.cpp" />
     <ClCompile Include="src\AudioSystem.cpp" />
     <ClCompile Include="src\AssetCatalog.cpp" />
     <ClCompile Include="src\AssetLoaders.cpp" />
     <ClCompile Include="src\ChargeAttack.cpp" />
+    <ClCompile Include="src\CombatEffects.cpp" />
+    <ClCompile Include="src\CombatLoop.cpp" />
     <ClCompile Include="src\CoopController.cpp" />
+    <ClCompile Include="src\DimensionRules.cpp" />
     <ClCompile Include="src\EffekseerSystem.cpp" />
     <ClCompile Include="src\EnemyController.cpp" />
-    <ClCompile Include="src\GameLogic.cpp" />
+    <ClCompile Include="src\FrameView.cpp" />
+    <ClCompile Include="src\GameFlow.cpp" />
+    <ClCompile Include="src\GameplayView.cpp" />
+    <ClCompile Include="src\GraphicsDevice.cpp" />
+    <ClCompile Include="src\HiddenBossLogic.cpp" />
+    <ClCompile Include="src\InputFlow.cpp" />
+    <ClCompile Include="src\MediaView.cpp" />
+    <ClCompile Include="src\MenuView.cpp" />
     <ClCompile Include="src\ModelLibrary.cpp" />
     <ClCompile Include="src\PlayerController.cpp" />
     <ClCompile Include="src\ReflectionSystem.cpp" />
-    <ClCompile Include="src\Renderer.cpp" />
+    <ClCompile Include="src\SaveData.cpp" />
+    <ClCompile Include="src\SpriteCanvas.cpp" />
     <ClCompile Include="src\SpriteLibrary.cpp" />
-    <ClCompile Include="src\SpriteRenderer.cpp" />
     <ClCompile Include="src\StageFactory.cpp" />
-    <ClCompile Include="src\SweetsApp.cpp" />
     <ClCompile Include="src\TextureLibrary.cpp" />
     <ClCompile Include="src\VideoSystem.cpp" />
     <ClCompile Include="src\main.cpp" />
@@ -123,11 +134,14 @@
     <ClInclude Include="src\AssetLoaders.h" />
     <ClInclude Include="src\EffekseerSystem.h" />
     <ClInclude Include="src\GameDefs.h" />
+    <ClInclude Include="src\GameMath.h" />
+    <ClInclude Include="src\GameStateTypes.h" />
     <ClInclude Include="src\GameTypes.h" />
+    <ClInclude Include="src\GameUiTypes.h" />
     <ClInclude Include="src\ModelLibrary.h" />
     <ClInclude Include="src\ReflectionSystem.h" />
+    <ClInclude Include="src\SpriteCanvas.h" />
     <ClInclude Include="src\SpriteLibrary.h" />
-    <ClInclude Include="src\SpriteRenderer.h" />
     <ClInclude Include="src\StageFactory.h" />
     <ClInclude Include="src\SweetsApp.h" />
     <ClInclude Include="src\TextureLibrary.h" />

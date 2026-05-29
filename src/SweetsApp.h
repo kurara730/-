@@ -24,7 +24,7 @@
 #include "GameTypes.h"
 #include "ModelLibrary.h"
 #include "SpriteLibrary.h"
-#include "SpriteRenderer.h"
+#include "SpriteCanvas.h"
 #include "TextureLibrary.h"
 #include "VideoSystem.h"
 
@@ -37,8 +37,8 @@ public:
 
 private:
     void CreateDevice();
-    void CreateRenderTargets();
-    void ReleaseRenderTargets();
+    void CreateFrameTargets();
+    void ReleaseFrameTargets();
     void CreateShadersAndStates();
     void CreateOffscreenTarget(ComPtr<ID3D11Texture2D>& texture, ComPtr<ID3D11RenderTargetView>& rtv, ComPtr<ID3D11ShaderResourceView>& srv, DXGI_FORMAT format);
     void CreateMeshes();
@@ -143,9 +143,8 @@ private:
     void DoMelee(float aim);
     void DoMeleeFor(Player& p, int ownerIndex, float aim);
 
-    void Render();
+    void PresentFrame();
     void DrawScene();
-    void DrawGameplay2D();
     void DrawGameplay3D();
     void DrawAdditiveScene();
     void CompositeScene();
@@ -260,7 +259,7 @@ private:
     Mesh ringMesh_;
     Mesh cubeMesh_;
     Mesh wedgeMesh_;
-    SpriteRenderer spriteRenderer_;
+    SpriteCanvas spriteCanvas_;
 
     XMMATRIX view_{ XMMatrixIdentity() };
     XMMATRIX proj_{ XMMatrixIdentity() };

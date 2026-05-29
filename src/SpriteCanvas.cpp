@@ -1,4 +1,4 @@
-#include "SpriteRenderer.h"
+#include "SpriteCanvas.h"
 
 #include <d3dcompiler.h>
 
@@ -25,7 +25,7 @@ XMFLOAT4 ToFloat4(Color c)
 }
 }
 
-bool SpriteRenderer::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, const std::wstring& shaderPath)
+bool SpriteCanvas::Initialize(ID3D11Device* device, ID3D11DeviceContext* context, const std::wstring& shaderPath)
 {
     Shutdown();
     if (!device || !context) return false;
@@ -133,7 +133,7 @@ bool SpriteRenderer::Initialize(ID3D11Device* device, ID3D11DeviceContext* conte
     return true;
 }
 
-void SpriteRenderer::Shutdown()
+void SpriteCanvas::Shutdown()
 {
     additiveBlend_.Reset();
     alphaBlend_.Reset();
@@ -151,7 +151,7 @@ void SpriteRenderer::Shutdown()
     initialized_ = false;
 }
 
-void SpriteRenderer::Begin(const XMMATRIX& viewProjection, bool additive)
+void SpriteCanvas::Begin(const XMMATRIX& viewProjection, bool additive)
 {
     if (!initialized_) return;
 
@@ -174,14 +174,14 @@ void SpriteRenderer::Begin(const XMMATRIX& viewProjection, bool additive)
     context_->PSSetSamplers(0, 1, &sampler);
 }
 
-void SpriteRenderer::End()
+void SpriteCanvas::End()
 {
     if (!initialized_) return;
     ID3D11ShaderResourceView* nullSrv = nullptr;
     context_->PSSetShaderResources(0, 1, &nullSrv);
 }
 
-void SpriteRenderer::DrawQuad(ID3D11ShaderResourceView* texture, V2 center, V2 size, float rotation, Color tint, float depth)
+void SpriteCanvas::DrawQuad(ID3D11ShaderResourceView* texture, V2 center, V2 size, float rotation, Color tint, float depth)
 {
     if (!initialized_) return;
 
@@ -211,7 +211,7 @@ void SpriteRenderer::DrawQuad(ID3D11ShaderResourceView* texture, V2 center, V2 s
     Submit(vertices, texture);
 }
 
-void SpriteRenderer::DrawCircle(V2 center, float radius, Color tint, float depth, int segments)
+void SpriteCanvas::DrawCircle(V2 center, float radius, Color tint, float depth, int segments)
 {
     if (!initialized_ || radius <= 0.0f) return;
     segments = std::max(8, std::min(segments, 96));
@@ -229,7 +229,7 @@ void SpriteRenderer::DrawCircle(V2 center, float radius, Color tint, float depth
     Submit(vertices, nullptr);
 }
 
-void SpriteRenderer::DrawRing(V2 center, float radius, float thickness, Color tint, float depth, int segments)
+void SpriteCanvas::DrawRing(V2 center, float radius, float thickness, Color tint, float depth, int segments)
 {
     if (!initialized_ || radius <= 0.0f || thickness <= 0.0f) return;
     segments = std::max(8, std::min(segments, 128));
@@ -256,7 +256,7 @@ void SpriteRenderer::DrawRing(V2 center, float radius, float thickness, Color ti
     Submit(vertices, nullptr);
 }
 
-void SpriteRenderer::DrawArc(V2 center, float radius, float thickness, float angle, float arc, Color tint, float depth, int segments)
+void SpriteCanvas::DrawArc(V2 center, float radius, float thickness, float angle, float arc, Color tint, float depth, int segments)
 {
     if (!initialized_ || radius <= 0.0f || thickness <= 0.0f || arc <= 0.0f) return;
     segments = std::max(4, std::min(segments, 96));
@@ -284,7 +284,7 @@ void SpriteRenderer::DrawArc(V2 center, float radius, float thickness, float ang
     Submit(vertices, nullptr);
 }
 
-void SpriteRenderer::Submit(const std::vector<SpriteVertex>& vertices, ID3D11ShaderResourceView* texture)
+void SpriteCanvas::Submit(const std::vector<SpriteVertex>& vertices, ID3D11ShaderResourceView* texture)
 {
     if (!initialized_ || vertices.empty()) return;
     if (vertices.size() > MaxSpriteVertices) return;
@@ -304,7 +304,7 @@ void SpriteRenderer::Submit(const std::vector<SpriteVertex>& vertices, ID3D11Sha
     context_->Draw(static_cast<UINT>(vertices.size()), 0);
 }
 
-SpriteRenderer::SpriteVertex SpriteRenderer::MakeVertex(float x, float y, float depth, float u, float v, Color tint) const
+SpriteCanvas::SpriteVertex SpriteCanvas::MakeVertex(float x, float y, float depth, float u, float v, Color tint) const
 {
     return { { x, y, depth }, { u, v }, ToFloat4(tint) };
 }

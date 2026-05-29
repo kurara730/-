@@ -9,7 +9,7 @@
 #include <string>
 #include <vector>
 
-class SpriteRenderer
+class SpriteCanvas
 {
 public:
     bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context, const std::wstring& shaderPath);
