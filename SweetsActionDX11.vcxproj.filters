@@ -27,6 +27,7 @@
     <ClCompile Include="src\CombatEffects.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\CombatLoop.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\CoopController.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\DataTables.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\DimensionRules.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\EffekseerSystem.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\EnemyController.cpp"><Filter>Source Files</Filter></ClCompile>
@@ -53,6 +54,7 @@
     <ClInclude Include="src\AudioSystem.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\AssetCatalog.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\AssetLoaders.h"><Filter>Header Files</Filter></ClInclude>
+    <ClInclude Include="src\DataTables.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\EffekseerSystem.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\GameDefs.h"><Filter>Header Files</Filter></ClInclude>
     <ClInclude Include="src\GameMath.h"><Filter>Header Files</Filter></ClInclude>

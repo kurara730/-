@@ -106,6 +106,7 @@
     <ClCompile Include="src\CombatEffects.cpp" />
     <ClCompile Include="src\CombatLoop.cpp" />
     <ClCompile Include="src\CoopController.cpp" />
+    <ClCompile Include="src\DataTables.cpp" />
     <ClCompile Include="src\DimensionRules.cpp" />
     <ClCompile Include="src\EffekseerSystem.cpp" />
     <ClCompile Include="src\EnemyController.cpp" />
@@ -132,6 +133,7 @@
     <ClInclude Include="src\AudioSystem.h" />
     <ClInclude Include="src\AssetCatalog.h" />
     <ClInclude Include="src\AssetLoaders.h" />
+    <ClInclude Include="src\DataTables.h" />
     <ClInclude Include="src\EffekseerSystem.h" />
     <ClInclude Include="src\GameDefs.h" />
     <ClInclude Include="src\GameMath.h" />
