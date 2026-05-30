@@ -196,6 +196,7 @@ private:
     void ResetDebugFxAdjustments();
     void SetDebugFxSlider(int index, float normalizedValue);
     float DebugFxSliderValue(int index) const;
+    float DebugFxDisplayValue(int index) const;
     void RestartCurrentRun();
     void StartSelectedTitleItem();
     void ActivatePauseMenuItem();

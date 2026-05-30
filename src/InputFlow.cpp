@@ -291,6 +291,26 @@ float SweetsApp::DebugFxSliderValue(int index) const
 #endif
 }
 
+float SweetsApp::DebugFxDisplayValue(int index) const
+{
+#if defined(_DEBUG)
+    switch (index)
+    {
+    case 0: return ClampFloat(debug_.brightness, 0.5f, 1.5f);
+    case 1: return ClampFloat(debug_.additiveFx, 0.0f, 2.0f);
+    case 2: return ClampFloat(debug_.screenFlashFx, 0.0f, 2.0f);
+    case 3: return ClampFloat(debug_.enemyBulletGlow, 0.0f, 2.0f);
+    case 4: return ClampFloat(debug_.swordFx, 0.0f, 2.0f);
+    case 5: return ClampFloat(debug_.ultimateFx, 0.0f, 2.0f);
+    case 6: return ClampFloat(debug_.hiddenBossAuraFx, 0.0f, 2.0f);
+    default: return 0.0f;
+    }
+#else
+    (void)index;
+    return 1.0f;
+#endif
+}
+
 void SweetsApp::ExecuteDebugAction(int action)
 {
 #if defined(_DEBUG)

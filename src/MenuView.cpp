@@ -1,6 +1,7 @@
 #include "SweetsApp.h"
 
 #include <filesystem>
+#include <iomanip>
 
 namespace
 {
@@ -823,16 +824,16 @@ void SweetsApp::DrawDebugHud()
     }
 
     const std::array<const wchar_t*, 7> fxLabels{
-        L"明るさ",
-        L"加算FX",
-        L"フラッシュ",
-        L"敵弾発光",
-        L"剣FX",
-        L"必殺FX",
-        L"隠しオーラ"
+        L"明るさ値",
+        L"加算FX値",
+        L"フラッシュ値",
+        L"敵弾発光値",
+        L"剣FX値",
+        L"必殺FX値",
+        L"隠しオーラ値"
     };
     textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f));
-    d2dContext_->DrawTextW(L"表示調整", 4, smallFormat_.Get(),
+    d2dContext_->DrawTextW(L"表示調整（実数）", 8, smallFormat_.Get(),
         D2D1::RectF(panelLeft + 18.0f, 510.0f, panelRight - 16.0f, 532.0f), textBrush_.Get());
 
     const float sliderLabelX = panelLeft + 18.0f;
@@ -853,9 +854,9 @@ void SweetsApp::DrawDebugHud()
         d2dContext_->FillRectangle(D2D1::RectF(sliderLeft, y, sliderLeft + (sliderRight - sliderLeft) * value, y + 8.0f), textBrush_.Get());
         const float knob = sliderLeft + (sliderRight - sliderLeft) * value;
         d2dContext_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(knob, y + 4.0f), active ? 7.0f : 5.5f, active ? 7.0f : 5.5f), textBrush_.Get());
-        const float display = i == 0 ? (0.5f + value) : (value * 2.0f);
+        const float display = DebugFxDisplayValue(i);
         std::wostringstream valueText;
-        valueText << static_cast<int>(display * 100.0f + 0.5f) << L"%";
+        valueText << std::fixed << std::setprecision(2) << display;
         const std::wstring valueString = valueText.str();
         textBrush_->SetColor(D2D1::ColorF(0.86f, 0.86f, 0.90f, 0.86f));
         d2dContext_->DrawTextW(valueString.c_str(), static_cast<UINT32>(valueString.size()), smallFormat_.Get(),
@@ -932,7 +933,10 @@ void SweetsApp::DrawDifficultySelection()
             D2D1::RectF(x + 12.0f, y + 44.0f, x + cardW - 12.0f, y + 66.0f), textBrush_.Get());
 
         std::wostringstream stats;
-        stats << L"弾 " << static_cast<int>(def.bulletCountMul * 100.0f) << L"% / ボム " << def.initialBombs;
+        stats << std::fixed << std::setprecision(2)
+            << L"弾数" << def.bulletCountMul
+            << L"  弾速" << def.bulletSpeedMul
+            << L"  ボム" << def.initialBombs;
         const std::wstring statLine = stats.str();
         textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.90f));
         d2dContext_->DrawTextW(statLine.c_str(), static_cast<UINT32>(statLine.size()), smallFormat_.Get(),
@@ -1126,12 +1130,14 @@ void SweetsApp::DrawLoadoutSelection()
         d2dContext_->DrawTextW(text.c_str(), static_cast<UINT32>(text.size()), format, rect, textBrush_.Get());
     };
 
-    auto statBar = [&](float x, float y, float w, const wchar_t* label, float value, const D2D1_COLOR_F& color)
+    auto statBar = [&](float x, float y, float w, const wchar_t* label, float value, const std::wstring& valueText, const D2D1_COLOR_F& color)
     {
         drawText(label, smallFormat_.Get(), D2D1::RectF(x, y - 2.0f, x + 46.0f, y + 18.0f), D2D1::ColorF(0.86f, 0.74f, 0.80f, 1.0f));
         fill(D2D1::RectF(x + 50.0f, y + 5.0f, x + w, y + 13.0f), D2D1::ColorF(0.22f, 0.10f, 0.16f, 0.95f));
         textBrush_->SetColor(color);
-        d2dContext_->FillRectangle(D2D1::RectF(x + 50.0f, y + 5.0f, x + 50.0f + (w - 50.0f) * ClampFloat(value, 0.0f, 1.0f), y + 13.0f), textBrush_.Get());
+        const float barRight = x + 50.0f + (w - 112.0f) * ClampFloat(value, 0.0f, 1.0f);
+        d2dContext_->FillRectangle(D2D1::RectF(x + 50.0f, y + 5.0f, barRight, y + 13.0f), textBrush_.Get());
+        drawText(valueText, smallFormat_.Get(), D2D1::RectF(x + w - 58.0f, y - 2.0f, x + w, y + 18.0f), D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.95f));
     };
 
     for (int i = 0; i < static_cast<int>(Loadouts.size()); ++i)
@@ -1164,10 +1170,16 @@ void SweetsApp::DrawLoadoutSelection()
 
         const float statX = x + 14.0f;
         const float statW = cardW - 28.0f;
-        statBar(statX, top + 145.0f, statW, L"体力", loadout.maxHp / 150.0f, accent);
-        statBar(statX, top + 161.0f, statW, L"速度", loadout.speed / 6.4f, accent);
-        statBar(statX, top + 177.0f, statW, L"火力", loadout.damageMul / 1.35f, accent);
-        statBar(statX, top + 193.0f, statW, L"反射", Weapons[static_cast<int>(loadout.weapon)].bounce / 6.0f, accent);
+        auto statValue = [](float value, int precision = 2)
+        {
+            std::wostringstream ss;
+            ss << std::fixed << std::setprecision(precision) << value;
+            return ss.str();
+        };
+        statBar(statX, top + 145.0f, statW, L"体力", loadout.maxHp / 150.0f, statValue(loadout.maxHp, 0), accent);
+        statBar(statX, top + 161.0f, statW, L"速度", loadout.speed / 6.4f, statValue(loadout.speed), accent);
+        statBar(statX, top + 177.0f, statW, L"火力", loadout.damageMul / 1.35f, statValue(loadout.damageMul), accent);
+        statBar(statX, top + 193.0f, statW, L"連射", ClampFloat(1.35f - loadout.cooldownMul, 0.0f, 1.0f), statValue(loadout.cooldownMul), accent);
 
         if (selected)
         {
