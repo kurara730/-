@@ -215,6 +215,26 @@ void SweetsApp::DrawGameplay3D()
         DrawSphere(p.pos, PlayerBodyY, p.radius, body);
         const V2 nose = p.pos + FromAngle(p.face) * (p.radius * 0.75f);
         DrawSphere(nose, PlayerBodyY + 0.03f, p.radius * 0.16f, Cream);
+        if (p.charging && !p.downed)
+        {
+            // チャージ進行に応じて外側のリングが機体へ収束し、溜まり具合を可視化する。
+            const float chargeProgress = ClampFloat(p.chargeT / 0.55f, 0.0f, 1.0f);
+            const Color chargeColor = p.chargeReady ? Gold : base;
+            const float outer = p.radius * (2.6f - 1.3f * chargeProgress);
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(outer, 1.0f, outer) *
+                XMMatrixTranslation(p.pos.x, 0.07f, p.pos.z),
+                WithAlpha(chargeColor, 0.28f + 0.42f * chargeProgress));
+            if (p.chargeReady)
+            {
+                // 発動可能になったら機体周りで脈動させ、撃てる合図を明確に出す。
+                const float pulse = 0.45f + 0.35f * std::sin(p.chargeT * 18.0f);
+                DrawMesh(ringMesh_,
+                    XMMatrixScaling(p.radius * 1.28f, 1.0f, p.radius * 1.28f) *
+                    XMMatrixTranslation(p.pos.x, 0.075f, p.pos.z),
+                    WithAlpha(Cream, pulse));
+            }
+        }
         if ((p.focus || screen_ == Screen::HiddenBoss) && !p.downed)
         {
             DrawMesh(ringMesh_,
