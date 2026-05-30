@@ -41,6 +41,7 @@ private:
     void ReleaseFrameTargets();
     void CreateShadersAndStates();
     void CreateOffscreenTarget(ComPtr<ID3D11Texture2D>& texture, ComPtr<ID3D11RenderTargetView>& rtv, ComPtr<ID3D11ShaderResourceView>& srv, DXGI_FORMAT format);
+    void CreateOffscreenTargetSized(ComPtr<ID3D11Texture2D>& texture, ComPtr<ID3D11RenderTargetView>& rtv, ComPtr<ID3D11ShaderResourceView>& srv, DXGI_FORMAT format, UINT w, UINT h);
     void CreateMeshes();
     void LoadAssets();
     void LoadTitleAssets();
@@ -159,6 +160,7 @@ private:
     void DrawScene();
     void DrawGameplay3D();
     void DrawAdditiveScene();
+    void RenderBloom();
     void CompositeScene();
     void DrawHud();
     void DrawDebugHud();
@@ -166,6 +168,7 @@ private:
     void DrawScreenFlashOverlay();
     void DrawCharacterSelect();
     void DrawPauseMenu();
+    void DrawSettingsMenu();
     void DrawVideoScreen();
     void DrawTitleMediaFrame(const D2D1_RECT_F& rect);
     void DrawBitmapCover(ID2D1Bitmap1* bitmap, const D2D1_RECT_F& rect, float opacity);
@@ -202,6 +205,7 @@ private:
     void ActivatePauseMenuItem();
     bool HandlePauseClick(float sx, float sy);
     bool HandlePauseDrag(float sx, float sy);
+    bool HandleSettingsClick(float sx, float sy);
     void SetAimMode(AimMode mode, bool save);
     void SetVolumeSlider(int index, float value, bool save);
     float VolumeSliderValue(int index) const;
@@ -245,12 +249,25 @@ private:
     ComPtr<ID3D11Texture2D> resolvedTex_;
     ComPtr<ID3D11RenderTargetView> resolvedRtv_;
     ComPtr<ID3D11ShaderResourceView> resolvedSrv_;
+    // ブルーム用(半解像度・HDR)。A/B でピンポンしてブラーをかける。
+    ComPtr<ID3D11Texture2D> bloomTexA_;
+    ComPtr<ID3D11RenderTargetView> bloomRtvA_;
+    ComPtr<ID3D11ShaderResourceView> bloomSrvA_;
+    ComPtr<ID3D11Texture2D> bloomTexB_;
+    ComPtr<ID3D11RenderTargetView> bloomRtvB_;
+    ComPtr<ID3D11ShaderResourceView> bloomSrvB_;
+    UINT bloomWidth_ = 0;
+    UINT bloomHeight_ = 0;
     ComPtr<ID3D11Texture2D> depthTex_;
     ComPtr<ID3D11DepthStencilView> dsv_;
     ComPtr<ID3D11VertexShader> vs_;
     ComPtr<ID3D11PixelShader> ps_;
     ComPtr<ID3D11VertexShader> postVs_;
     ComPtr<ID3D11PixelShader> postPs_;
+    ComPtr<ID3D11VertexShader> bloomVs_;
+    ComPtr<ID3D11PixelShader> bloomPrefilterPs_;
+    ComPtr<ID3D11PixelShader> bloomBlurPs_;
+    ComPtr<ID3D11Buffer> bloomCB_;
     ComPtr<ID3D11InputLayout> inputLayout_;
     ComPtr<ID3D11Buffer> frameCB_;
     ComPtr<ID3D11Buffer> objectCB_;
@@ -295,6 +312,7 @@ private:
     float mouseY_ = 400.0f;
 
     Screen screen_ = Screen::BootLoading;
+    Screen settingsReturnScreen_ = Screen::Title; // 音量設定画面から戻る先(タイトル or ポーズ)
     std::array<Player, MaxPlayers> players_{};
     Player& player_ = players_[0];
     Boss boss_;
@@ -334,7 +352,7 @@ private:
     GameMode pendingGameMode_ = GameMode::Story;
     GameOverChoice gameOverChoice_ = GameOverChoice::Retry;
     GameplayDimension gameplayDimension_ = GameplayDimension::TwoD;
-    AimMode aimMode_ = AimMode::MoveDirection;
+    AimMode aimMode_ = AimMode::Cursor;
     DebugState debug_;
     LoadPhase loadPhase_ = LoadPhase::Boot;
     bool hiddenBossUnlocked_ = false;

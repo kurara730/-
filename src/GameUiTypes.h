@@ -9,6 +9,7 @@ enum class Screen
     BootLoading,
     GameplayLoading,
     Title,
+    Settings,
     CharacterSelect,
     DifficultySelect,
     Playing,
@@ -62,7 +63,8 @@ enum class TitleMenuItem
 {
     Story,
     Endless,
-    Credits
+    Credits,
+    Settings
 };
 
 enum class GameOverChoice

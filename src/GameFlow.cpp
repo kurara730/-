@@ -1,4 +1,5 @@
 #include "SweetsApp.h"
+#include "DataTables.h"
 #include "ReflectionSystem.h"
 #include "StageFactory.h"
 
@@ -280,6 +281,7 @@ void SweetsApp::UpdateBootLoading(float dt)
         break;
     case LoadPhase::Graphics:
         LoadProgress();
+        LoadCharacterTableFromCsv();
         ApplyAudioVolume();
         AdvanceLoadPhase(LoadPhase::TitleAssets, L"Save data and settings loaded");
         break;

@@ -185,5 +185,12 @@ struct ObjectCB
 
 struct PostCB
 {
-    XMFLOAT4 params;
+    XMFLOAT4 params;  // x: taa blend, y: additive scale, z: view mode, w: brightness(exposure)
+    XMFLOAT4 params2; // x: bloom intensity, y: vignette strength, z: tonemap enable, w: unused
+};
+
+struct BloomCB
+{
+    XMFLOAT4 texel;  // xy: texel size of source, zw: blur direction (1,0) or (0,1)
+    XMFLOAT4 params; // x: threshold, y: soft knee, z: intensity, w: unused
 };
