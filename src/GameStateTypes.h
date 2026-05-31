@@ -26,7 +26,7 @@ struct WeaponDef
 };
 
 inline const std::array<WeaponDef, 4> Weapons{ {
-    { L"イチゴ", Berry, 0.15f, 15.0f, 18.0f, 0.13f, 0, 0 },
+    { L"イチゴ", Berry, 0.19f, 15.0f, 18.0f, 0.13f, 0, 0 },
     { L"チョコ", Choco, 0.38f, 0.0f, 38.0f, 0.0f, 0, 0 },
     { L"チーズ", Gold, 0.32f, 10.0f, 31.0f, 0.22f, 1, 0 },
     { L"ロール", Cream, 0.54f, 11.5f, 34.0f, 0.19f, 0, 5 },
@@ -180,6 +180,7 @@ struct Shot
     int ownerIndex = 0;
     int reflectedCount = 0;
     int splitCount = 0;
+    int reflectSplit = 0;       // 反射した瞬間に分裂する子弾数（ショート用）
     float angularVel = 0.0f;
     float accel = 0.0f;
     float homingStrength = 0.0f;
@@ -214,6 +215,7 @@ struct Slash
     Color color = Choco;
     SlashVisualMode visualMode = SlashVisualMode::Sector;
     bool hitBoss = false;
+    bool sweep = false;         // 薙ぎ払い：刃が弧を端から端へ振り抜ける演出
 };
 
 struct Pickup
