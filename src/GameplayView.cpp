@@ -141,23 +141,31 @@ void SweetsApp::DrawGameplay3D()
         XMMatrixTranslation(0.0f, 0.025f, 0.0f),
         WithAlpha(Cream, 0.22f));
 
+    auto ringAt = [&](V2 pos, float r, float y, Color c)
+    {
+        DrawMesh(ringMesh_,
+            XMMatrixScaling(r, 1.0f, r) * XMMatrixTranslation(pos.x, y, pos.z), c);
+    };
     for (const auto& o : obstacles_)
     {
         if (o.damageField)
         {
             DrawCylinder(o.pos, o.radius, 0.08f, WithAlpha(Red, 0.42f));
-            DrawMesh(ringMesh_,
-                XMMatrixScaling(o.radius, 1.0f, o.radius) *
-                XMMatrixTranslation(o.pos.x, 0.16f, o.pos.z),
-                WithAlpha(Red, 0.78f));
+            ringAt(o.pos, o.radius, 0.16f, WithAlpha(Red, 0.78f));
+        }
+        else if (o.warpId >= 0)
+        {
+            // ワープポータル：回転する光輪
+            DrawCylinder(o.pos, o.radius * 0.5f, 0.05f, WithAlpha(o.color, o.flash > 0.0f ? 0.8f : 0.35f));
+            ringAt(o.pos, o.radius * 1.2f, 0.20f, WithAlpha(o.color, 0.85f));
+            ringAt(o.pos, o.radius * (0.7f + 0.15f * std::sin(o.spin * 4.0f)), 0.24f, WithAlpha(Cream, 0.60f));
         }
         else
         {
-            DrawCylinder(o.pos, o.radius, o.cheeseWall ? 0.82f : 0.56f, WithAlpha(o.color, 0.86f));
-            DrawMesh(ringMesh_,
-                XMMatrixScaling(o.radius * 1.08f, 1.0f, o.radius * 1.08f) *
-                XMMatrixTranslation(o.pos.x, 0.65f, o.pos.z),
-                WithAlpha(Cream, 0.30f));
+            const Color c = o.flash > 0.0f ? Cream : o.color;
+            const float top = o.cheeseWall ? 0.82f : (o.bumper ? 0.66f : 0.56f);
+            DrawCylinder(o.pos, o.radius, top, WithAlpha(c, 0.86f));
+            ringAt(o.pos, o.radius * 1.08f, 0.65f, WithAlpha(o.bumper ? Gold : Cream, o.bumper ? 0.55f : 0.30f));
         }
     }
 

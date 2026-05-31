@@ -173,10 +173,11 @@ void SweetsApp::ClearWave()
     StartWave();
 }
 
-void SweetsApp::SpawnPickup()
+void SweetsApp::SpawnPickupAt(V2 pos)
 {
     Pickup p{};
-    p.pos = RandInArena(1.5f);
+    p.pos = pos;
+    ClampInside(p.pos, 1.0f);
     p.type = RandInt(0, 9);
     p.pickupType = static_cast<PickupType>(p.type);
     switch (p.pickupType)
@@ -194,6 +195,11 @@ void SweetsApp::SpawnPickup()
     }
     SyncPickup3D(p);
     pickups_.push_back(p);
+}
+
+void SweetsApp::SpawnPickup()
+{
+    SpawnPickupAt(RandInArena(1.5f));
 }
 
 void SweetsApp::Update(float dt)

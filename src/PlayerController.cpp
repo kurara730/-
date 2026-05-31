@@ -31,9 +31,9 @@ void SweetsApp::UpdatePlayer(float dt)
     ClampInside(player_.pos, player_.radius);
     SyncPlayer3D(player_);
 
-    for (const auto& o : obstacles_)
+    for (auto& o : obstacles_)
     {
-        if (o.damageField) continue;
+        if (o.damageField || o.warpId >= 0) continue; // 床とポータルは通過可
         V2 d = player_.pos - o.pos;
         const float l = RuleDistance(player_.pos, PlayerBodyY, o.pos, o.height);
         const float minD = player_.radius + o.radius;
@@ -41,6 +41,14 @@ void SweetsApp::UpdatePlayer(float dt)
         {
             const V2 n = Normalize(d);
             player_.pos = o.pos + n * minD;
+            if (o.bumper)
+            {
+                // バンパー：触れた自機を勢いよく弾き返す
+                player_.dashVel = n * 11.0f;
+                player_.dashT = std::max(player_.dashT, 0.16f);
+                o.flash = 1.0f;
+                Burst(player_.pos, Gold, 12);
+            }
             SyncPlayer3D(player_);
         }
     }

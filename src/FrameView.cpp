@@ -184,13 +184,22 @@ void SweetsApp::DrawScene()
     {
         if (o.damageField)
         {
+            spriteCanvas_.DrawCircle(o.pos, o.radius, WithAlpha(Red, 0.22f), 0.33f, 40);
             spriteCanvas_.DrawRing(o.pos, o.radius, 0.18f, WithAlpha(Red, 0.68f), 0.32f);
+        }
+        else if (o.warpId >= 0)
+        {
+            // ワープポータル
+            spriteCanvas_.DrawCircle(o.pos, o.radius * 0.6f, WithAlpha(o.color, o.flash > 0.0f ? 0.6f : 0.30f), 0.33f, 32);
+            spriteCanvas_.DrawRing(o.pos, o.radius * 1.1f, 0.10f, WithAlpha(o.color, 0.85f), 0.31f, 48);
+            spriteCanvas_.DrawRing(o.pos, o.radius * (0.7f + 0.15f * std::sin(o.spin * 4.0f)), 0.07f, WithAlpha(Cream, 0.6f), 0.30f, 40);
         }
         else
         {
+            const Color c = o.flash > 0.0f ? Cream : o.color;
             const float size = o.radius * (o.cheeseWall ? 2.35f : 2.05f);
-            DrawSprite2D(L"2d_obstacle_wall", o.pos, { size, size }, o.ttl * 0.35f, WithAlpha(o.color, 0.92f), 0.38f);
-            spriteCanvas_.DrawRing(o.pos, o.radius, 0.08f, WithAlpha(Cream, 0.28f), 0.36f);
+            DrawSprite2D(L"2d_obstacle_wall", o.pos, { size, size }, o.ttl * 0.35f + o.spin * 0.2f, WithAlpha(c, 0.92f), 0.38f);
+            spriteCanvas_.DrawRing(o.pos, o.radius, 0.08f, WithAlpha(o.bumper ? Gold : Cream, o.bumper ? 0.55f : 0.28f), 0.36f);
         }
     }
     for (const auto& p : pickups_)
