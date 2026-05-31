@@ -469,6 +469,17 @@ void SweetsApp::DrawSector(const Slash& s)
         return;
     }
 
+    if (s.sweep)
+    {
+        // 薙ぎ払い：刃が弧の端から端へ振り抜ける
+        const float prog = 1.0f - ClampFloat(s.ttl / s.life, 0.0f, 1.0f);
+        const float bladeAng = s.angle - s.arc * 0.5f + s.arc * prog;
+        const V2 bc = s.pos + FromAngle(bladeAng) * (s.range * 0.5f);
+        DrawSprite2D(L"2d_slash", bc, { s.range * 1.25f, s.range * 0.72f }, bladeAng, WithAlpha(s.color, alpha), 0.08f);
+        spriteCanvas_.DrawArc(s.pos, s.range * 0.60f, s.range * 0.34f, s.angle, s.arc, WithAlpha(Cream, alpha * 0.5f), 0.07f, 32);
+        return;
+    }
+
     const V2 center = s.pos + FromAngle(s.angle) * (s.range * 0.45f);
     if (s.visualMode == SlashVisualMode::Line)
     {
@@ -484,6 +495,23 @@ void SweetsApp::DrawSector3D(const Slash& s)
 {
     if (s.visualMode == SlashVisualMode::Hidden) return;
     const float alpha = ClampFloat(s.ttl / s.life, 0.0f, 1.0f) * 0.55f;
+    if (s.sweep)
+    {
+        // 薙ぎ払い：刃が弧の端から端へ振り抜ける
+        const float prog = 1.0f - ClampFloat(s.ttl / s.life, 0.0f, 1.0f);
+        const float bladeAng = s.angle - s.arc * 0.5f + s.arc * prog;
+        const V2 c = s.pos + FromAngle(bladeAng) * (s.range * 0.5f);
+        DrawMesh(wedgeMesh_,
+            XMMatrixScaling(s.range * 0.55f, 1.0f, s.range * 0.55f) *
+            XMMatrixRotationY(-bladeAng) *
+            XMMatrixTranslation(c.x, s.height, c.z),
+            WithAlpha(s.color, alpha + 0.10f));
+        DrawMesh(ringMesh_,
+            XMMatrixScaling(s.range * 0.62f, 1.0f, s.range * 0.62f) *
+            XMMatrixTranslation(s.pos.x, s.height + 0.015f, s.pos.z),
+            WithAlpha(Cream, alpha * 0.25f));
+        return;
+    }
     const V2 center = s.pos + FromAngle(s.angle) * (s.range * 0.42f);
     DrawMesh(wedgeMesh_,
         XMMatrixScaling(s.range * 0.82f, 1.0f, s.range * 0.82f) *

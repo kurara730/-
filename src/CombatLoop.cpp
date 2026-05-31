@@ -15,11 +15,13 @@ bool IsEliteType(EnemyType type)
 
 void SweetsApp::UpdateShots(float dt)
 {
+    std::vector<Shot> spawned; // 反射分裂などイテレーション中に増える弾を遅延追加
     for (auto& s : shots_)
     {
         if (s.dead) continue;
         s.ttl -= dt;
         if (s.ttl <= 0.0f) continue;
+        const int reflectBefore = s.reflectedCount;
         if (s.enemy && (std::fabs(s.angularVel) > 0.0001f || std::fabs(s.accel) > 0.0001f))
         {
             float speed = Len(s.vel);
@@ -126,6 +128,31 @@ void SweetsApp::UpdateShots(float dt)
 
         if (s.dead) continue;
 
+        // ショート弾：反射した瞬間に小さな追尾弾へ分裂（面制圧）
+        if (!s.enemy && s.reflectSplit > 0 && s.reflectedCount > reflectBefore)
+        {
+            const float baseAng = AngleOf(s.vel);
+            const int n = s.reflectSplit;
+            for (int i = 0; i < n; ++i)
+            {
+                const float a = baseAng + (static_cast<float>(i) / std::max(1, n - 1) - 0.5f) * 1.1f;
+                Shot child{};
+                child.pos = s.pos;
+                child.vel = FromAngle(a) * 8.5f;
+                child.radius = 0.11f;
+                child.damage = s.damage * 0.42f;
+                child.ttl = 1.4f;
+                child.homingStrength = 1.6f;
+                child.ownerIndex = s.ownerIndex;
+                child.sourceCharacter = CharacterType::Shortcake;
+                child.color = Berry;
+                SyncShot3D(child);
+                spawned.push_back(child);
+            }
+            Burst(s.pos, Berry, 12);
+            s.reflectSplit = 0;
+        }
+
         if (s.enemy)
         {
             for (auto& p : players_)
@@ -179,6 +206,8 @@ void SweetsApp::UpdateShots(float dt)
             }
         }
     }
+
+    for (const auto& sp : spawned) shots_.push_back(sp);
 }
 
 void SweetsApp::UpdatePickups(float dt)
