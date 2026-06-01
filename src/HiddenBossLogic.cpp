@@ -72,7 +72,7 @@ void SweetsApp::StartHiddenBoss()
     hiddenBossPhaseIntroLife_ = 0.0f;
     ResetHiddenBossCores();
     screen_ = Screen::HiddenBoss;
-    message_ = L"Hidden Boss Phase 1";
+    message_ = L"炎核を見つけろ";
     messageT_ = 3.0f;
 }
 
@@ -126,6 +126,7 @@ void SweetsApp::UpdateHiddenBossIntro(float dt)
         particles_.push_back(p);
     }
     UpdateParticles(dt);
+    UpdateCamera(dt);
     particles_.erase(std::remove_if(particles_.begin(), particles_.end(), [](const Particle& p) { return p.ttl <= 0.0f || p.y < -0.1f; }), particles_.end());
     if (hiddenIntroT_ >= HiddenBossIntroDuration)
     {
@@ -265,6 +266,7 @@ void SweetsApp::UpdateHiddenBoss(float dt)
         boss_.flash = std::max(boss_.flash, 0.08f);
         boss_.spin += dt * (hiddenBossForm_ >= 3 ? 3.6f : 2.6f);
         UpdateParticles(dt);
+        UpdateCamera(dt);
         particles_.erase(std::remove_if(particles_.begin(), particles_.end(), [](const Particle& p) { return p.ttl <= 0.0f || p.y < -0.1f; }), particles_.end());
         return;
     }
@@ -470,6 +472,7 @@ void SweetsApp::UpdateHiddenBoss(float dt)
     UpdateShots(dt);
     UpdatePickups(dt);
     UpdateParticles(dt);
+    UpdateCamera(dt);
     for (auto& s : slashes_)
     {
         s.ttl -= dt;

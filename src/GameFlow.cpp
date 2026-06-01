@@ -101,6 +101,10 @@ void SweetsApp::ResetGame()
     message_ = L"";
     messageT_ = 0.0f;
     screenFlashT_ = 0.0f;
+    combatNotices_.clear();
+    worldTelegraphs_.clear();
+    camera_.center = player_.pos;
+    camera_.target = player_.pos;
     SyncAll3DState();
     StartWave();
 }
@@ -547,6 +551,7 @@ void SweetsApp::UpdatePlaying(float dt)
     UpdateShots(dt);
     UpdatePickups(dt);
     UpdateParticles(dt);
+    UpdateCamera(dt);
     for (auto& s : slashes_)
     {
         s.ttl -= dt;

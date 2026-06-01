@@ -611,8 +611,8 @@ V2 SweetsApp::ScreenToWorld(float sx, float sy) const
     if (Use3DRules())
     {
         const XMMATRIX view = XMMatrixLookAtLH(
-            XMVectorSet(0.0f, 15.8f, -17.8f, 1.0f),
-            XMVectorSet(0.0f, 0.0f, 0.8f, 1.0f),
+            XMVectorSet(camera_.center.x, 15.8f, camera_.center.z - 17.8f, 1.0f),
+            XMVectorSet(camera_.center.x, 0.0f, camera_.center.z + 0.8f, 1.0f),
             XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
         const XMMATRIX proj = XMMatrixPerspectiveFovLH(
             XMConvertToRadians(48.0f),
@@ -635,7 +635,7 @@ V2 SweetsApp::ScreenToWorld(float sx, float sy) const
         ClampInside(out, 0.0f);
         return out;
     }
-    V2 out{ nx * GameplayHalfWidth(width_, height_), ny * GameplayHalfHeight() };
+    V2 out{ camera_.center.x + nx * GameplayViewHalfWidth(), camera_.center.z + ny * GameplayViewHalfHeight() };
     ClampInside(out, 0.0f);
     return out;
 }

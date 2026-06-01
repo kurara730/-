@@ -53,6 +53,20 @@ void SweetsApp::UpdateEffectVisuals(float dt)
     swordEffectVisuals_.erase(
         std::remove_if(swordEffectVisuals_.begin(), swordEffectVisuals_.end(), [](const SwordEffectVisual& visual) { return visual.ttl <= 0.0f; }),
         swordEffectVisuals_.end());
+    for (auto& notice : combatNotices_)
+    {
+        notice.ttl -= dt;
+    }
+    combatNotices_.erase(
+        std::remove_if(combatNotices_.begin(), combatNotices_.end(), [](const CombatNotice& notice) { return notice.ttl <= 0.0f; }),
+        combatNotices_.end());
+    for (auto& telegraph : worldTelegraphs_)
+    {
+        telegraph.ttl -= dt;
+    }
+    worldTelegraphs_.erase(
+        std::remove_if(worldTelegraphs_.begin(), worldTelegraphs_.end(), [](const WorldTelegraph& telegraph) { return telegraph.ttl <= 0.0f; }),
+        worldTelegraphs_.end());
 }
 
 // 敵弾を1発作る共通処理です。

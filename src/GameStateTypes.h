@@ -177,6 +177,21 @@ struct Boss
     bool active = false;
 };
 
+struct BossGimmickState
+{
+    BossType type = BossType::Demon;
+    BossPatternId nextPattern = BossPatternId::Radial;
+    int patternStep = 0;
+    int sealHits = 0;
+    int mirrorIndex = 0;
+    float timer = 0.0f;
+    float vulnerableT = 0.0f;
+    float guardAngle = 0.0f;
+    float gravityT = 0.0f;
+    float territoryT = 0.0f;
+    bool mirrorOpen = false;
+};
+
 // 弾1発分の状態です。
 // enemy=true は敵弾、false は味方弾です。反射すると enemy が false になり ownerIndex が入ります。
 // hitBoss は貫通弾や斬撃波が同じボスへ毎フレーム多段ヒットしないための印です。

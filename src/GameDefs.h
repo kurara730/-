@@ -101,6 +101,19 @@ enum class BossDamageKind
     ReflectedShot
 };
 
+enum class BossPatternId
+{
+    Radial = 0,
+    Aimed,
+    Spiral,
+    Curve,
+    Seal,
+    GuardRing,
+    MirrorSplit,
+    GravityWell,
+    TerritoryZone
+};
+
 // UI表示用の短い名前を返すヘルパーです。
 // ここで表示名をまとめておくと、ポーズ画面など複数箇所で同じ表記を使えます。
 inline constexpr const wchar_t* AimModeName(AimMode mode)

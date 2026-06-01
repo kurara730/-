@@ -212,6 +212,11 @@ private:
     void DrawUltimatePreview(const Player& p, int ownerIndex);
     void DrawSprite2D(const std::wstring& spriteId, V2 pos, V2 size, float rotation, Color tint, float depth = 0.5f);
     V2 ScreenToWorld(float sx, float sy) const;
+    V2 WorldToScreen(V2 world) const;
+    SettingsLayout BuildSettingsLayout() const;
+    void UpdateCamera(float dt);
+    float GameplayViewHalfWidth() const;
+    float GameplayViewHalfHeight() const;
 
     void OnKeyDown(WPARAM key);
     bool HandleDebugKey(WPARAM key);
@@ -325,6 +330,7 @@ private:
     XMMATRIX view_{ XMMatrixIdentity() };
     XMMATRIX proj_{ XMMatrixIdentity() };
     XMFLOAT3 cameraPos_{ 0.0f, 15.5f, -18.5f };
+    CameraState camera_;
 
     bool keys_[MaxKeys]{};
     bool mouseLeft_ = false;
@@ -348,6 +354,9 @@ private:
     std::vector<EffectPulse> effectPulses_;
     std::vector<SwordEffectVisual> swordEffectVisuals_;
     std::array<HiddenBossCore, HiddenBossCoreCount> hiddenBossCores_{};
+    BossGimmickState bossGimmick_{};
+    std::vector<CombatNotice> combatNotices_;
+    std::vector<WorldTelegraph> worldTelegraphs_;
     AssetCatalog assetCatalog_;
     EffekseerSystem effekseer_;
     AudioSystem audio_;

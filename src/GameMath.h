@@ -21,7 +21,7 @@ using namespace DirectX;
 // 変更するとゲーム全体の広さと難易度が大きく変わります。
 constexpr float Pi = 3.14159265358979323846f;
 constexpr float TwoPi = Pi * 2.0f;
-constexpr float ArenaRadius = 10.0f;
+constexpr float ArenaRadius = 14.0f;
 constexpr int MaxKeys = 256;
 
 // DX11 側へ渡す色もこの構造体で統一します。

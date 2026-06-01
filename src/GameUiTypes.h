@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <string>
 
 #include "GameMath.h"
 
@@ -141,4 +142,49 @@ struct DebugState
     float swordFx = 1.0f;
     float ultimateFx = 1.0f;
     float hiddenBossAuraFx = 1.0f;
+};
+
+struct UiRect
+{
+    float left = 0.0f;
+    float top = 0.0f;
+    float right = 0.0f;
+    float bottom = 0.0f;
+};
+
+struct SettingsLayout
+{
+    UiRect panel{};
+    std::array<UiRect, 4> volumeSliders{};
+    std::array<UiRect, 3> aimButtons{};
+    float sliderLeft = 0.0f;
+    float sliderRight = 0.0f;
+};
+
+struct CameraState
+{
+    V2 center{};
+    V2 target{};
+    float halfHeight = 9.4f;
+    float follow = 8.5f;
+};
+
+struct CombatNotice
+{
+    std::wstring text;
+    float ttl = 0.0f;
+    float life = 0.0f;
+    Color color = Gold;
+};
+
+struct WorldTelegraph
+{
+    V2 pos{};
+    V2 dir{ 1.0f, 0.0f };
+    float radius = 1.0f;
+    float length = 0.0f;
+    float ttl = 0.0f;
+    float life = 0.0f;
+    Color color = Gold;
+    BossPatternId pattern = BossPatternId::Radial;
 };

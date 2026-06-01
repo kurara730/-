@@ -140,23 +140,23 @@ void SweetsApp::DrawScene()
     vp.MaxDepth = 1.0f;
     context_->RSSetViewports(1, &vp);
 
-    const float halfH = GameplayHalfHeight();
-    const float halfW = GameplayHalfWidth(width_, height_);
+    const float halfH = GameplayViewHalfHeight();
+    const float halfW = GameplayViewHalfWidth();
     if (Use3DRules())
     {
         SyncAll3DState();
-        const XMVECTOR eye = XMVectorSet(0.0f, 15.8f, -17.8f, 1.0f);
-        const XMVECTOR at = XMVectorSet(0.0f, 0.0f, 0.8f, 1.0f);
+        const XMVECTOR eye = XMVectorSet(camera_.center.x, 15.8f, camera_.center.z - 17.8f, 1.0f);
+        const XMVECTOR at = XMVectorSet(camera_.center.x, 0.0f, camera_.center.z + 0.8f, 1.0f);
         const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
         view_ = XMMatrixLookAtLH(eye, at, up);
         proj_ = XMMatrixPerspectiveFovLH(XMConvertToRadians(48.0f), static_cast<float>(std::max(1u, width_)) / std::max(1.0f, static_cast<float>(height_)), 0.1f, 80.0f);
-        cameraPos_ = { 0.0f, 15.8f, -17.8f };
+        cameraPos_ = { camera_.center.x, 15.8f, camera_.center.z - 17.8f };
     }
     else
     {
-        view_ = XMMatrixIdentity();
+        view_ = XMMatrixTranslation(-camera_.center.x, -camera_.center.z, 0.0f);
         proj_ = XMMatrixOrthographicOffCenterLH(-halfW, halfW, -halfH, halfH, 0.0f, 10.0f);
-        cameraPos_ = { 0.0f, 15.5f, -18.5f };
+        cameraPos_ = { camera_.center.x, 15.5f, camera_.center.z - 18.5f };
     }
 #if defined(_DEBUG)
     if (debug_.taa)
@@ -204,8 +204,8 @@ void SweetsApp::DrawScene()
     const Color fieldFill{ 0.18f, 0.07f, 0.12f, 1.0f };
     if (fieldShape_ == FieldShape::Rectangle || fieldShape_ == FieldShape::Corridor)
     {
-        const float halfX = fieldShape_ == FieldShape::Corridor ? 4.1f : 8.8f;
-        const float halfZ = fieldShape_ == FieldShape::Corridor ? 9.4f : 6.0f;
+        const float halfX = fieldShape_ == FieldShape::Corridor ? 5.8f : 12.6f;
+        const float halfZ = fieldShape_ == FieldShape::Corridor ? 13.4f : 8.8f;
         spriteCanvas_.DrawQuad(nullptr, { 0.0f, 0.0f }, { halfX * 2.0f, halfZ * 2.0f }, 0.0f, WithAlpha(fieldFill, 0.92f), 0.94f);
         drawBoundaryLine({ -halfX, -halfZ }, { halfX, -halfZ }, WithAlpha(Gold, 0.76f), 0.16f);
         drawBoundaryLine({ halfX, -halfZ }, { halfX, halfZ }, WithAlpha(Gold, 0.76f), 0.16f);
@@ -233,9 +233,9 @@ void SweetsApp::DrawScene()
     {
         spriteCanvas_.DrawCircle({ 0.0f, 0.0f }, ArenaRadius + 1.3f, WithAlpha(Rose, 0.20f), 0.95f, 96);
         spriteCanvas_.DrawCircle({ 0.0f, 0.0f }, ArenaRadius, WithAlpha(fieldFill, 0.92f), 0.94f, 96);
-        spriteCanvas_.DrawCircle({ 0.0f, 0.0f }, 3.05f, WithAlpha({ 0.04f, 0.02f, 0.03f, 1.0f }, 0.98f), 0.93f, 72);
+        spriteCanvas_.DrawCircle({ 0.0f, 0.0f }, 4.15f, WithAlpha({ 0.04f, 0.02f, 0.03f, 1.0f }, 0.98f), 0.93f, 72);
         spriteCanvas_.DrawRing({ 0.0f, 0.0f }, ArenaRadius, 0.16f, WithAlpha(Gold, 0.76f), 0.20f, 128);
-        spriteCanvas_.DrawRing({ 0.0f, 0.0f }, 3.05f, 0.14f, WithAlpha(Sky, 0.66f), 0.21f, 96);
+        spriteCanvas_.DrawRing({ 0.0f, 0.0f }, 4.15f, 0.14f, WithAlpha(Sky, 0.66f), 0.21f, 96);
     }
     else
     {
@@ -245,6 +245,22 @@ void SweetsApp::DrawScene()
         spriteCanvas_.DrawRing({ 0.0f, 0.0f }, fieldRadius, 0.16f, WithAlpha(Gold, 0.76f), 0.20f, 128);
         spriteCanvas_.DrawRing({ 0.0f, 0.0f }, fieldRadius * 0.68f, 0.035f, WithAlpha(Cream, 0.18f), 0.30f, 96);
         spriteCanvas_.DrawRing({ 0.0f, 0.0f }, fieldRadius * 0.36f, 0.035f, WithAlpha(Cream, 0.13f), 0.30f, 72);
+    }
+
+    for (const auto& telegraph : worldTelegraphs_)
+    {
+        const float t = 1.0f - ClampFloat(telegraph.ttl / std::max(0.01f, telegraph.life), 0.0f, 1.0f);
+        const float alpha = 0.22f + 0.46f * t;
+        if (telegraph.length > 0.01f)
+        {
+            const V2 mid = telegraph.pos + Normalize(telegraph.dir) * (telegraph.length * 0.5f);
+            spriteCanvas_.DrawQuad(nullptr, mid, { telegraph.radius, telegraph.length }, AngleOf(telegraph.dir) - Pi * 0.5f, WithAlpha(telegraph.color, alpha), 0.29f);
+        }
+        else
+        {
+            spriteCanvas_.DrawRing(telegraph.pos, telegraph.radius * (0.72f + t * 0.34f), 0.08f + 0.04f * t, WithAlpha(telegraph.color, alpha), 0.29f, 72);
+            spriteCanvas_.DrawCircle(telegraph.pos, telegraph.radius * 0.42f, WithAlpha(telegraph.color, alpha * 0.18f), 0.30f, 48);
+        }
     }
 
     for (const auto& o : obstacles_)

@@ -25,15 +25,15 @@ V2 SweetsApp::RandInArena(float margin)
         V2 p{};
         if (fieldShape_ == FieldShape::Rectangle)
         {
-            p = { Rand(-8.6f + margin, 8.6f - margin), Rand(-5.8f + margin, 5.8f - margin) };
+            p = { Rand(-12.2f + margin, 12.2f - margin), Rand(-8.4f + margin, 8.4f - margin) };
         }
         else if (fieldShape_ == FieldShape::Corridor)
         {
-            p = { Rand(-3.8f + margin, 3.8f - margin), Rand(-9.2f + margin, 9.2f - margin) };
+            p = { Rand(-5.4f + margin, 5.4f - margin), Rand(-13.0f + margin, 13.0f - margin) };
         }
         else if (fieldShape_ == FieldShape::Ring)
         {
-            const float r = Rand(3.6f + margin, ArenaRadius - margin);
+            const float r = Rand(4.5f + margin, ArenaRadius - margin);
             const float a = Rand(0.0f, TwoPi);
             p = FromAngle(a) * r;
         }
@@ -89,8 +89,8 @@ bool SweetsApp::ResolveFieldBoundary(V2& p, float radius, V2& normal) const
 
     if (fieldShape_ == FieldShape::Rectangle || fieldShape_ == FieldShape::Corridor)
     {
-        const float halfX = fieldShape_ == FieldShape::Corridor ? 4.1f : 8.8f;
-        const float halfZ = fieldShape_ == FieldShape::Corridor ? 9.4f : 6.0f;
+        const float halfX = fieldShape_ == FieldShape::Corridor ? 5.8f : 12.6f;
+        const float halfZ = fieldShape_ == FieldShape::Corridor ? 13.4f : 8.8f;
         bool hit = false;
         float bestPen = 0.0f;
         V2 bestNormal{};
@@ -129,7 +129,7 @@ bool SweetsApp::ResolveFieldBoundary(V2& p, float radius, V2& normal) const
     if (fieldShape_ == FieldShape::Ring)
     {
         const float d = Len(p);
-        const float inner = 3.05f + radius;
+        const float inner = 4.15f + radius;
         if (d < inner && d > 0.0001f)
         {
             normal = Normalize(p) * -1.0f;
@@ -148,8 +148,8 @@ bool SweetsApp::ResolveFieldBoundary(V2& p, float radius, V2& normal) const
     if (fieldShape_ == FieldShape::Octagon)
     {
         bool hit = resolveCircle(ArenaRadius * 0.96f);
-        const float side = 8.25f - radius;
-        const float diagLimit = 10.85f - radius;
+        const float side = 11.7f - radius;
+        const float diagLimit = 15.15f - radius;
         auto clampPlane = [&](V2 n)
         {
             const float d = Dot(p, n);
@@ -174,5 +174,78 @@ bool SweetsApp::ResolveFieldBoundary(V2& p, float radius, V2& normal) const
 
     const float radiusLimit = fieldShape_ == FieldShape::ShrinkCircle ? shrinkRadius_ : ArenaRadius;
     return resolveCircle(radiusLimit);
+}
+
+float SweetsApp::GameplayViewHalfHeight() const
+{
+    return camera_.halfHeight;
+}
+
+float SweetsApp::GameplayViewHalfWidth() const
+{
+    const float aspect = static_cast<float>(std::max(1u, width_)) / std::max(1.0f, static_cast<float>(height_));
+    return GameplayViewHalfHeight() * aspect;
+}
+
+void SweetsApp::UpdateCamera(float dt)
+{
+    V2 target{};
+    int count = 0;
+    for (const auto& p : players_)
+    {
+        if (!p.active || p.downed) continue;
+        target += p.pos;
+        ++count;
+    }
+    if (count > 0)
+    {
+        target = target / static_cast<float>(count);
+    }
+    else if (boss_.active)
+    {
+        target = boss_.pos;
+    }
+    camera_.target = target;
+    const float follow = 1.0f - std::exp(-camera_.follow * std::max(0.0f, dt));
+    camera_.center += (camera_.target - camera_.center) * follow;
+    ClampInside(camera_.center, 0.0f);
+}
+
+V2 SweetsApp::WorldToScreen(V2 world) const
+{
+    const float halfW = GameplayViewHalfWidth();
+    const float halfH = GameplayViewHalfHeight();
+    const V2 local = world - camera_.center;
+    return {
+        static_cast<float>(width_) * 0.5f + local.x / std::max(0.01f, halfW) * static_cast<float>(width_) * 0.5f,
+        static_cast<float>(height_) * 0.5f - local.z / std::max(0.01f, halfH) * static_cast<float>(height_) * 0.5f
+    };
+}
+
+SettingsLayout SweetsApp::BuildSettingsLayout() const
+{
+    SettingsLayout layout{};
+    const float panelW = 480.0f;
+    const float panelH = 400.0f;
+    const float left = (static_cast<float>(width_) - panelW) * 0.5f;
+    const float top = (static_cast<float>(height_) - panelH) * 0.5f;
+    layout.panel = { left, top, left + panelW, top + panelH };
+    layout.sliderLeft = left + 170.0f;
+    layout.sliderRight = left + panelW - 48.0f;
+    for (int i = 0; i < 4; ++i)
+    {
+        const float y = top + 110.0f + i * 44.0f;
+        layout.volumeSliders[i] = { layout.sliderLeft - 12.0f, y - 14.0f, layout.sliderRight + 12.0f, y + 22.0f };
+    }
+    const float aimTop = top + 110.0f + 4 * 44.0f + 8.0f;
+    const float aimButtonW = 104.0f;
+    const float aimButtonH = 32.0f;
+    const float aimStartX = left + 138.0f;
+    for (int i = 0; i < 3; ++i)
+    {
+        const float x = aimStartX + i * (aimButtonW + 10.0f);
+        layout.aimButtons[i] = { x, aimTop, x + aimButtonW, aimTop + aimButtonH };
+    }
+    return layout;
 }
 

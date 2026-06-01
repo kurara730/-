@@ -56,21 +56,98 @@ bool IsChargeBossDamage(BossDamageKind kind)
 
 float NormalBossHitCap(float maxHp, BossDamageKind kind, bool reflected)
 {
-    if (reflected || kind == BossDamageKind::ReflectedShot) return maxHp * 0.16f;
+    if (reflected || kind == BossDamageKind::ReflectedShot) return maxHp * 0.14f;
     switch (kind)
     {
     case BossDamageKind::Bomb:
     case BossDamageKind::Ultimate:
-        return maxHp * 0.18f;
+        return maxHp * 0.12f;
     case BossDamageKind::ChargeShot:
-        return maxHp * 0.10f;
+        return maxHp * 0.065f;
     case BossDamageKind::ChocolateCharge:
-        return maxHp * 0.085f;
+        return maxHp * 0.050f;
     case BossDamageKind::Melee:
-        return maxHp * 0.055f;
+        return maxHp * 0.045f;
     case BossDamageKind::NormalShot:
     default:
-        return maxHp * 0.08f;
+        return maxHp * 0.070f;
+    }
+}
+
+BossPatternId PatternForBoss(BossType type, int step)
+{
+    switch (type)
+    {
+    case BossType::Demon:
+    {
+        constexpr std::array<BossPatternId, 4> seq{ BossPatternId::Seal, BossPatternId::Radial, BossPatternId::Aimed, BossPatternId::Curve };
+        return seq[step % static_cast<int>(seq.size())];
+    }
+    case BossType::DonutKing:
+    {
+        constexpr std::array<BossPatternId, 4> seq{ BossPatternId::GuardRing, BossPatternId::Spiral, BossPatternId::Aimed, BossPatternId::Radial };
+        return seq[step % static_cast<int>(seq.size())];
+    }
+    case BossType::MirrorMacaron:
+    {
+        constexpr std::array<BossPatternId, 4> seq{ BossPatternId::MirrorSplit, BossPatternId::Curve, BossPatternId::Aimed, BossPatternId::Spiral };
+        return seq[step % static_cast<int>(seq.size())];
+    }
+    case BossType::GravityPudding:
+    {
+        constexpr std::array<BossPatternId, 4> seq{ BossPatternId::GravityWell, BossPatternId::Radial, BossPatternId::Curve, BossPatternId::Aimed };
+        return seq[step % static_cast<int>(seq.size())];
+    }
+    case BossType::TerritoryCake:
+    {
+        constexpr std::array<BossPatternId, 4> seq{ BossPatternId::TerritoryZone, BossPatternId::Aimed, BossPatternId::Radial, BossPatternId::Curve };
+        return seq[step % static_cast<int>(seq.size())];
+    }
+    case BossType::DemonParfait:
+    {
+        constexpr std::array<BossPatternId, 6> seq{ BossPatternId::Seal, BossPatternId::GuardRing, BossPatternId::MirrorSplit, BossPatternId::GravityWell, BossPatternId::TerritoryZone, BossPatternId::Spiral };
+        return seq[step % static_cast<int>(seq.size())];
+    }
+    default:
+        return static_cast<BossPatternId>(step % 4);
+    }
+}
+
+int AttackIndexForPattern(BossPatternId pattern)
+{
+    switch (pattern)
+    {
+    case BossPatternId::Aimed:
+    case BossPatternId::GuardRing:
+    case BossPatternId::MirrorSplit:
+        return 1;
+    case BossPatternId::Spiral:
+    case BossPatternId::Seal:
+        return 2;
+    case BossPatternId::Curve:
+    case BossPatternId::GravityWell:
+    case BossPatternId::TerritoryZone:
+        return 3;
+    case BossPatternId::Radial:
+    default:
+        return 0;
+    }
+}
+
+Color PatternTelegraphColor(BossPatternId pattern)
+{
+    switch (pattern)
+    {
+    case BossPatternId::Seal: return Grape;
+    case BossPatternId::GuardRing: return Gold;
+    case BossPatternId::MirrorSplit: return Cream;
+    case BossPatternId::GravityWell: return Sky;
+    case BossPatternId::TerritoryZone: return Mint;
+    case BossPatternId::Aimed: return Red;
+    case BossPatternId::Spiral: return Gold;
+    case BossPatternId::Curve: return Mint;
+    case BossPatternId::Radial:
+    default: return Grape;
     }
 }
 }
@@ -261,6 +338,10 @@ void SweetsApp::SpawnBoss()
     boss_.type = (wave_ / 3) % 6;
     boss_.bossType = static_cast<BossType>(boss_.type);
     boss_.phase = 1;
+    bossGimmick_ = {};
+    bossGimmick_.type = boss_.bossType;
+    bossGimmick_.nextPattern = PatternForBoss(boss_.bossType, 0);
+    bossGimmick_.guardAngle = boss_.spin;
     SyncBoss3D(boss_);
 }
 
@@ -423,6 +504,16 @@ void SweetsApp::UpdateBoss(float dt)
 
     boss_.spin += dt * (1.0f + wave_ * 0.03f);
     if (boss_.flash > 0.0f) boss_.flash -= dt;
+    bossGimmick_.timer += dt;
+    bossGimmick_.guardAngle += dt * (0.95f + boss_.phase * 0.18f);
+    const bool wasVulnerable = bossGimmick_.vulnerableT > 0.0f;
+    if (bossGimmick_.vulnerableT > 0.0f) bossGimmick_.vulnerableT = std::max(0.0f, bossGimmick_.vulnerableT - dt);
+    if (wasVulnerable && bossGimmick_.vulnerableT <= 0.0f)
+    {
+        bossGimmick_.mirrorOpen = false;
+    }
+    if (bossGimmick_.gravityT > 0.0f) bossGimmick_.gravityT = std::max(0.0f, bossGimmick_.gravityT - dt);
+    if (bossGimmick_.territoryT > 0.0f) bossGimmick_.territoryT = std::max(0.0f, bossGimmick_.territoryT - dt);
 
     Player* targetPlayer = FindNearestPlayer(boss_.pos);
     if (!targetPlayer) return;
@@ -434,13 +525,14 @@ void SweetsApp::UpdateBoss(float dt)
     ClampInside(boss_.pos, boss_.radius);
     SyncBoss3D(boss_);
 
-    if (boss_.bossType == BossType::GravityPudding)
+    if (boss_.bossType == BossType::GravityPudding || boss_.bossType == BossType::DemonParfait)
     {
         for (auto& p : players_)
         {
             if (!p.active || p.downed) continue;
             const V2 pull = boss_.pos - p.pos;
-            p.pos += Normalize(pull) * dt * (Len(pull) < 6.5f ? 1.1f : 0.25f);
+            const float gravityMul = bossGimmick_.gravityT > 0.0f ? 1.55f : 1.0f;
+            p.pos += Normalize(pull) * dt * gravityMul * (Len(pull) < 7.4f ? 1.1f : 0.25f);
             SyncPlayer3D(p);
         }
     }
@@ -455,6 +547,7 @@ void SweetsApp::UpdateBoss(float dt)
     // 召喚、フィールド設置、弾幕パターンをここへ集約しています。
     auto fireBossAttack = [&]()
     {
+        const BossPatternId pattern = bossGimmick_.nextPattern;
         const int attack = std::max(0, boss_.telegraphAttack);
         if (boss_.telegraphAdd && BossAddCount() < tuning.bossAddCap)
         {
@@ -465,7 +558,8 @@ void SweetsApp::UpdateBoss(float dt)
             Enemy mirror{};
             mirror.type = EnemyType::Mirror;
             mirror.kind = static_cast<int>(mirror.type);
-            mirror.pos = boss_.pos + FromAngle(Rand(0.0f, TwoPi)) * 2.2f;
+            const float mirrorAngle = boss_.spin + 0.75f * static_cast<float>(bossGimmick_.patternStep);
+            mirror.pos = boss_.pos + FromAngle(mirrorAngle) * 2.2f;
             ClampInside(mirror.pos, 0.5f);
             mirror.height = Use3DRules() ? 0.82f : EnemyBodyY;
             mirror.radius = 0.38f;
@@ -483,14 +577,21 @@ void SweetsApp::UpdateBoss(float dt)
         if (boss_.telegraphField)
         {
             Obstacle field{};
-            field.pos = targetPlayer->pos + FromAngle(Rand(0.0f, TwoPi)) * Rand(0.5f, 2.0f);
+            const float fieldAngle = AngleOf(toP) + (pattern == BossPatternId::GravityWell ? Pi * 0.35f : -Pi * 0.28f);
+            field.pos = targetPlayer->pos + FromAngle(fieldAngle) * 1.35f;
             ClampInside(field.pos, 1.0f);
-            field.radius = 0.70f + 0.08f * boss_.phase;
+            field.radius = (pattern == BossPatternId::GravityWell ? 0.90f : 0.78f) + 0.08f * boss_.phase;
             field.ttl = 3.0f;
-            field.color = Red;
+            field.color = pattern == BossPatternId::GravityWell ? Sky : Mint;
             field.damageField = true;
             SyncObstacle3D(field);
             obstacles_.push_back(field);
+            if (pattern == BossPatternId::GravityWell) bossGimmick_.gravityT = 3.8f;
+            if (pattern == BossPatternId::TerritoryZone) bossGimmick_.territoryT = 4.2f;
+        }
+        if (pattern == BossPatternId::Seal)
+        {
+            bossGimmick_.sealHits = 0;
         }
         if (attack == 0)
         {
@@ -555,17 +656,17 @@ void SweetsApp::UpdateBoss(float dt)
     boss_.attackCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
     if (boss_.attackCd <= 0.0f)
     {
-        const int attack = RandInt(0, boss_.phase >= 3 ? 3 : 2);
-        const bool addBoss = boss_.bossType == BossType::DonutKing || boss_.bossType == BossType::DemonParfait;
-        const bool mirrorBoss = boss_.bossType == BossType::MirrorMacaron || boss_.bossType == BossType::DemonParfait;
-        const bool territoryBoss = boss_.bossType == BossType::TerritoryCake || boss_.bossType == BossType::DemonParfait;
+        const BossPatternId pattern = PatternForBoss(boss_.bossType, bossGimmick_.patternStep++);
+        const int attack = AttackIndexForPattern(pattern);
+        bossGimmick_.nextPattern = pattern;
         boss_.telegraphAttack = attack;
-        boss_.telegraphAdd = addBoss && BossAddCount() < tuning.bossAddCap;
-        boss_.telegraphMirror = mirrorBoss && BossAddCount() < tuning.bossAddCap && Rand(0.0f, 1.0f) < 0.25f;
-        boss_.telegraphField = territoryBoss && Rand(0.0f, 1.0f) < 0.22f;
+        boss_.telegraphAdd = pattern == BossPatternId::GuardRing && BossAddCount() < tuning.bossAddCap;
+        boss_.telegraphMirror = pattern == BossPatternId::MirrorSplit && BossAddCount() < tuning.bossAddCap;
+        boss_.telegraphField = pattern == BossPatternId::GravityWell || pattern == BossPatternId::TerritoryZone;
         boss_.telegraphLife = tuning.bossTelegraphTime;
         boss_.telegraphT = tuning.bossTelegraphTime;
         boss_.flash = std::max(boss_.flash, tuning.bossTelegraphTime);
+        const Color telegraphColor = PatternTelegraphColor(pattern);
         EffectPulse pulse{};
         pulse.pos = boss_.pos;
         pulse.startRadius = boss_.radius * 1.1f;
@@ -573,19 +674,35 @@ void SweetsApp::UpdateBoss(float dt)
         pulse.ttl = tuning.bossTelegraphTime;
         pulse.life = tuning.bossTelegraphTime;
         pulse.y = 0.22f;
-        pulse.color = attack == 0 ? Grape : (attack == 1 ? Red : (attack == 2 ? Gold : Mint));
+        pulse.color = telegraphColor;
         pulse.pos3 = Grounded3D(pulse.pos, pulse.y);
         effectPulses_.push_back(pulse);
-        switch (attack)
+
+        WorldTelegraph telegraph{};
+        telegraph.pos = boss_.pos;
+        telegraph.dir = Normalize(toP);
+        telegraph.radius = boss_.radius * (pattern == BossPatternId::GuardRing ? 3.2f : 2.4f);
+        telegraph.length = pattern == BossPatternId::Aimed ? 7.0f : 0.0f;
+        telegraph.ttl = tuning.bossTelegraphTime;
+        telegraph.life = tuning.bossTelegraphTime;
+        telegraph.color = telegraphColor;
+        telegraph.pattern = pattern;
+        worldTelegraphs_.push_back(telegraph);
+
+        if (pattern == BossPatternId::Seal)
         {
-        case 0: message_ = L"ボス予兆: 放射弾"; break;
-        case 1: message_ = L"ボス予兆: 狙い撃ち"; break;
-        case 2: message_ = L"ボス予兆: 回転弾"; break;
-        default: message_ = L"ボス予兆: 曲がる弾"; break;
+            for (int i = 0; i < 3; ++i)
+            {
+                WorldTelegraph seal{};
+                seal.pos = boss_.pos + FromAngle(boss_.spin + TwoPi * i / 3.0f) * (boss_.radius + 1.35f);
+                seal.radius = 0.55f;
+                seal.ttl = tuning.bossTelegraphTime + 1.0f;
+                seal.life = seal.ttl;
+                seal.color = Grape;
+                seal.pattern = BossPatternId::Seal;
+                worldTelegraphs_.push_back(seal);
+            }
         }
-        if (boss_.telegraphAdd || boss_.telegraphMirror) message_ += L" + 召喚";
-        if (boss_.telegraphField) message_ += L" + 領域";
-        messageT_ = tuning.bossTelegraphTime + 0.55f;
         if (boss_.telegraphT <= 0.0f)
         {
             fireBossAttack();
@@ -807,25 +924,99 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
             screenFlashT_ = nextForm == 2 ? 0.28f : 0.20f;
             screenFlashLife_ = screenFlashT_;
             screenFlashColor_ = Gold;
-            message_ = nextForm == 2 ? L"Hidden Boss Phase 2" : L"Hidden Boss Final Phase";
+            message_ = nextForm == 2 ? L"金色弾を弾き返せ" : L"最後は正面勝負";
             messageT_ = 1.8f;
         }
         return;
     }
     float appliedDmg = dmg;
-    if (reflected || kind == BossDamageKind::ReflectedShot)
+    const bool isReflected = reflected || kind == BossDamageKind::ReflectedShot;
+    auto addNotice = [&](const std::wstring& text, Color color)
+    {
+        CombatNotice notice{};
+        notice.text = text;
+        notice.ttl = 1.25f;
+        notice.life = notice.ttl;
+        notice.color = color;
+        combatNotices_.push_back(notice);
+    };
+    auto openWeakness = [&](float seconds, Color color)
+    {
+        bossGimmick_.vulnerableT = std::max(bossGimmick_.vulnerableT, seconds);
+        Burst(boss_.pos, color, 42);
+        addNotice(L"反射で弱点露出", color);
+    };
+    if (isReflected)
     {
         appliedDmg *= 1.35f;
+        switch (boss_.bossType)
+        {
+        case BossType::Demon:
+        case BossType::DemonParfait:
+            ++bossGimmick_.sealHits;
+            if (bossGimmick_.sealHits >= 3)
+            {
+                bossGimmick_.sealHits = 0;
+                openWeakness(4.5f, Grape);
+            }
+            else
+            {
+                addNotice(L"封印に反射ヒット", Grape);
+            }
+            break;
+        case BossType::DonutKing:
+            openWeakness(3.2f, Gold);
+            break;
+        case BossType::MirrorMacaron:
+            bossGimmick_.mirrorOpen = true;
+            openWeakness(4.0f, Cream);
+            break;
+        case BossType::GravityPudding:
+            bossGimmick_.gravityT = 0.0f;
+            openWeakness(3.6f, Sky);
+            break;
+        case BossType::TerritoryCake:
+            bossGimmick_.territoryT = 0.0f;
+            openWeakness(3.6f, Mint);
+            break;
+        default:
+            break;
+        }
+    }
+    if (bossGimmick_.vulnerableT <= 0.0f)
+    {
+        switch (boss_.bossType)
+        {
+        case BossType::Demon:
+            appliedDmg *= isReflected ? 0.95f : 0.72f;
+            break;
+        case BossType::DonutKing:
+            appliedDmg *= isReflected ? 0.95f : 0.62f;
+            break;
+        case BossType::MirrorMacaron:
+            appliedDmg *= (isReflected || bossGimmick_.mirrorOpen) ? 0.95f : 0.55f;
+            break;
+        case BossType::GravityPudding:
+            appliedDmg *= isReflected ? 0.95f : 0.70f;
+            break;
+        case BossType::TerritoryCake:
+            appliedDmg *= isReflected ? 0.95f : (bossGimmick_.territoryT > 0.0f ? 0.68f : 0.82f);
+            break;
+        case BossType::DemonParfait:
+            appliedDmg *= isReflected ? 0.95f : 0.62f;
+            break;
+        default:
+            break;
+        }
     }
     appliedDmg = std::min(appliedDmg, NormalBossHitCap(boss_.maxHp, kind, reflected));
     boss_.hp -= appliedDmg;
     boss_.flash = 0.15f;
-    if (reflected || kind == BossDamageKind::ReflectedShot)
+    if (isReflected)
     {
         Player& owner = players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))];
         AddScore(static_cast<int>(appliedDmg * 4.0f), &owner);
-        message_ = L"反射弱点ヒット";
-        messageT_ = std::max(messageT_, 0.75f);
+        addNotice(L"反射ボーナス", Gold);
     }
     const float hpPct = boss_.hp / boss_.maxHp;
     const int nextPhase = hpPct < 0.25f ? 4 : (hpPct < 0.50f ? 3 : (hpPct < 0.75f ? 2 : 1));
