@@ -76,6 +76,7 @@ private:
     void BuildStage();
     void UpdateStage(float dt);
     void SpawnPickup();
+    void SpawnPickupAt(V2 pos);
     void UseUltimate();
     void UseUltimateFor(Player& p, int ownerIndex);
     void UseBomb();

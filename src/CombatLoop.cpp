@@ -68,13 +68,14 @@ void SweetsApp::ReflectEnemyShotsNear(V2 center, float radius, int ownerIndex, C
 // 移動 → 壁反射 → 障害物 → 敵/プレイヤー命中、という順番で処理します。
 void SweetsApp::UpdateShots(float dt)
 {
+    std::vector<Shot> spawned; // 反射分裂などイテレーション中に増える弾を遅延追加
     for (auto& s : shots_)
     {
         if (s.dead) continue;
         s.ttl -= dt;
         if (s.ttl <= 0.0f) continue;
-
         // 敵弾は角速度や加速度を持てます。曲がる弾や加速弾の弾幕に使います。
+        const int reflectBefore = s.reflectedCount;
         if (s.enemy && (std::fabs(s.angularVel) > 0.0001f || std::fabs(s.accel) > 0.0001f))
         {
             float speed = Len(s.vel);
@@ -144,14 +145,28 @@ void SweetsApp::UpdateShots(float dt)
 
         // チーズ壁などの障害物との衝突。
         // 敵弾がチーズ壁に当たった場合は味方弾へ変換されます。
-        for (const auto& o : obstacles_)
+        for (auto& o : obstacles_)
         {
             V2 d = s.pos - o.pos;
             const float l = RuleDistance(s.pos, s.height, o.pos, o.height);
             if (l < s.radius + o.radius)
             {
+                // ワープポータルは弾を通す（自機専用の回避ギミック）
+                if (o.warpId >= 0)
+                {
+                    continue;
+                }
+
                 V2 n = Normalize(d);
                 s.pos = o.pos + n * (s.radius + o.radius + 0.01f);
+
+                // 破壊可能オブジェへのダメージ（プレイヤー弾のみ）
+                if (o.breakable && !s.enemy)
+                {
+                    o.hp -= s.damage;
+                    o.flash = 1.0f;
+                }
+
                 if (s.enemy && o.cheeseWall)
                 {
                     ApplyShotReflection(s, n, std::max(1.15f, o.reflectPower));
@@ -161,6 +176,22 @@ void SweetsApp::UpdateShots(float dt)
                     s.color = Gold;
                     s.damage *= 1.25f;
                     s.bounce = std::max(s.bounce, 2);
+                }
+                else if (o.bumper)
+                {
+                    // バンパー：加速して大きく反射＋発光・スコア
+                    ApplyShotReflection(s, n, std::max(1.55f, o.reflectPower));
+                    const float sp = Len(s.vel);
+                    s.vel = Normalize(s.vel) * std::min(sp * 1.3f + 1.5f, 26.0f);
+                    o.flash = 1.0f;
+                    Burst(s.pos, Gold, 10);
+                    if (!s.enemy)
+                    {
+                        AddScore(12, &players_[std::max(0, std::min(s.ownerIndex, MaxPlayers - 1))]);
+                        message_ = L"バンパー反射!";
+                        messageT_ = std::max(messageT_, 0.6f);
+                    }
+                    if (s.bounce > 0) --s.bounce;
                 }
                 else if (s.bounce > 0 || s.enemy)
                 {
@@ -176,6 +207,31 @@ void SweetsApp::UpdateShots(float dt)
         }
 
         if (s.dead) continue;
+
+        // ショート弾：反射した瞬間に小さな追尾弾へ分裂（面制圧）
+        if (!s.enemy && s.reflectSplit > 0 && s.reflectedCount > reflectBefore)
+        {
+            const float baseAng = AngleOf(s.vel);
+            const int n = s.reflectSplit;
+            for (int i = 0; i < n; ++i)
+            {
+                const float a = baseAng + (static_cast<float>(i) / std::max(1, n - 1) - 0.5f) * 1.1f;
+                Shot child{};
+                child.pos = s.pos;
+                child.vel = FromAngle(a) * 8.5f;
+                child.radius = 0.11f;
+                child.damage = s.damage * 0.42f;
+                child.ttl = 1.4f;
+                child.homingStrength = 1.6f;
+                child.ownerIndex = s.ownerIndex;
+                child.sourceCharacter = CharacterType::Shortcake;
+                child.color = Berry;
+                SyncShot3D(child);
+                spawned.push_back(child);
+            }
+            Burst(s.pos, Berry, 12);
+            s.reflectSplit = 0;
+        }
 
         if (s.enemy)
         {
@@ -287,6 +343,8 @@ void SweetsApp::UpdateShots(float dt)
             }
         }
     }
+
+    for (const auto& sp : spawned) shots_.push_back(sp);
 }
 
 // アイテムの寿命、磁石吸引、取得効果を処理します。

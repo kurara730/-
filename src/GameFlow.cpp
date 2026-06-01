@@ -229,10 +229,11 @@ void SweetsApp::ClearWave()
 
 // アイテムはPickupTypeごとに効果が違います。
 // 表示は GameplayView.cpp 側で形も変え、敵と見分けやすくしています。
-void SweetsApp::SpawnPickup()
+void SweetsApp::SpawnPickupAt(V2 pos)
 {
     Pickup p{};
-    p.pos = RandInArena(1.5f);
+    p.pos = pos;
+    ClampInside(p.pos, 1.0f);
     p.type = RandInt(0, 9);
     p.pickupType = static_cast<PickupType>(p.type);
     switch (p.pickupType)
@@ -250,6 +251,11 @@ void SweetsApp::SpawnPickup()
     }
     SyncPickup3D(p);
     pickups_.push_back(p);
+}
+
+void SweetsApp::SpawnPickup()
+{
+    SpawnPickupAt(RandInArena(1.5f));
 }
 
 // アプリ全体の更新入口です。

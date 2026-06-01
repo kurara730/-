@@ -110,9 +110,9 @@ void SweetsApp::UpdatePlayer(float dt)
         ReflectEnemyShotsNear(player_.pos, player_.radius + 0.72f, 0, CharacterType::Roll, Cream, 1.30f);
     }
 
-    for (const auto& o : obstacles_)
+    for (auto& o : obstacles_)
     {
-        if (o.damageField) continue;
+        if (o.damageField || o.warpId >= 0) continue; // 床とポータルは通過可
         V2 d = player_.pos - o.pos;
         const float l = RuleDistance(player_.pos, PlayerBodyY, o.pos, o.height);
         const float minD = player_.radius + o.radius;
@@ -120,6 +120,14 @@ void SweetsApp::UpdatePlayer(float dt)
         {
             const V2 n = Normalize(d);
             player_.pos = o.pos + n * minD;
+            if (o.bumper)
+            {
+                // バンパー：触れた自機を勢いよく弾き返す
+                player_.dashVel = n * 11.0f;
+                player_.dashT = std::max(player_.dashT, 0.16f);
+                o.flash = 1.0f;
+                Burst(player_.pos, Gold, 12);
+            }
             SyncPlayer3D(player_);
         }
     }
@@ -241,6 +249,12 @@ void SweetsApp::FirePrimaryFor(Player& p, int ownerIndex, float aim)
             s.bounce = std::max(s.bounce, 3);
             PlayCombatEffect(L"sword_slash", p.pos, 0.52f, a, 0.86f, Choco, 12);
         }
+        if (p.character == CharacterType::Shortcake)
+        {
+            // ショートは1回だけ反射でき、跳ね返った瞬間に分裂する
+            s.bounce = std::max(s.bounce, 1);
+            s.reflectSplit = 3;
+        }
         SyncShot3D(s);
         shots_.push_back(s);
     }
@@ -266,6 +280,7 @@ void SweetsApp::DoMeleeFor(Player& p, int ownerIndex, float aim)
     s.damage = 44.0f * dmgScale;
     s.color = Choco;
     s.visualMode = SlashVisualMode::Hidden;
+    s.sweep = true; // 薙ぎ払いモーション
     SyncSlash3D(s);
     slashes_.push_back(s);
     audio_.PlaySoundEffect(SoundEffect::ChocoSlash);
@@ -289,6 +304,14 @@ void SweetsApp::DoMeleeFor(Player& p, int ownerIndex, float aim)
         if (!e.dead && inCone(e.pos, e.radius, e.height))
         {
             DamageEnemy(e, s.damage, p.pos, 1.8f, false, ownerIndex);
+            p.ult = std::min(100.0f, p.ult + 1.0f); // 近接ヒットで必殺ゲージ
+            if (e.dead)
+            {
+                // 近接キル報酬：HP回復＋必殺ゲージ加算（切り込むほど強くなる）
+                p.hp = std::min(p.maxHp, p.hp + 6.0f);
+                p.ult = std::min(100.0f, p.ult + 4.0f);
+                Burst(e.pos, Choco, 14);
+            }
         }
     }
     for (const auto& core : hiddenBossCores_)
@@ -301,6 +324,27 @@ void SweetsApp::DoMeleeFor(Player& p, int ownerIndex, float aim)
     if (boss_.active && inCone(boss_.pos, boss_.radius, boss_.height))
     {
         DamageBoss(s.damage * 0.8f, BossDamageKind::Melee, false, ownerIndex);
+        p.ult = std::min(100.0f, p.ult + 1.0f);
+    }
+
+    // 薙ぎ払いで弾幕を弾き返す：範囲内の敵弾をプレイヤー弾に変えて撃ち返す
+    for (auto& bs : shots_)
+    {
+        if (!bs.enemy || bs.dead) continue;
+        if (!inCone(bs.pos, bs.radius, bs.height)) continue;
+        bs.vel = FromAngle(aim) * std::max(10.0f, Len(bs.vel) * 1.25f);
+        bs.enemy = false;
+        bs.ownerIndex = ownerIndex;
+        bs.sourceCharacter = CharacterType::Chocolate;
+        bs.reflected = true;
+        bs.reflectedCount = std::max(1, bs.reflectedCount + 1);
+        bs.damage = std::max(bs.damage, 16.0f);
+        bs.bounce = std::max(bs.bounce, 1);
+        bs.pierce = std::max(bs.pierce, 1);
+        bs.ttl = std::max(bs.ttl, 1.6f);
+        bs.color = Choco;
+        SyncShot3D(bs);
+        Burst(bs.pos, Choco, 6);
     }
 }
 

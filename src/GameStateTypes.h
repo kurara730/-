@@ -29,7 +29,7 @@ struct WeaponDef
 };
 
 inline const std::array<WeaponDef, 4> Weapons{ {
-    { L"イチゴ", Berry, 0.15f, 15.0f, 18.0f, 0.13f, 0, 0 },
+    { L"イチゴ", Berry, 0.19f, 15.0f, 18.0f, 0.13f, 0, 0 },
     { L"チョコ", Choco, 0.38f, 0.0f, 38.0f, 0.0f, 0, 0 },
     { L"チーズ", Gold, 0.32f, 10.0f, 31.0f, 0.22f, 1, 0 },
     { L"ロール", Cream, 0.54f, 11.5f, 34.0f, 0.19f, 0, 5 },
@@ -92,6 +92,7 @@ struct Player
     float chargeCd = 0.0f;
     float dashT = 0.0f;
     float reviveT = 0.0f;
+    float warpCd = 0.0f;
     float fever = 0.0f;
     float feverT = 0.0f;
     float corePower = 0.0f;
@@ -212,10 +213,12 @@ struct Shot
     int splitCount = 0;
     int yoyoCombo = 0;
     int lastHitEnemyId = -1;
+    int reflectSplit = 0;       // 反射した瞬間に分裂する子弾数（ショート用）
     float angularVel = 0.0f;
     float accel = 0.0f;
     float homingStrength = 0.0f;
     float yoyoRetargetT = 0.0f;
+    float warpCd = 0.0f;
     CharacterType sourceCharacter = CharacterType::Shortcake;
     bool enemy = false;
     bool dead = false;
@@ -251,6 +254,7 @@ struct Slash
     Color color = Choco;
     SlashVisualMode visualMode = SlashVisualMode::Sector;
     bool hitBoss = false;
+    bool sweep = false;         // 薙ぎ払い：刃が弧を端から端へ振り抜ける演出
 };
 
 // フィールド上のアイテムです。
@@ -286,6 +290,21 @@ struct Obstacle
     bool moving = false;
     bool cheeseWall = false;
     bool damageField = false;
+    bool bumper = false;        // 反射ブースト台
+    bool breakable = false;     // 破壊可能（壊すとドロップ）
+    float maxHp = 140.0f;
+    float flash = 0.0f;         // ヒット時の発光
+    float spin = 0.0f;          // 見た目の回転
+    float pushForce = 0.0f;     // コンベア/突風（vel方向へ押す）
+    float gravity = 0.0f;       // 重力井戸（>0で引き寄せ）
+    V2 orbitCenter{};           // 公転中心
+    float orbitRadius = 0.0f;
+    float orbitAngle = 0.0f;
+    float orbitSpeed = 0.0f;    // 0以外で公転
+    bool flipper = false;       // フリッパー（往復スイング）
+    float swingBase = 0.0f;     // スイングの中心角
+    float swingAmp = 0.0f;      // スイングの振れ幅
+    int warpId = -1;            // ワープ対（同一idどうしが対）
 };
 
 // 軽量な粒子です。爆発、反射、被弾などの短い演出に使います。

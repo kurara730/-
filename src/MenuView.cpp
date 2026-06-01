@@ -171,24 +171,74 @@ void SweetsApp::DrawHud()
     d2dContext_->DrawTextW(hud.str().c_str(), static_cast<UINT32>(hud.str().size()), hudFormat_.Get(),
         D2D1::RectF(18.0f, 14.0f, static_cast<float>(width_) - 18.0f, 48.0f), textBrush_.Get());
 
+    auto fillBar = [&](float l, float t, float w, float h, float pct,
+                       D2D1::ColorF bg, D2D1::ColorF fg)
+    {
+        pct = ClampFloat(pct, 0.0f, 1.0f);
+        const D2D1_RECT_F frame = D2D1::RectF(l, t, l + w, t + h);
+        textBrush_->SetColor(bg);
+        d2dContext_->FillRectangle(frame, textBrush_.Get());
+        textBrush_->SetColor(fg);
+        d2dContext_->FillRectangle(D2D1::RectF(l, t, l + w * pct, t + h), textBrush_.Get());
+        // 視認性のための外枠
+        textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.95f));
+        d2dContext_->DrawRectangle(frame, textBrush_.Get(), 3.0f);
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.9f));
+        d2dContext_->DrawRectangle(frame, textBrush_.Get(), 1.4f);
+    };
+    auto hudText = [&](const std::wstring& s, float l, float t, float r, D2D1::ColorF c)
+    {
+        textBrush_->SetColor(c);
+        d2dContext_->DrawTextW(s.c_str(), static_cast<UINT32>(s.size()), smallFormat_.Get(),
+            D2D1::RectF(l, t, r, t + 22.0f), textBrush_.Get());
+    };
+
     for (int i = 0; i < MaxPlayers; ++i)
     {
         const Player& p = players_[i];
         if (!p.active) continue;
-        const float top = 48.0f + i * 24.0f;
+        const float top = 48.0f + i * 26.0f;
         const int displayHp = p.hp > 0.0f ? std::max(1, static_cast<int>(std::ceil(p.hp))) : 0;
-        std::wostringstream line;
-        line << L"P" << (i + 1)
-            << (i == 0 ? L" 1P " : (p.ai ? L" AI " : L" PAD "))
+        const float hpRatio = ClampFloat(p.hp / std::max(1.0f, p.maxHp), 0.0f, 1.0f);
+        const float ultRatio = ClampFloat(p.ult / 100.0f, 0.0f, 1.0f);
+        const bool ultReady = p.ult >= 100.0f;
+        const D2D1::ColorF barBg(0.18f, 0.06f, 0.10f, 0.85f);
+
+        // 識別タグ（P番号・操作種別・キャラ名）
+        const D2D1::ColorF tagColor = p.downed
+            ? D2D1::ColorF(1.0f, 0.35f, 0.35f, 0.95f)
+            : (i == 0 ? D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f) : D2D1::ColorF(0.82f, 0.88f, 1.0f, 0.92f));
+        std::wostringstream tag;
+        tag << L"P" << (i + 1) << (i == 0 ? L" " : (p.ai ? L" AI " : L" PAD "))
             << CharacterTexts[static_cast<int>(p.character)].jpName
-            << L" HP " << displayHp << L"/" << static_cast<int>(p.maxHp)
-            << L" 必殺 " << static_cast<int>(p.ult) << L"%"
-            << L" ボム" << p.bombs
-            << L" グレイズ" << p.graze
             << (p.downed ? L" ダウン" : L"");
-        textBrush_->SetColor(i == 0 ? D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f) : D2D1::ColorF(0.82f, 0.88f, 1.0f, 0.92f));
-        d2dContext_->DrawTextW(line.str().c_str(), static_cast<UINT32>(line.str().size()), smallFormat_.Get(),
-            D2D1::RectF(18.0f, top, static_cast<float>(width_) - 18.0f, top + 24.0f), textBrush_.Get());
+        hudText(tag.str(), 18.0f, top + 2.0f, 150.0f, tagColor);
+
+        // HPゲージ（残量に応じて赤→緑へ変化、数値はバー上に重ねる）
+        const D2D1::ColorF hpFill(0.95f - 0.60f * hpRatio, 0.30f + 0.60f * hpRatio, 0.34f + 0.14f * hpRatio, 0.95f);
+        fillBar(156.0f, top + 5.0f, 150.0f, 15.0f, hpRatio, barBg, hpFill);
+        std::wostringstream hpStr;
+        hpStr << L"HP " << displayHp << L"/" << static_cast<int>(p.maxHp);
+        hudText(hpStr.str(), 162.0f, top + 3.0f, 306.0f, D2D1::ColorF(1.0f, 1.0f, 1.0f, 0.96f));
+
+        // 必殺ゲージ（満タンで点滅、数値はバー右に表示）
+        float ultBright = 1.0f;
+        if (ultReady) ultBright = 0.78f + 0.22f * std::sin(gameTime_ * 7.0f);
+        const D2D1::ColorF ultFill(1.0f * ultBright, 0.82f * ultBright, 0.30f * ultBright, 0.95f);
+        fillBar(320.0f, top + 5.0f, 150.0f, 15.0f, ultRatio, barBg, ultFill);
+        std::wostringstream ultStr;
+        if (ultReady) ultStr << L"必殺 READY!";
+        else ultStr << L"必殺 " << static_cast<int>(p.ult) << L"%";
+        const D2D1::ColorF ultTextColor = ultReady
+            ? D2D1::ColorF(1.0f, 0.86f, 0.32f, ClampFloat(ultBright, 0.0f, 1.0f))
+            : D2D1::ColorF(1.0f, 0.82f, 0.55f, 0.95f);
+        hudText(ultStr.str(), 478.0f, top + 3.0f, 600.0f, ultTextColor);
+
+        // ボム / グレイズ
+        std::wostringstream extra;
+        extra << L"ボム " << p.bombs << L"   グレイズ " << p.graze;
+        hudText(extra.str(), 612.0f, top + 3.0f, static_cast<float>(width_) - 18.0f,
+            D2D1::ColorF(0.86f, 0.90f, 1.0f, 0.92f));
     }
 
     if (boss_.active)

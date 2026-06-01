@@ -147,23 +147,31 @@ void SweetsApp::DrawGameplay3D()
         XMMatrixTranslation(0.0f, 0.025f, 0.0f),
         WithAlpha(Cream, 0.22f));
 
+    auto ringAt = [&](V2 pos, float r, float y, Color c)
+    {
+        DrawMesh(ringMesh_,
+            XMMatrixScaling(r, 1.0f, r) * XMMatrixTranslation(pos.x, y, pos.z), c);
+    };
     for (const auto& o : obstacles_)
     {
         if (o.damageField)
         {
             DrawCylinder(o.pos, o.radius, 0.08f, WithAlpha(Red, 0.42f));
-            DrawMesh(ringMesh_,
-                XMMatrixScaling(o.radius, 1.0f, o.radius) *
-                XMMatrixTranslation(o.pos.x, 0.16f, o.pos.z),
-                WithAlpha(Red, 0.78f));
+            ringAt(o.pos, o.radius, 0.16f, WithAlpha(Red, 0.78f));
+        }
+        else if (o.warpId >= 0)
+        {
+            // ワープポータル：回転する光輪
+            DrawCylinder(o.pos, o.radius * 0.5f, 0.05f, WithAlpha(o.color, o.flash > 0.0f ? 0.8f : 0.35f));
+            ringAt(o.pos, o.radius * 1.2f, 0.20f, WithAlpha(o.color, 0.85f));
+            ringAt(o.pos, o.radius * (0.7f + 0.15f * std::sin(o.spin * 4.0f)), 0.24f, WithAlpha(Cream, 0.60f));
         }
         else
         {
-            DrawCylinder(o.pos, o.radius, o.cheeseWall ? 0.82f : 0.56f, WithAlpha(o.color, 0.86f));
-            DrawMesh(ringMesh_,
-                XMMatrixScaling(o.radius * 1.08f, 1.0f, o.radius * 1.08f) *
-                XMMatrixTranslation(o.pos.x, 0.65f, o.pos.z),
-                WithAlpha(Cream, 0.30f));
+            const Color c = o.flash > 0.0f ? Cream : o.color;
+            const float top = o.cheeseWall ? 0.82f : (o.bumper ? 0.66f : 0.56f);
+            DrawCylinder(o.pos, o.radius, top, WithAlpha(c, 0.86f));
+            ringAt(o.pos, o.radius * 1.08f, 0.65f, WithAlpha(o.bumper ? Gold : Cream, o.bumper ? 0.55f : 0.30f));
         }
     }
 
@@ -262,19 +270,26 @@ void SweetsApp::DrawGameplay3D()
         DrawSphere(nose, PlayerBodyY + 0.03f, p.radius * 0.16f, Cream);
         const V2 line = p.pos + FromAngle(p.face) * (p.radius * 1.55f);
         DrawCylinder(line, p.radius * 0.08f, 0.10f, WithAlpha(Cream, 0.65f));
-        if (p.chargeFull)
+        if (p.charging && !p.downed)
         {
+            // チャージ進行に応じて外側のリングが機体へ収束し、溜まり具合を可視化する。
+            const float chargeProgress = ClampFloat(p.chargeT / 1.15f, 0.0f, 1.0f);
+            const Color chargeColor = p.chargeFull ? Gold : (p.chargeReady ? Sky : base);
+            const float outer = p.radius * (2.6f - 1.3f * chargeProgress);
             DrawMesh(ringMesh_,
-                XMMatrixScaling(p.radius * 1.85f, 1.0f, p.radius * 1.85f) *
-                XMMatrixTranslation(p.pos.x, 0.075f, p.pos.z),
-                WithAlpha(Gold, 0.84f));
-        }
-        else if (p.chargeReady)
-        {
-            DrawMesh(ringMesh_,
-                XMMatrixScaling(p.radius * 1.55f, 1.0f, p.radius * 1.55f) *
+                XMMatrixScaling(outer, 1.0f, outer) *
                 XMMatrixTranslation(p.pos.x, 0.07f, p.pos.z),
-                WithAlpha(Sky, 0.58f));
+                WithAlpha(chargeColor, 0.28f + 0.42f * chargeProgress));
+            if (p.chargeReady)
+            {
+                // 発動可能になったら機体周りで脈動させ、撃てる合図を明確に出す。
+                const float pulse = 0.45f + 0.35f * std::sin(p.chargeT * 18.0f);
+                const float readyRadius = p.chargeFull ? p.radius * 1.85f : p.radius * 1.28f;
+                DrawMesh(ringMesh_,
+                    XMMatrixScaling(readyRadius, 1.0f, readyRadius) *
+                    XMMatrixTranslation(p.pos.x, 0.075f, p.pos.z),
+                    WithAlpha(p.chargeFull ? Gold : Cream, pulse));
+            }
         }
         if ((p.focus || screen_ == Screen::HiddenBoss) && !p.downed)
         {
@@ -510,6 +525,17 @@ void SweetsApp::DrawSector(const Slash& s)
         return;
     }
 
+    if (s.sweep)
+    {
+        // 薙ぎ払い：刃が弧の端から端へ振り抜ける
+        const float prog = 1.0f - ClampFloat(s.ttl / s.life, 0.0f, 1.0f);
+        const float bladeAng = s.angle - s.arc * 0.5f + s.arc * prog;
+        const V2 bc = s.pos + FromAngle(bladeAng) * (s.range * 0.5f);
+        DrawSprite2D(L"2d_slash", bc, { s.range * 1.25f, s.range * 0.72f }, bladeAng, WithAlpha(s.color, alpha), 0.08f);
+        spriteCanvas_.DrawArc(s.pos, s.range * 0.60f, s.range * 0.34f, s.angle, s.arc, WithAlpha(Cream, alpha * 0.5f), 0.07f, 32);
+        return;
+    }
+
     const V2 center = s.pos + FromAngle(s.angle) * (s.range * 0.45f);
     if (s.visualMode == SlashVisualMode::Line)
     {
@@ -525,6 +551,23 @@ void SweetsApp::DrawSector3D(const Slash& s)
 {
     if (s.visualMode == SlashVisualMode::Hidden) return;
     const float alpha = ClampFloat(s.ttl / s.life, 0.0f, 1.0f) * 0.55f;
+    if (s.sweep)
+    {
+        // 薙ぎ払い：刃が弧の端から端へ振り抜ける
+        const float prog = 1.0f - ClampFloat(s.ttl / s.life, 0.0f, 1.0f);
+        const float bladeAng = s.angle - s.arc * 0.5f + s.arc * prog;
+        const V2 c = s.pos + FromAngle(bladeAng) * (s.range * 0.5f);
+        DrawMesh(wedgeMesh_,
+            XMMatrixScaling(s.range * 0.55f, 1.0f, s.range * 0.55f) *
+            XMMatrixRotationY(-bladeAng) *
+            XMMatrixTranslation(c.x, s.height, c.z),
+            WithAlpha(s.color, alpha + 0.10f));
+        DrawMesh(ringMesh_,
+            XMMatrixScaling(s.range * 0.62f, 1.0f, s.range * 0.62f) *
+            XMMatrixTranslation(s.pos.x, s.height + 0.015f, s.pos.z),
+            WithAlpha(Cream, alpha * 0.25f));
+        return;
+    }
     const V2 center = s.pos + FromAngle(s.angle) * (s.range * 0.42f);
     DrawMesh(wedgeMesh_,
         XMMatrixScaling(s.range * 0.82f, 1.0f, s.range * 0.82f) *
