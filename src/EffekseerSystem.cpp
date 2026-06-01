@@ -19,8 +19,12 @@
 #endif
 #endif
 
+// EffekseerSystem.cpp は外部Effekseer Runtimeとの接続だけを担当します。
+// SWEETS_USE_EFFEKSEER が無いビルドでも、関数は失敗を返すだけでゲームを止めません。
+
 namespace
 {
+// Effekseer素材は実行ファイルの隣、作業ディレクトリ、親ディレクトリから探します。
 std::filesystem::path FindRuntimeAsset(const std::wstring& relativePath)
 {
     const std::filesystem::path relative(relativePath);
@@ -51,6 +55,7 @@ std::filesystem::path FindRuntimeAsset(const std::wstring& relativePath)
     return relative;
 }
 
+// Effekseer API は char16_t ベースのパスを要求するため、wstringから変換します。
 std::u16string ToU16(const std::wstring& text)
 {
     std::u16string out;
@@ -63,6 +68,7 @@ std::u16string ToU16(const std::wstring& text)
 }
 
 #if defined(SWEETS_USE_EFFEKSEER) && SWEETS_USE_EFFEKSEER
+// DirectXMathの行列をEffekseer側の行列表現へコピーします。
 Effekseer::Matrix44 ToEffekseerMatrix(const DirectX::XMMATRIX& matrix)
 {
     DirectX::XMFLOAT4X4 m{};

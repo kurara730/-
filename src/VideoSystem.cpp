@@ -14,6 +14,9 @@
 
 using Microsoft::WRL::ComPtr;
 
+// VideoSystem.cpp はMedia Foundationで動画をRGBAフレームへデコードします。
+// DX11テクスチャ化は呼び出し側で行い、ここでは「最新フレームのピクセル」を渡すだけにしています。
+
 namespace
 {
 constexpr DWORD FirstVideoStream = static_cast<DWORD>(MF_SOURCE_READER_FIRST_VIDEO_STREAM);
@@ -38,6 +41,8 @@ struct VideoSystem::Impl
         }
     }
 
+    // Media Foundationは動画を開く時だけ初期化します。
+    // 起動時に必ず初期化しないことで、タイトル表示までの待ち時間を抑えます。
     bool EnsureMediaFoundation()
     {
         if (mfStarted) return true;
@@ -51,6 +56,7 @@ struct VideoSystem::Impl
         return true;
     }
 
+    // assets/video/title.mp4 などを複数の実行配置から探します。
     std::wstring ResolveAssetPath(const std::wstring& relativePath) const
     {
         namespace fs = std::filesystem;
@@ -79,6 +85,8 @@ struct VideoSystem::Impl
         return {};
     }
 
+    // 動画ファイルを開き、MFVideoFormat_RGB32で読めるように設定します。
+    // 失敗してもLastErrorへ理由を入れ、ゲーム側は静止画へフォールバックします。
     bool Open(const std::wstring& relativePath, bool loopVideo)
     {
         Stop();

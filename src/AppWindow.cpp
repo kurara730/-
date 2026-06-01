@@ -2,8 +2,12 @@
 
 #include <algorithm>
 
+// AppWindow.cpp はWin32アプリとしての外枠です。
+// ウィンドウ作成、メッセージ処理、メインループを担当し、ゲーム内容は他ファイルへ任せます。
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
+// 最小限の初期化を行い、重い素材読み込みはロード画面へ回します。
 bool SweetsApp::Initialize(HINSTANCE instance, int showCmd)
 {
     const HRESULT coHr = CoInitializeEx(nullptr, COINITBASE_MULTITHREADED);
@@ -53,6 +57,7 @@ bool SweetsApp::Initialize(HINSTANCE instance, int showCmd)
     return true;
 }
 
+// Windowsメッセージを処理しつつ、毎フレームの経過時間を計算してUpdate/PresentFrameを呼びます。
 int SweetsApp::Run()
 {
     MSG msg{};
@@ -99,6 +104,7 @@ int SweetsApp::Run()
     return static_cast<int>(msg.wParam);
 }
 
+// Win32から届く入力やリサイズ通知をゲーム側の状態へ変換します。
 LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg)
@@ -127,7 +133,11 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_MOUSEMOVE:
         mouseX_ = static_cast<float>(GET_X_LPARAM(lp));
         mouseY_ = static_cast<float>(GET_Y_LPARAM(lp));
-        if (screen_ == Screen::Paused && HandlePauseDrag(mouseX_, mouseY_))
+        if (HandleDebugDrag(mouseX_, mouseY_))
+        {
+            return 0;
+        }
+        if ((screen_ == Screen::Paused || screen_ == Screen::Settings) && HandlePauseDrag(mouseX_, mouseY_))
         {
             return 0;
         }
@@ -137,9 +147,15 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         mouseY_ = static_cast<float>(GET_Y_LPARAM(lp));
         if (HandleDebugClick(mouseX_, mouseY_))
         {
+            SetCapture(hwnd);
             return 0;
         }
         if (screen_ == Screen::Paused && HandlePauseClick(mouseX_, mouseY_))
+        {
+            SetCapture(hwnd);
+            return 0;
+        }
+        if (screen_ == Screen::Settings && HandleSettingsClick(mouseX_, mouseY_))
         {
             SetCapture(hwnd);
             return 0;
@@ -160,6 +176,18 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         {
             return 0;
         }
+        if (screen_ == Screen::Credits && SelectCreditsAt(mouseX_, mouseY_))
+        {
+            return 0;
+        }
+        if (screen_ == Screen::GameOver && SelectGameOverAt(mouseX_, mouseY_))
+        {
+            return 0;
+        }
+        if ((screen_ == Screen::Clear || screen_ == Screen::CompleteClear) && SelectClearAt(mouseX_, mouseY_))
+        {
+            return 0;
+        }
         mouseLeft_ = true;
         SetCapture(hwnd);
         return 0;
@@ -170,6 +198,7 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             SaveSettings();
         }
         draggingVolume_ = -1;
+        draggingDebugFx_ = -1;
         ReleaseCapture();
         return 0;
     case WM_RBUTTONDOWN:

@@ -19,6 +19,7 @@ add_executable(SweetsActionDX11 WIN32
     src/CombatEffects.cpp
     src/CombatLoop.cpp
     src/CoopController.cpp
+    src/DataTables.cpp
     src/DimensionRules.cpp
     src/EffekseerSystem.cpp
     src/EnemyController.cpp
@@ -42,6 +43,7 @@ add_executable(SweetsActionDX11 WIN32
     src/AudioSystem.h
     src/AssetLoaders.h
     src/AssetCatalog.h
+    src/DataTables.h
     src/EffekseerSystem.h
     src/GameDefs.h
     src/GameMath.h
@@ -60,6 +62,7 @@ add_executable(SweetsActionDX11 WIN32
     assets/shaders/basic_lit.hlsl
     assets/shaders/effect_additive.hlsl
     assets/shaders/postprocess.hlsl
+    assets/shaders/bloom.hlsl
     assets/shaders/sprite_unlit.hlsl
     assets/textures/title.jpg
     assets/textures/2d/player_shortcake.png
@@ -94,6 +97,11 @@ add_executable(SweetsActionDX11 WIN32
     assets/audio/333_BPM177.mp3
     assets/audio/ruins.mp3
     "assets/audio/Lonery boy.wav"
+    assets/audio/hidden_gauge1.mp3
+    assets/audio/hidden_gauge2.mp3
+    assets/audio/hidden_gauge3.mp3
+    assets/audio/se/choco_slash.mp3
+    assets/audio/se/ultimate_slash.mp3
     assets/effects/sword_slash.efkefc
     assets/effects/sword/sword_slash.efkefc
     assets/effects/sword/Sword9.efkproj
@@ -116,6 +124,7 @@ add_executable(SweetsActionDX11 WIN32
     assets/effects/Textures/Aura06_T.png
     assets/effects/Textures/Normal01.png
     assets/video/README_video.md
+    assets/data/characters.csv
 )
 
 target_compile_features(SweetsActionDX11 PRIVATE cxx_std_17)
@@ -165,6 +174,7 @@ endif()
 set_source_files_properties(assets/shaders/basic_lit.hlsl PROPERTIES VS_TOOL_OVERRIDE "None")
 set_source_files_properties(assets/shaders/effect_additive.hlsl PROPERTIES VS_TOOL_OVERRIDE "None")
 set_source_files_properties(assets/shaders/postprocess.hlsl PROPERTIES VS_TOOL_OVERRIDE "None")
+set_source_files_properties(assets/shaders/bloom.hlsl PROPERTIES VS_TOOL_OVERRIDE "None")
 set_source_files_properties(assets/shaders/sprite_unlit.hlsl PROPERTIES VS_TOOL_OVERRIDE "None")
 
 add_custom_command(TARGET SweetsActionDX11 POST_BUILD

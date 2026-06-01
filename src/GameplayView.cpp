@@ -2,8 +2,12 @@
 
 #include <filesystem>
 
+// GameplayView.cpp は戦闘画面の表示を担当します。
+// 2Dモードではスプライト、3Dモードではメッシュを使い、ゲームルール側の状態を見た目へ変換します。
+
 namespace
 {
+// TAA用のジッター値です。2D/3Dどちらの戦闘画面にも使えます。
 float Halton(int index, int base)
 {
     float f = 1.0f;
@@ -107,6 +111,8 @@ const wchar_t* PickupSpriteId(PickupType type)
 }
 }
 
+// 3Dモードの戦闘表示です。
+// ルール側も3D判定に切り替わるため、高さ付きの敵弾やボス攻撃を確認できます。
 void SweetsApp::DrawGameplay3D()
 {
     float blendFactor[4]{ 0, 0, 0, 0 };
@@ -201,6 +207,45 @@ void SweetsApp::DrawGameplay3D()
             XMMatrixScaling(boss_.radius * 1.42f, 1.0f, boss_.radius * 1.42f) *
             XMMatrixTranslation(boss_.pos.x, 0.10f, boss_.pos.z),
             WithAlpha(Red, 0.45f));
+        if (boss_.bossType == BossType::HiddenBoss && hiddenBossForm_ >= 2)
+        {
+            const float pulse = 0.14f * std::sin(gameTime_ * (hiddenBossForm_ >= 3 ? 8.0f : 5.2f));
+            const float alpha = hiddenBossForm_ >= 3 ? 0.88f : 0.64f;
+#if defined(_DEBUG)
+            const float auraFx = ClampFloat(debug_.hiddenBossAuraFx, 0.0f, 2.0f);
+#else
+            const float auraFx = 1.0f;
+#endif
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(boss_.radius * (2.05f + pulse), 1.0f, boss_.radius * (2.05f + pulse)) *
+                XMMatrixTranslation(boss_.pos.x, 0.16f, boss_.pos.z),
+                WithAlpha(Gold, ClampFloat(alpha * auraFx, 0.0f, 1.0f)));
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(boss_.radius * (2.70f - pulse), 1.0f, boss_.radius * (2.70f - pulse)) *
+                XMMatrixTranslation(boss_.pos.x, 0.18f, boss_.pos.z),
+                WithAlpha(Cream, ClampFloat(alpha * 0.42f * auraFx, 0.0f, 1.0f)));
+            const int flameCount = hiddenBossForm_ >= 3 ? 18 : 12;
+            for (int i = 0; i < flameCount; ++i)
+            {
+                const float a = TwoPi * static_cast<float>(i) / static_cast<float>(flameCount) + gameTime_ * 0.8f;
+                const float wave = std::sin(gameTime_ * 5.0f + i * 1.7f);
+                const V2 pos = boss_.pos + FromAngle(a) * (boss_.radius * (1.55f + 0.12f * wave));
+                DrawCylinder(pos, 0.045f + 0.018f * std::fabs(wave), 0.70f + 0.28f * std::fabs(wave), WithAlpha(Gold, ClampFloat(0.58f * auraFx, 0.0f, 1.0f)));
+                DrawSphere(pos, BossBodyY + 0.88f + 0.18f * wave, 0.10f, WithAlpha(Cream, ClampFloat(0.45f * auraFx, 0.0f, 1.0f)));
+            }
+        }
+        if (boss_.bossType == BossType::HiddenBoss && hiddenBossForm_ == 1)
+        {
+            for (const auto& core : hiddenBossCores_)
+            {
+                if (!core.active) continue;
+                DrawSphere(core.pos, ShotBodyY + 0.12f, core.radius, core.flash > 0.0f ? Cream : Gold);
+                DrawMesh(ringMesh_,
+                    XMMatrixScaling(core.radius * 1.55f, 1.0f, core.radius * 1.55f) *
+                    XMMatrixTranslation(core.pos.x, ShotBodyY + 0.02f, core.pos.z),
+                    WithAlpha(Red, 0.68f));
+            }
+        }
         if (boss_.telegraphT > 0.0f && boss_.telegraphLife > 0.0f)
         {
             const float t = 1.0f - ClampFloat(boss_.telegraphT / boss_.telegraphLife, 0.0f, 1.0f);
@@ -223,11 +268,13 @@ void SweetsApp::DrawGameplay3D()
         DrawSphere(p.pos, PlayerBodyY, p.radius, body);
         const V2 nose = p.pos + FromAngle(p.face) * (p.radius * 0.75f);
         DrawSphere(nose, PlayerBodyY + 0.03f, p.radius * 0.16f, Cream);
+        const V2 line = p.pos + FromAngle(p.face) * (p.radius * 1.55f);
+        DrawCylinder(line, p.radius * 0.08f, 0.10f, WithAlpha(Cream, 0.65f));
         if (p.charging && !p.downed)
         {
             // チャージ進行に応じて外側のリングが機体へ収束し、溜まり具合を可視化する。
-            const float chargeProgress = ClampFloat(p.chargeT / 0.55f, 0.0f, 1.0f);
-            const Color chargeColor = p.chargeReady ? Gold : base;
+            const float chargeProgress = ClampFloat(p.chargeT / 1.15f, 0.0f, 1.0f);
+            const Color chargeColor = p.chargeFull ? Gold : (p.chargeReady ? Sky : base);
             const float outer = p.radius * (2.6f - 1.3f * chargeProgress);
             DrawMesh(ringMesh_,
                 XMMatrixScaling(outer, 1.0f, outer) *
@@ -237,10 +284,11 @@ void SweetsApp::DrawGameplay3D()
             {
                 // 発動可能になったら機体周りで脈動させ、撃てる合図を明確に出す。
                 const float pulse = 0.45f + 0.35f * std::sin(p.chargeT * 18.0f);
+                const float readyRadius = p.chargeFull ? p.radius * 1.85f : p.radius * 1.28f;
                 DrawMesh(ringMesh_,
-                    XMMatrixScaling(p.radius * 1.28f, 1.0f, p.radius * 1.28f) *
+                    XMMatrixScaling(readyRadius, 1.0f, readyRadius) *
                     XMMatrixTranslation(p.pos.x, 0.075f, p.pos.z),
-                    WithAlpha(Cream, pulse));
+                    WithAlpha(p.chargeFull ? Gold : Cream, pulse));
             }
         }
         if ((p.focus || screen_ == Screen::HiddenBoss) && !p.downed)
@@ -283,6 +331,8 @@ void SweetsApp::DrawGameplay3D()
 #endif
 }
 
+// 2Dスプライトを1枚描く共通処理です。
+// 画像が読み込めない時は、呼び出し側が図形フォールバックを出す前提です。
 void SweetsApp::DrawSprite2D(const std::wstring& spriteId, V2 pos, V2 size, float rotation, Color tint, float depth)
 {
     const SpriteAsset* sprite = spriteLibrary_.Find(spriteId);
@@ -324,6 +374,8 @@ void SweetsApp::DrawCylinder(V2 p, float radius, float height, Color c)
     DrawMesh(cylinderMesh_, XMMatrixScaling(radius, height, radius) * XMMatrixTranslation(p.x, 0.0f, p.z), c);
 }
 
+// 2Dアイテム表示です。
+// 色だけでなく形を変え、敵や弾と見間違えにくくしています。
 void SweetsApp::DrawPickupShape(const Pickup& p)
 {
     const float bob = 0.34f + 0.10f * std::sin(gameTime_ * 5.0f + p.pos.x * 1.7f);
@@ -456,11 +508,15 @@ void SweetsApp::DrawPickupShape(const Pickup& p)
     }
 }
 
+// 3Dモード用のアイテム表示です。
+// 2Dと同じ意味の形を、既存メッシュの組み合わせで表現します。
 void SweetsApp::DrawPickupShape3D(const Pickup& p)
 {
     DrawPickupShape(p);
 }
 
+// 2Dの扇形斬撃表示です。
+// チョコ剣攻撃はEffekseerを主表示にするため、Hidden指定ならここでは描きません。
 void SweetsApp::DrawSector(const Slash& s)
 {
     const float alpha = ClampFloat(s.ttl / s.life, 0.0f, 1.0f) * 0.60f;
@@ -524,6 +580,8 @@ void SweetsApp::DrawSector3D(const Slash& s)
         WithAlpha(Cream, alpha * 0.28f));
 }
 
+// 必殺技の範囲プレビューです。
+// 「どこまで当たるか分からない」問題を減らすため、発動前に範囲を見せます。
 void SweetsApp::DrawUltimatePreview(const Player& p, int ownerIndex)
 {
     if (!p.active || p.downed || p.ult < 100.0f)
@@ -531,9 +589,14 @@ void SweetsApp::DrawUltimatePreview(const Player& p, int ownerIndex)
         return;
     }
 
+#if defined(_DEBUG)
+    const float ultimateFx = ClampFloat(debug_.ultimateFx, 0.0f, 2.0f);
+#else
+    const float ultimateFx = 1.0f;
+#endif
     auto drawRing = [&](V2 center, float radius, Color color, float alpha)
     {
-        spriteCanvas_.DrawRing(center, radius, 0.10f + radius * 0.015f, WithAlpha(color, alpha), 0.09f, 96);
+        spriteCanvas_.DrawRing(center, radius, 0.10f + radius * 0.015f, WithAlpha(color, ClampFloat(alpha * ultimateFx, 0.0f, 1.0f)), 0.09f, 96);
     };
 
     const Color accent = Loadouts[static_cast<int>(p.character)].color;
@@ -582,6 +645,8 @@ void SweetsApp::DrawUltimatePreview(const Player& p, int ownerIndex)
     }
 }
 
+// マウス座標をゲーム内座標へ変換します。
+// 2Dでは正射影、3Dではカメラレイと地面の交点として扱います。
 V2 SweetsApp::ScreenToWorld(float sx, float sy) const
 {
     const float nx = (2.0f * sx / std::max(1u, width_)) - 1.0f;
@@ -589,8 +654,8 @@ V2 SweetsApp::ScreenToWorld(float sx, float sy) const
     if (Use3DRules())
     {
         const XMMATRIX view = XMMatrixLookAtLH(
-            XMVectorSet(0.0f, 15.8f, -17.8f, 1.0f),
-            XMVectorSet(0.0f, 0.0f, 0.8f, 1.0f),
+            XMVectorSet(camera_.center.x, 15.8f, camera_.center.z - 17.8f, 1.0f),
+            XMVectorSet(camera_.center.x, 0.0f, camera_.center.z + 0.8f, 1.0f),
             XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f));
         const XMMATRIX proj = XMMatrixPerspectiveFovLH(
             XMConvertToRadians(48.0f),
@@ -613,7 +678,7 @@ V2 SweetsApp::ScreenToWorld(float sx, float sy) const
         ClampInside(out, 0.0f);
         return out;
     }
-    V2 out{ nx * GameplayHalfWidth(width_, height_), ny * GameplayHalfHeight() };
+    V2 out{ camera_.center.x + nx * GameplayViewHalfWidth(), camera_.center.z + ny * GameplayViewHalfHeight() };
     ClampInside(out, 0.0f);
     return out;
 }

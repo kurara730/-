@@ -28,19 +28,31 @@
 #include "TextureLibrary.h"
 #include "VideoSystem.h"
 
+// SweetsApp はこのゲーム全体の中心クラスです。
+// Win32 ウィンドウ、DX11/D2D、入力、ゲーム進行、音声、動画、デバッグ機能を
+// 分割された cpp ファイルへ振り分けつつ、共有する状態をここで持っています。
 class SweetsApp
 {
 public:
+    // アプリの起動時に一度だけ呼ばれる初期化処理。
+    // 重い素材読み込みは後続のロード画面へ回し、まずウィンドウ表示を優先します。
     bool Initialize(HINSTANCE instance, int showCmd);
+
+    // メインループ。毎フレーム入力、更新、画面表示を順に呼びます。
     int Run();
+
+    // Win32 から届くキーボード、マウス、リサイズなどのイベント入口です。
     LRESULT HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
 private:
+    // --- グラフィック初期化と画面ターゲット ---
+    // DX11 のデバイスやシェーダ、メッシュ、画面サイズ依存リソースを作ります。
     void CreateDevice();
     void CreateFrameTargets();
     void ReleaseFrameTargets();
     void CreateShadersAndStates();
     void CreateOffscreenTarget(ComPtr<ID3D11Texture2D>& texture, ComPtr<ID3D11RenderTargetView>& rtv, ComPtr<ID3D11ShaderResourceView>& srv, DXGI_FORMAT format);
+    void CreateOffscreenTargetSized(ComPtr<ID3D11Texture2D>& texture, ComPtr<ID3D11RenderTargetView>& rtv, ComPtr<ID3D11ShaderResourceView>& srv, DXGI_FORMAT format, UINT w, UINT h);
     void CreateMeshes();
     void LoadAssets();
     void LoadTitleAssets();
@@ -50,6 +62,8 @@ private:
     Mesh CreateMesh(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices);
     void Resize(UINT w, UINT h);
 
+    // --- ゲーム進行 ---
+    // ラン開始、Wave 進行、ボス/敵/アイテム生成など、ゲームルールの大枠です。
     void ResetGame();
     void StartGameWithDifficulty(bool hiddenBossPractice);
     void StartHiddenBoss();
@@ -57,6 +71,7 @@ private:
     void StartWave();
     void ClearWave();
     void SpawnEnemy();
+    int SpawnEnemyFormation();
     void SpawnBoss();
     void BuildStage();
     void UpdateStage(float dt);
@@ -67,15 +82,27 @@ private:
     void UseBomb();
     void UseBombFor(Player& p, int ownerIndex);
     void ApplyLoadout();
+
+    // --- 協力プレイとAI ---
+    // 1P は基本操作、2P-4P は Off/AI/Pad を切り替えて使います。
     void ApplyLoadout(Player& p, int loadoutIndex, int playerIndex, bool ai);
     void UpdateCoopPlayers(float dt);
     void UpdateAiPlayer(Player& p, int playerIndex, float dt);
     void UpdateGamepadPlayer(Player& p, int playerIndex, float dt);
     void TryRevivePlayers(float dt);
     bool AllPlayersDown() const;
+    int ActivePlayerCount() const;
+    float MultiplayerHpMultiplier() const;
+    float HiddenBossLevelHpMultiplier() const;
     Player* FindNearestPlayer(V2 pos);
     const Player* FindNearestPlayer(V2 pos) const;
     V2 FindNearestEnemyOrBoss(V2 pos) const;
+
+    // --- 照準と 2D/3D ルール ---
+    // 攻撃方向はカーソル、移動方向、近い敵オートのいずれかで決まります。
+    bool FindAimTarget(V2 pos, float range, V2& out) const;
+    float ResolvePlayerAim(const Player& p, int ownerIndex, V2 moveDir, V2 cursorPoint) const;
+    V2 ResolvePlayerAimPoint(const Player& p, int ownerIndex, V2 cursorPoint, float range) const;
     bool Use3DRules() const;
     void SetGameplayDimension(GameplayDimension dimension);
     void SyncAll3DState();
@@ -94,9 +121,12 @@ private:
     float RuleDistance(const Player& p, const Enemy& e) const;
     float RuleDistance(const Player& p, const Pickup& item) const;
     bool RuleCircleHit(V2 a, float ay, float ar, V2 b, float by, float br) const;
+    bool ResolveFieldBoundary(V2& p, float radius, V2& normal) const;
     float AddScore(int base, const Player* source = nullptr);
     void GrantBossSkill(Player& p);
 
+    // --- 毎フレーム更新 ---
+    // 画面状態ごとに必要な更新だけを呼び、タイトルではゲーム本体を動かさないようにします。
     void Update(float dt);
     void UpdateBootLoading(float dt);
     void UpdateGameplayLoading(float dt);
@@ -107,6 +137,10 @@ private:
     void UpdateClear(float dt);
     void UpdateHiddenBossIntro(float dt);
     void UpdateHiddenBoss(float dt);
+    void ResetHiddenBossCores();
+    void UpdateHiddenBossCores(float dt);
+    bool DamageHiddenBossCore(float dmg, V2 from, int ownerIndex);
+    void DamageHiddenBossCoresInRadius(V2 center, float radius, float dmg, int ownerIndex);
     void UpdateEventVideo(float dt);
     void UpdatePlaying(float dt);
     void UpdateAudioForScreen();
@@ -125,8 +159,10 @@ private:
     void DamageEnemy(Enemy& e, float dmg, V2 from, float knock, bool reflected, int ownerIndex);
     void DamageBoss(float dmg);
     void DamageBoss(float dmg, bool reflected, int ownerIndex);
+    void DamageBoss(float dmg, BossDamageKind kind, bool reflected, int ownerIndex);
     void Burst(V2 p, Color c, int count);
     void PlayCombatEffect(const std::wstring& id, V2 position, float y, float rotationY, float scale, Color fallbackColor, int fallbackCount);
+    void ReflectEnemyShotsNear(V2 center, float radius, int ownerIndex, CharacterType source, Color color, float power);
     void SpawnEnemyShot(V2 pos, float angle, float speed, float damage, float radius, Color color, float ttl = 5.0f, float angularVel = 0.0f, float accel = 0.0f);
     int ScaledBulletCount(int base) const;
     const DifficultyDef& CurrentDifficulty() const;
@@ -148,6 +184,7 @@ private:
     void DrawScene();
     void DrawGameplay3D();
     void DrawAdditiveScene();
+    void RenderBloom();
     void CompositeScene();
     void DrawHud();
     void DrawDebugHud();
@@ -155,6 +192,7 @@ private:
     void DrawScreenFlashOverlay();
     void DrawCharacterSelect();
     void DrawPauseMenu();
+    void DrawSettingsMenu();
     void DrawVideoScreen();
     void DrawTitleMediaFrame(const D2D1_RECT_F& rect);
     void DrawBitmapCover(ID2D1Bitmap1* bitmap, const D2D1_RECT_F& rect, float opacity);
@@ -175,17 +213,29 @@ private:
     void DrawUltimatePreview(const Player& p, int ownerIndex);
     void DrawSprite2D(const std::wstring& spriteId, V2 pos, V2 size, float rotation, Color tint, float depth = 0.5f);
     V2 ScreenToWorld(float sx, float sy) const;
+    V2 WorldToScreen(V2 world) const;
+    SettingsLayout BuildSettingsLayout() const;
+    void UpdateCamera(float dt);
+    float GameplayViewHalfWidth() const;
+    float GameplayViewHalfHeight() const;
 
     void OnKeyDown(WPARAM key);
     bool HandleDebugKey(WPARAM key);
     bool HandleDebugClick(float sx, float sy);
+    bool HandleDebugDrag(float sx, float sy);
     bool DebugPanelContains(float sx, float sy) const;
     void ExecuteDebugAction(int action);
+    void ResetDebugFxAdjustments();
+    void SetDebugFxSlider(int index, float normalizedValue);
+    float DebugFxSliderValue(int index) const;
+    float DebugFxDisplayValue(int index) const;
     void RestartCurrentRun();
     void StartSelectedTitleItem();
     void ActivatePauseMenuItem();
     bool HandlePauseClick(float sx, float sy);
     bool HandlePauseDrag(float sx, float sy);
+    bool HandleSettingsClick(float sx, float sy);
+    void SetAimMode(AimMode mode, bool save);
     void SetVolumeSlider(int index, float value, bool save);
     float VolumeSliderValue(int index) const;
     float* MutableVolumeSliderValue(int index);
@@ -195,6 +245,9 @@ private:
     bool SelectCoopSlotAt(float sx, float sy);
     bool SelectTitleMenuAt(float sx, float sy);
     bool SelectDifficultyAt(float sx, float sy);
+    bool SelectCreditsAt(float sx, float sy);
+    bool SelectGameOverAt(float sx, float sy);
+    bool SelectClearAt(float sx, float sy);
     bool KeyDown(int key) const;
     float Rand(float a, float b);
     int RandInt(int a, int b);
@@ -225,12 +278,25 @@ private:
     ComPtr<ID3D11Texture2D> resolvedTex_;
     ComPtr<ID3D11RenderTargetView> resolvedRtv_;
     ComPtr<ID3D11ShaderResourceView> resolvedSrv_;
+    // ブルーム用(半解像度・HDR)。A/B でピンポンしてブラーをかける。
+    ComPtr<ID3D11Texture2D> bloomTexA_;
+    ComPtr<ID3D11RenderTargetView> bloomRtvA_;
+    ComPtr<ID3D11ShaderResourceView> bloomSrvA_;
+    ComPtr<ID3D11Texture2D> bloomTexB_;
+    ComPtr<ID3D11RenderTargetView> bloomRtvB_;
+    ComPtr<ID3D11ShaderResourceView> bloomSrvB_;
+    UINT bloomWidth_ = 0;
+    UINT bloomHeight_ = 0;
     ComPtr<ID3D11Texture2D> depthTex_;
     ComPtr<ID3D11DepthStencilView> dsv_;
     ComPtr<ID3D11VertexShader> vs_;
     ComPtr<ID3D11PixelShader> ps_;
     ComPtr<ID3D11VertexShader> postVs_;
     ComPtr<ID3D11PixelShader> postPs_;
+    ComPtr<ID3D11VertexShader> bloomVs_;
+    ComPtr<ID3D11PixelShader> bloomPrefilterPs_;
+    ComPtr<ID3D11PixelShader> bloomBlurPs_;
+    ComPtr<ID3D11Buffer> bloomCB_;
     ComPtr<ID3D11InputLayout> inputLayout_;
     ComPtr<ID3D11Buffer> frameCB_;
     ComPtr<ID3D11Buffer> objectCB_;
@@ -265,6 +331,7 @@ private:
     XMMATRIX view_{ XMMatrixIdentity() };
     XMMATRIX proj_{ XMMatrixIdentity() };
     XMFLOAT3 cameraPos_{ 0.0f, 15.5f, -18.5f };
+    CameraState camera_;
 
     bool keys_[MaxKeys]{};
     bool mouseLeft_ = false;
@@ -275,6 +342,7 @@ private:
     float mouseY_ = 400.0f;
 
     Screen screen_ = Screen::BootLoading;
+    Screen settingsReturnScreen_ = Screen::Title; // 音量設定画面から戻る先(タイトル or ポーズ)
     std::array<Player, MaxPlayers> players_{};
     Player& player_ = players_[0];
     Boss boss_;
@@ -286,6 +354,10 @@ private:
     std::vector<Particle> particles_;
     std::vector<EffectPulse> effectPulses_;
     std::vector<SwordEffectVisual> swordEffectVisuals_;
+    std::array<HiddenBossCore, HiddenBossCoreCount> hiddenBossCores_{};
+    BossGimmickState bossGimmick_{};
+    std::vector<CombatNotice> combatNotices_;
+    std::vector<WorldTelegraph> worldTelegraphs_;
     AssetCatalog assetCatalog_;
     EffekseerSystem effekseer_;
     AudioSystem audio_;
@@ -307,11 +379,13 @@ private:
     int difficultyIndex_ = 1;
     int pauseMenuIndex_ = 0;
     int draggingVolume_ = -1;
+    int draggingDebugFx_ = -1;
     Difficulty difficulty_ = Difficulty::Normal;
     GameMode gameMode_ = GameMode::Story;
     GameMode pendingGameMode_ = GameMode::Story;
     GameOverChoice gameOverChoice_ = GameOverChoice::Retry;
     GameplayDimension gameplayDimension_ = GameplayDimension::TwoD;
+    AimMode aimMode_ = AimMode::MoveDirection;
     DebugState debug_;
     LoadPhase loadPhase_ = LoadPhase::Boot;
     bool hiddenBossUnlocked_ = false;
@@ -327,6 +401,7 @@ private:
     bool bossWave_ = false;
     bool waveStarted_ = false;
     StageType stage_ = StageType::Donut;
+    FieldShape fieldShape_ = FieldShape::Circle;
     float stageTimer_ = 0.0f;
     float shrinkRadius_ = ArenaRadius;
     float spawnTimer_ = 0.0f;
@@ -339,6 +414,16 @@ private:
     float hiddenPatternCd_ = 0.0f;
     int hiddenPatternStep_ = 0;
     int hiddenBossPhase_ = -1;
+    int hiddenBossForm_ = 1;
+    float hiddenBossGaugeHp_ = HiddenBossBaseGaugeHp;
+    float hiddenBossTotalHp_ = HiddenBossBaseGaugeHp * HiddenBossGaugeCount;
+    float hiddenBossCoreOpenT_ = 0.0f;
+    float hiddenBossAuraBreakT_ = 0.0f;
+    int hiddenBossReflectCount_ = 0;
+    float hiddenBossPhaseIntroT_ = 0.0f;
+    float hiddenBossPhaseIntroLife_ = 0.0f;
+    int enemySerial_ = 0;
+    bool suppressEnemyKillUltGain_ = false;
     float messageT_ = 0.0f;
     float bootLoadElapsed_ = 0.0f;
     float loadPhaseElapsed_ = 0.0f;

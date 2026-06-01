@@ -1,14 +1,19 @@
 #pragma once
 
 #include <array>
+#include <string>
 
 #include "GameMath.h"
 
+// 画面状態です。
+// Update と表示処理はこの Screen を見て分岐します。タイトル中に戦闘を進めない、
+// ポーズ中はゲーム更新を止める、といった制御の基準になります。
 enum class Screen
 {
     BootLoading,
     GameplayLoading,
     Title,
+    Settings,
     CharacterSelect,
     DifficultySelect,
     Playing,
@@ -22,6 +27,8 @@ enum class Screen
     GameOver
 };
 
+// 起動直後の段階ロード用フェーズです。
+// いきなり全素材を読むと初回起動が長くなるため、画面を出してから段階的に進めます。
 enum class LoadPhase
 {
     Boot = 0,
@@ -51,6 +58,8 @@ inline const wchar_t* LoadPhaseName(LoadPhase phase)
     }
 }
 
+// 遊び方のモードです。
+// Story はWave12で区切り、Endless はWaveを継続、HiddenBossPractice は隠しボスへ直接入ります。
 enum class GameMode
 {
     Story,
@@ -62,7 +71,8 @@ enum class TitleMenuItem
 {
     Story,
     Endless,
-    Credits
+    Credits,
+    Settings
 };
 
 enum class GameOverChoice
@@ -80,6 +90,8 @@ enum class Difficulty
     Lunatic
 };
 
+// 通常戦とボス戦でレベルデザインの目的が違うため、調整値も分けています。
+// MobRelease は雑魚を倒す爽快感、BossSkillCheck は回避とビルド確認を重視します。
 enum class EncounterProfile
 {
     MobRelease,
@@ -109,6 +121,8 @@ inline const std::array<EncounterTuning, 3> EncounterTunings{ {
 
 struct DebugState
 {
+    // F1デバッグパネルで操作できる開発用状態です。
+    // Releaseでは無効化されるため、通常プレイの仕様やバランスには影響しません。
     bool hud = false;
     bool overlays = false;
     bool taa = false;
@@ -121,4 +135,56 @@ struct DebugState
     float fpsAccum = 0.0f;
     int fpsFrames = 0;
     int taaFrame = 0;
+    float brightness = 1.0f;
+    float additiveFx = 1.0f;
+    float screenFlashFx = 1.0f;
+    float enemyBulletGlow = 1.0f;
+    float swordFx = 1.0f;
+    float ultimateFx = 1.0f;
+    float hiddenBossAuraFx = 1.0f;
+};
+
+struct UiRect
+{
+    float left = 0.0f;
+    float top = 0.0f;
+    float right = 0.0f;
+    float bottom = 0.0f;
+};
+
+struct SettingsLayout
+{
+    UiRect panel{};
+    std::array<UiRect, 4> volumeSliders{};
+    std::array<UiRect, 3> aimButtons{};
+    float sliderLeft = 0.0f;
+    float sliderRight = 0.0f;
+};
+
+struct CameraState
+{
+    V2 center{};
+    V2 target{};
+    float halfHeight = 9.4f;
+    float follow = 8.5f;
+};
+
+struct CombatNotice
+{
+    std::wstring text;
+    float ttl = 0.0f;
+    float life = 0.0f;
+    Color color = Gold;
+};
+
+struct WorldTelegraph
+{
+    V2 pos{};
+    V2 dir{ 1.0f, 0.0f };
+    float radius = 1.0f;
+    float length = 0.0f;
+    float ttl = 0.0f;
+    float life = 0.0f;
+    Color color = Gold;
+    BossPatternId pattern = BossPatternId::Radial;
 };
