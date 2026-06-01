@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+// 2Dゲーム画面用のスプライト描画ヘルパーです。
+// テクスチャ付き四角形だけでなく、円、リング、扇形も同じ入口で描けます。
 class SpriteCanvas
 {
 public:
@@ -18,6 +20,7 @@ public:
     void Begin(const DirectX::XMMATRIX& viewProjection, bool additive);
     void End();
 
+    // center/size はゲーム内ワールド座標です。depth は重なり順の調整に使います。
     void DrawQuad(ID3D11ShaderResourceView* texture, V2 center, V2 size, float rotation, Color tint, float depth = 0.5f);
     void DrawCircle(V2 center, float radius, Color tint, float depth = 0.5f, int segments = 36);
     void DrawRing(V2 center, float radius, float thickness, Color tint, float depth = 0.5f, int segments = 48);

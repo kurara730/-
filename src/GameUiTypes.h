@@ -4,6 +4,9 @@
 
 #include "GameMath.h"
 
+// 画面状態です。
+// Update と表示処理はこの Screen を見て分岐します。タイトル中に戦闘を進めない、
+// ポーズ中はゲーム更新を止める、といった制御の基準になります。
 enum class Screen
 {
     BootLoading,
@@ -23,6 +26,8 @@ enum class Screen
     GameOver
 };
 
+// 起動直後の段階ロード用フェーズです。
+// いきなり全素材を読むと初回起動が長くなるため、画面を出してから段階的に進めます。
 enum class LoadPhase
 {
     Boot = 0,
@@ -52,6 +57,8 @@ inline const wchar_t* LoadPhaseName(LoadPhase phase)
     }
 }
 
+// 遊び方のモードです。
+// Story はWave12で区切り、Endless はWaveを継続、HiddenBossPractice は隠しボスへ直接入ります。
 enum class GameMode
 {
     Story,
@@ -82,6 +89,8 @@ enum class Difficulty
     Lunatic
 };
 
+// 通常戦とボス戦でレベルデザインの目的が違うため、調整値も分けています。
+// MobRelease は雑魚を倒す爽快感、BossSkillCheck は回避とビルド確認を重視します。
 enum class EncounterProfile
 {
     MobRelease,
@@ -111,6 +120,8 @@ inline const std::array<EncounterTuning, 3> EncounterTunings{ {
 
 struct DebugState
 {
+    // F1デバッグパネルで操作できる開発用状態です。
+    // Releaseでは無効化されるため、通常プレイの仕様やバランスには影響しません。
     bool hud = false;
     bool overlays = false;
     bool taa = false;

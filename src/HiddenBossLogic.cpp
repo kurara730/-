@@ -5,6 +5,8 @@
 
 namespace
 {
+// HPから現在のゲージ/形態を求めます。
+// 3ゲージ制なので、残りHPが2ゲージ分以下なら第2形態、1ゲージ分以下なら第3形態です。
 int HiddenBossFormFromHp(float hp, float gaugeHp)
 {
     if (hp <= gaugeHp) return 3;
@@ -12,12 +14,15 @@ int HiddenBossFormFromHp(float hp, float gaugeHp)
     return 1;
 }
 
+// 1ゲージ目の炎核がすべて壊れているか確認します。
 bool HiddenBossCoresCleared(const std::array<HiddenBossCore, HiddenBossCoreCount>& cores)
 {
     return std::none_of(cores.begin(), cores.end(), [](const HiddenBossCore& core) { return core.active; });
 }
 }
 
+// 隠しボス本戦を開始します。
+// HPは1ゲージHP × 3ゲージ × 協力人数補正 × ストーリー到達時のレベル補正で決まります。
 void SweetsApp::StartHiddenBoss()
 {
     EnsureGameplayAssetsReady();
@@ -33,8 +38,10 @@ void SweetsApp::StartHiddenBoss()
     hiddenBossCores_ = {};
     screenFlashT_ = 0.0f;
     stage_ = StageType::BossArena;
+    fieldShape_ = FieldShape::Circle;
     stageTimer_ = 0.0f;
     shrinkRadius_ = ArenaRadius;
+    // Practiceではレベル補正なし、Story到達では平均レベルに応じてHPが上がります。
     hiddenBossGaugeHp_ = HiddenBossBaseGaugeHp * MultiplayerHpMultiplier() * HiddenBossLevelHpMultiplier();
     hiddenBossTotalHp_ = hiddenBossGaugeHp_ * static_cast<float>(HiddenBossGaugeCount);
 
@@ -69,6 +76,8 @@ void SweetsApp::StartHiddenBoss()
     messageT_ = 3.0f;
 }
 
+// 隠しボス突入時のプレイヤー準備です。
+// 高難度戦に入る前にHP/ボム/ULTを整え、突入直後の理不尽な事故を防ぎます。
 void SweetsApp::PrepareHiddenBossResources()
 {
     for (auto& p : players_)
@@ -84,6 +93,8 @@ void SweetsApp::PrepareHiddenBossResources()
     }
 }
 
+// 隠しボス登場演出です。
+// BGM開始から10秒間は上空を飛び、降下完了後に本戦へ移行します。
 void SweetsApp::UpdateHiddenBossIntro(float dt)
 {
     hiddenIntroT_ += dt;
@@ -122,6 +133,8 @@ void SweetsApp::UpdateHiddenBossIntro(float dt)
     }
 }
 
+// 1ゲージ目の炎核を配置し直します。
+// ボス周囲を回る核を壊すと、本体へ通るダメージが大きくなります。
 void SweetsApp::ResetHiddenBossCores()
 {
     const float hp = 360.0f + 38.0f * static_cast<float>(std::max(1, player_.level));
@@ -140,6 +153,8 @@ void SweetsApp::ResetHiddenBossCores()
     }
 }
 
+// 炎核の回転と位置同期です。
+// 第2形態以降では使わないので、配列を空に戻します。
 void SweetsApp::UpdateHiddenBossCores(float dt)
 {
     if (hiddenBossForm_ != 1)
@@ -164,6 +179,8 @@ void SweetsApp::UpdateHiddenBossCores(float dt)
     }
 }
 
+// 炎核への命中処理です。
+// すべて壊れたら敵弾を消し、短い攻撃チャンスを発生させます。
 bool SweetsApp::DamageHiddenBossCore(float dmg, V2 from, int ownerIndex)
 {
     if (hiddenBossForm_ != 1 || hiddenBossCoreOpenT_ > 0.0f) return false;
@@ -195,6 +212,7 @@ bool SweetsApp::DamageHiddenBossCore(float dmg, V2 from, int ownerIndex)
     return false;
 }
 
+// ボムや必殺など、範囲攻撃で炎核をまとめて削るための処理です。
 void SweetsApp::DamageHiddenBossCoresInRadius(V2 center, float radius, float dmg, int ownerIndex)
 {
     if (hiddenBossForm_ != 1 || hiddenBossCoreOpenT_ > 0.0f) return;
@@ -208,6 +226,8 @@ void SweetsApp::DamageHiddenBossCoresInRadius(V2 center, float radius, float dmg
     }
 }
 
+// 隠しボス本戦の更新です。
+// 通常ボスとは違い、3ゲージごとのギミック、専用BGM、専用弾幕をここで管理します。
 void SweetsApp::UpdateHiddenBoss(float dt)
 {
     gameTime_ += dt;
@@ -228,6 +248,7 @@ void SweetsApp::UpdateHiddenBoss(float dt)
     if (hiddenBossCoreOpenT_ > 0.0f) hiddenBossCoreOpenT_ = std::max(0.0f, hiddenBossCoreOpenT_ - dt);
     if (hiddenBossAuraBreakT_ > 0.0f) hiddenBossAuraBreakT_ = std::max(0.0f, hiddenBossAuraBreakT_ - dt);
 
+    // HP残量から現在形態を再計算します。形態ごとにギミックと弾幕が変わります。
     hiddenBossForm_ = HiddenBossFormFromHp(std::max(1.0f, boss_.hp), hiddenBossGaugeHp_);
     boss_.phase = hiddenBossForm_;
     boss_.spin += dt * (1.35f + hiddenBossForm_ * 0.20f);
@@ -236,6 +257,7 @@ void SweetsApp::UpdateHiddenBoss(float dt)
     SyncBoss3D(boss_);
     if (boss_.flash > 0.0f) boss_.flash -= dt;
 
+    // 形態移行演出中は入力/被弾/弾幕更新を止め、ボスへ視線を集めます。
     if (hiddenBossPhaseIntroT_ > 0.0f)
     {
         mouseRightReleased_ = false;
@@ -253,6 +275,7 @@ void SweetsApp::UpdateHiddenBoss(float dt)
     UpdateHiddenBossCores(dt);
 
     const int activeHiddenPhase = std::max(0, std::min(hiddenBossForm_ - 1, 2));
+    // 形態が切り替わった瞬間に敵弾を消し、事故を防いで次のルールをメッセージで知らせます。
     if (activeHiddenPhase != hiddenBossPhase_)
     {
         hiddenBossPhase_ = activeHiddenPhase;
@@ -321,6 +344,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
         const int phase = hiddenBossPhase_;
         const float aimed = AngleOf(player_.pos - boss_.pos);
         const int pattern = hiddenPatternStep_ % 3;
+        // 第1形態: 炎核を壊すギミック。
+        // 核破壊前は弾密度を抑え、核を見つけて壊す余裕を残します。
         if (phase == 0)
         {
             const bool open = hiddenBossCoreOpenT_ > 0.0f;
@@ -353,6 +378,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                 hiddenPatternCd_ = open ? 0.72f : 1.05f;
             }
         }
+        // 第2形態: 金色弾を反射してオーラを剥がすギミック。
+        // 反射対象が分かりやすいように、金色弾を出す瞬間は他弾を少し控えめにします。
         else if (phase == 1)
         {
             const bool broken = hiddenBossAuraBreakT_ > 0.0f;
@@ -400,6 +427,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                 hiddenPatternCd_ = broken ? 0.68f : 0.95f;
             }
         }
+        // 第3形態: ギミック無しの殴り合いです。
+        // 中央へ戻れる隙間を残しつつ、高密度の弾幕で回避力を試します。
         else
         {
             if (pattern == 0)

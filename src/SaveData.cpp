@@ -4,8 +4,13 @@
 #include <fstream>
 #include <sstream>
 
+// SaveData.cpp は、進行状況と設定をユーザー別のローカルフォルダへ保存します。
+// 保存に失敗してもゲーム進行は止めず、次回起動時だけ既定値へ戻る設計です。
+
 namespace
 {
+// %LOCALAPPDATA%\SweetsPanicDX11\save.dat を保存先にします。
+// リポジトリ内へ書かないので、Git管理ファイルを汚しません。
 std::filesystem::path SaveFilePath()
 {
     wchar_t localAppData[MAX_PATH]{};
@@ -14,6 +19,7 @@ std::filesystem::path SaveFilePath()
     return base / L"SweetsPanicDX11" / L"save.dat";
 }
 
+// 壊れた値や範囲外の値を読んでも、fallbackへ戻して安全に起動します。
 float ParseSaveFloat(const std::string& line, const char* key, float fallback)
 {
     const std::string prefix = std::string(key) + "=";
@@ -50,7 +56,7 @@ void SweetsApp::LoadProgress()
     bgmVolume_ = 1.0f;
     seVolume_ = 1.0f;
     uiVolume_ = 1.0f;
-    aimMode_ = AimMode::Cursor;
+    aimMode_ = AimMode::MoveDirection;
     const std::filesystem::path path = SaveFilePath();
     std::ifstream in(path);
     if (!in) return;

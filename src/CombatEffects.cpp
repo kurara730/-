@@ -2,6 +2,9 @@
 #include "ReflectionSystem.h"
 #include "StageFactory.h"
 
+// CombatEffects.cpp は、弾や攻撃の見た目を支える軽量演出を扱います。
+// Effekseerが出ない環境でも、ここで発光リングや粒子を出して攻撃が見えるようにします。
+
 namespace
 {
 bool IsEliteType(EnemyType type)
@@ -13,6 +16,7 @@ bool IsEliteType(EnemyType type)
 }
 }
 
+// 通常の小粒子更新です。寿命が減り、速度と高さを反映して移動します。
 void SweetsApp::UpdateParticles(float dt)
 {
     for (auto& p : particles_)
@@ -26,6 +30,7 @@ void SweetsApp::UpdateParticles(float dt)
     }
 }
 
+// 剣FXや発光リングなど、寿命付きの見た目データを更新します。
 void SweetsApp::UpdateEffectVisuals(float dt)
 {
     if (screenFlashT_ > 0.0f)
@@ -50,6 +55,8 @@ void SweetsApp::UpdateEffectVisuals(float dt)
         swordEffectVisuals_.end());
 }
 
+// 敵弾を1発作る共通処理です。
+// 難易度ごとの弾速、弾サイズ、弾数調整はここへ集約しています。
 void SweetsApp::SpawnEnemyShot(V2 pos, float angle, float speed, float damage, float radius, Color color, float ttl, float angularVel, float accel)
 {
     if (screen_ == Screen::HiddenBoss)
@@ -89,6 +96,7 @@ void SweetsApp::SpawnEnemyShot(V2 pos, float angle, float speed, float damage, f
     shots_.push_back(s);
 }
 
+// 爆発や反射時に使う短い粒子発生です。
 void SweetsApp::Burst(V2 p, Color c, int count)
 {
     for (int i = 0; i < count; ++i)
@@ -108,6 +116,8 @@ void SweetsApp::Burst(V2 p, Color c, int count)
     }
 }
 
+// 攻撃エフェクト再生入口です。
+// Effekseer再生に成功しても、同時に補助FXを出して「見えない」状態を避けます。
 void SweetsApp::PlayCombatEffect(const std::wstring& id, V2 position, float y, float rotationY, float scale, Color fallbackColor, int fallbackCount)
 {
     const bool sword = id == L"sword_slash";

@@ -2,8 +2,12 @@
 
 #include <algorithm>
 
+// 入力処理は「ゲーム中の操作」と「メニュークリック」を分けて考えます。
+// メニュー系はマウス操作主体にし、ゲーム中の移動/攻撃/ポーズ/F1だけキーを残しています。
+
 namespace
 {
+// クリック位置が矩形内に入っているか調べる、メニューUI用の小さな共通関数です。
 bool PointInRect(float sx, float sy, float left, float top, float right, float bottom)
 {
     return sx >= left && sx <= right && sy >= top && sy <= bottom;
@@ -51,6 +55,8 @@ bool DebugFxSliderRect(int index, float width, float& x, float& y, float& w, flo
 }
 }
 
+// キーが押された瞬間の処理です。
+// 長押しで毎フレーム処理する移動や攻撃は UpdatePlayer 側で見ます。
 void SweetsApp::OnKeyDown(WPARAM key)
 {
     if (HandleDebugKey(key))
@@ -298,6 +304,8 @@ void SweetsApp::OnKeyDown(WPARAM key)
     }
 }
 
+// デバッグ用キー入力です。
+// F1はパネル開閉だけにし、F2-F12の直接チートは使わない方針です。
 bool SweetsApp::HandleDebugKey(WPARAM key)
 {
 #if defined(_DEBUG)
@@ -330,6 +338,8 @@ bool SweetsApp::DebugPanelContains(float sx, float sy) const
 #endif
 }
 
+// F1デバッグパネル内のクリック処理です。
+// パネル上のクリックはゲーム側の射撃入力へ渡さないよう、ここで消費します。
 bool SweetsApp::HandleDebugClick(float sx, float sy)
 {
 #if defined(_DEBUG)
@@ -379,6 +389,8 @@ bool SweetsApp::HandleDebugClick(float sx, float sy)
 #endif
 }
 
+// デバッグスライダーのドラッグ処理です。
+// 画面効果の値をその場で変え、派手さや明るさを調整できます。
 bool SweetsApp::HandleDebugDrag(float sx, float sy)
 {
 #if defined(_DEBUG)
@@ -479,6 +491,8 @@ float SweetsApp::DebugFxDisplayValue(int index) const
 #endif
 }
 
+// デバッグパネルのボタン実行処理です。
+// Releaseビルドでは呼ばれても効果が出ないよう、Debug限定の使い方を想定しています。
 void SweetsApp::ExecuteDebugAction(int action)
 {
 #if defined(_DEBUG)
@@ -607,6 +621,8 @@ void SweetsApp::ActivatePauseMenuItem()
     }
 }
 
+// 攻撃方向モードを変更します。
+// save=true の時は save.dat に保存し、次回起動でも同じ操作感にします。
 void SweetsApp::SetAimMode(AimMode mode, bool save)
 {
     aimMode_ = mode;
@@ -619,6 +635,8 @@ void SweetsApp::SetAimMode(AimMode mode, bool save)
     messageT_ = 1.2f;
 }
 
+// ポーズ画面のクリック処理です。
+// Resume/Restart/Settings/Title と音量・照準モードをマウスで操作します。
 bool SweetsApp::HandlePauseClick(float sx, float sy)
 {
     const float panelW = 420.0f;
@@ -782,6 +800,8 @@ void SweetsApp::StartSelectedTitleItem()
     screen_ = Screen::CharacterSelect;
 }
 
+// キャラクターカードのクリック判定です。
+// 1Pのキャラを選び、Story/Endlessの次画面へ進む準備をします。
 bool SweetsApp::SelectLoadoutAt(float sx, float sy)
 {
     const float gap = 14.0f;
@@ -805,6 +825,8 @@ bool SweetsApp::SelectLoadoutAt(float sx, float sy)
     return false;
 }
 
+// 2P-4Pの Off/AI/Pad とキャラ選択のクリック処理です。
+// 初期値はOffなので、ユーザーが明示的にAI/Padを選んだ時だけ参加します。
 bool SweetsApp::SelectCoopSlotAt(float sx, float sy)
 {
     const float cardH = 214.0f;
@@ -842,6 +864,8 @@ bool SweetsApp::SelectCoopSlotAt(float sx, float sy)
     return false;
 }
 
+// タイトルのメニュー項目をクリック位置から選びます。
+// Story/Endlessはキャラ選択へ進み、Credits/Settingsは直接画面を開きます。
 bool SweetsApp::SelectTitleMenuAt(float sx, float sy)
 {
     const float itemW = 248.0f;
@@ -862,6 +886,8 @@ bool SweetsApp::SelectTitleMenuAt(float sx, float sy)
     return false;
 }
 
+// 難易度選択のクリック判定です。
+// Hidden Boss Practice が解禁済みなら、通常難易度とは別の項目として選べます。
 bool SweetsApp::SelectDifficultyAt(float sx, float sy)
 {
     const int optionCount = DifficultyOptionCount();

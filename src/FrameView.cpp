@@ -2,8 +2,12 @@
 
 #include <filesystem>
 
+// FrameView.cpp は1フレーム分の画面出力をまとめます。
+// ゲーム本体を描いた後、加算FX、ブルーム、TAA、HUD、画面フラッシュを順に重ねます。
+
 namespace
 {
+// TAA用のジッター値です。フレームごとに少し違う位置で描いて履歴と混ぜます。
 float Halton(int index, int base)
 {
     float f = 1.0f;
@@ -107,6 +111,8 @@ const wchar_t* PickupSpriteId(PickupType type)
 }
 }
 
+// 毎フレーム最後に呼ばれる表示入口です。
+// DrawSceneで画面を作り、swapChain_->Presentでウィンドウへ出します。
 void SweetsApp::PresentFrame()
 {
     DrawScene();
@@ -118,6 +124,8 @@ void SweetsApp::PresentFrame()
     swapChain_->Present(1, 0);
 }
 
+// 画面状態に応じて、タイトル、メニュー、ゲーム、動画などを描き分けます。
+// メニュー画面ではゲーム中オブジェクトを描かないようにし、背景の混乱を防ぎます。
 void SweetsApp::DrawScene()
 {
     const float clear[4] = { 0.12f, 0.045f, 0.085f, 1.0f };
@@ -186,11 +194,58 @@ void SweetsApp::DrawScene()
     }
     spriteCanvas_.Begin(view_ * proj_, false);
 
-    spriteCanvas_.DrawCircle({ 0.0f, 0.0f }, ArenaRadius + 1.3f, WithAlpha(Rose, 0.24f), 0.95f, 96);
-    spriteCanvas_.DrawCircle({ 0.0f, 0.0f }, ArenaRadius, WithAlpha({ 0.18f, 0.07f, 0.12f, 1.0f }, 0.92f), 0.94f, 96);
-    spriteCanvas_.DrawRing({ 0.0f, 0.0f }, ArenaRadius, 0.16f, WithAlpha(Gold, 0.76f), 0.20f, 128);
-    spriteCanvas_.DrawRing({ 0.0f, 0.0f }, ArenaRadius * 0.68f, 0.035f, WithAlpha(Cream, 0.18f), 0.30f, 96);
-    spriteCanvas_.DrawRing({ 0.0f, 0.0f }, ArenaRadius * 0.36f, 0.035f, WithAlpha(Cream, 0.13f), 0.30f, 72);
+    auto drawBoundaryLine = [&](V2 a, V2 b, Color color, float thickness)
+    {
+        const V2 mid = (a + b) * 0.5f;
+        const V2 d = b - a;
+        spriteCanvas_.DrawQuad(nullptr, mid, { thickness, Len(d) }, AngleOf(d) - Pi * 0.5f, color, 0.20f);
+    };
+
+    const Color fieldFill{ 0.18f, 0.07f, 0.12f, 1.0f };
+    if (fieldShape_ == FieldShape::Rectangle || fieldShape_ == FieldShape::Corridor)
+    {
+        const float halfX = fieldShape_ == FieldShape::Corridor ? 4.1f : 8.8f;
+        const float halfZ = fieldShape_ == FieldShape::Corridor ? 9.4f : 6.0f;
+        spriteCanvas_.DrawQuad(nullptr, { 0.0f, 0.0f }, { halfX * 2.0f, halfZ * 2.0f }, 0.0f, WithAlpha(fieldFill, 0.92f), 0.94f);
+        drawBoundaryLine({ -halfX, -halfZ }, { halfX, -halfZ }, WithAlpha(Gold, 0.76f), 0.16f);
+        drawBoundaryLine({ halfX, -halfZ }, { halfX, halfZ }, WithAlpha(Gold, 0.76f), 0.16f);
+        drawBoundaryLine({ halfX, halfZ }, { -halfX, halfZ }, WithAlpha(Gold, 0.76f), 0.16f);
+        drawBoundaryLine({ -halfX, halfZ }, { -halfX, -halfZ }, WithAlpha(Gold, 0.76f), 0.16f);
+        if (fieldShape_ == FieldShape::Corridor)
+        {
+            drawBoundaryLine({ -halfX * 0.52f, -halfZ }, { -halfX * 0.52f, halfZ }, WithAlpha(Cream, 0.16f), 0.045f);
+            drawBoundaryLine({ halfX * 0.52f, -halfZ }, { halfX * 0.52f, halfZ }, WithAlpha(Cream, 0.16f), 0.045f);
+        }
+    }
+    else if (fieldShape_ == FieldShape::Octagon)
+    {
+        spriteCanvas_.DrawCircle({ 0.0f, 0.0f }, ArenaRadius + 0.6f, WithAlpha(Rose, 0.18f), 0.95f, 96);
+        spriteCanvas_.DrawCircle({ 0.0f, 0.0f }, ArenaRadius * 0.96f, WithAlpha(fieldFill, 0.92f), 0.94f, 96);
+        const float r = ArenaRadius * 0.88f;
+        for (int i = 0; i < 8; ++i)
+        {
+            const V2 a = FromAngle(TwoPi * i / 8.0f + Pi * 0.125f) * r;
+            const V2 b = FromAngle(TwoPi * (i + 1) / 8.0f + Pi * 0.125f) * r;
+            drawBoundaryLine(a, b, WithAlpha(Gold, 0.78f), 0.15f);
+        }
+    }
+    else if (fieldShape_ == FieldShape::Ring)
+    {
+        spriteCanvas_.DrawCircle({ 0.0f, 0.0f }, ArenaRadius + 1.3f, WithAlpha(Rose, 0.20f), 0.95f, 96);
+        spriteCanvas_.DrawCircle({ 0.0f, 0.0f }, ArenaRadius, WithAlpha(fieldFill, 0.92f), 0.94f, 96);
+        spriteCanvas_.DrawCircle({ 0.0f, 0.0f }, 3.05f, WithAlpha({ 0.04f, 0.02f, 0.03f, 1.0f }, 0.98f), 0.93f, 72);
+        spriteCanvas_.DrawRing({ 0.0f, 0.0f }, ArenaRadius, 0.16f, WithAlpha(Gold, 0.76f), 0.20f, 128);
+        spriteCanvas_.DrawRing({ 0.0f, 0.0f }, 3.05f, 0.14f, WithAlpha(Sky, 0.66f), 0.21f, 96);
+    }
+    else
+    {
+        const float fieldRadius = fieldShape_ == FieldShape::ShrinkCircle ? shrinkRadius_ : ArenaRadius;
+        spriteCanvas_.DrawCircle({ 0.0f, 0.0f }, fieldRadius + 1.3f, WithAlpha(Rose, 0.24f), 0.95f, 96);
+        spriteCanvas_.DrawCircle({ 0.0f, 0.0f }, fieldRadius, WithAlpha(fieldFill, 0.92f), 0.94f, 96);
+        spriteCanvas_.DrawRing({ 0.0f, 0.0f }, fieldRadius, 0.16f, WithAlpha(Gold, 0.76f), 0.20f, 128);
+        spriteCanvas_.DrawRing({ 0.0f, 0.0f }, fieldRadius * 0.68f, 0.035f, WithAlpha(Cream, 0.18f), 0.30f, 96);
+        spriteCanvas_.DrawRing({ 0.0f, 0.0f }, fieldRadius * 0.36f, 0.035f, WithAlpha(Cream, 0.13f), 0.30f, 72);
+    }
 
     for (const auto& o : obstacles_)
     {
@@ -362,6 +417,8 @@ void SweetsApp::DrawScene()
     spriteCanvas_.End();
 }
 
+// 発光系の追加表示です。
+// 弾、反射リング、剣FX、必殺、隠しボスの金色オーラなどをここで重ねます。
 void SweetsApp::DrawAdditiveScene()
 {
     if (!additiveRtv_) return;
@@ -492,6 +549,8 @@ void SweetsApp::DrawAdditiveScene()
     spriteCanvas_.End();
 }
 
+// ブルーム処理です。
+// 明るい部分を抽出してぼかし、合成時に戻すことで発光感を出します。
 void SweetsApp::RenderBloom()
 {
     if (!bloomRtvA_ || !bloomRtvB_ || !bloomVs_ || !bloomPrefilterPs_ || !bloomBlurPs_ || !additiveSrv_ || !bloomCB_)
@@ -556,6 +615,8 @@ void SweetsApp::RenderBloom()
     context_->PSSetShaderResources(0, 1, nullSrv);
 }
 
+// シーン色、加算FX、ブルーム、履歴を最終画面へ合成します。
+// Debug時はTAAや加算RT表示の切替もここで反映します。
 void SweetsApp::CompositeScene()
 {
     if (!resolvedRtv_ || !postVs_ || !postPs_ || !sceneColorSrv_ || !additiveSrv_ || !historySrv_)
@@ -617,6 +678,8 @@ void SweetsApp::CompositeScene()
 #endif
 }
 
+// 画面全体の一瞬フラッシュです。
+// 剣、必殺、隠しボス演出などの衝撃を短く見せるために使います。
 void SweetsApp::DrawScreenFlashOverlay()
 {
     if (screenFlashT_ <= 0.0f || screenFlashLife_ <= 0.0f)

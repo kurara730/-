@@ -28,14 +28,25 @@
 #include "TextureLibrary.h"
 #include "VideoSystem.h"
 
+// SweetsApp はこのゲーム全体の中心クラスです。
+// Win32 ウィンドウ、DX11/D2D、入力、ゲーム進行、音声、動画、デバッグ機能を
+// 分割された cpp ファイルへ振り分けつつ、共有する状態をここで持っています。
 class SweetsApp
 {
 public:
+    // アプリの起動時に一度だけ呼ばれる初期化処理。
+    // 重い素材読み込みは後続のロード画面へ回し、まずウィンドウ表示を優先します。
     bool Initialize(HINSTANCE instance, int showCmd);
+
+    // メインループ。毎フレーム入力、更新、画面表示を順に呼びます。
     int Run();
+
+    // Win32 から届くキーボード、マウス、リサイズなどのイベント入口です。
     LRESULT HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
 private:
+    // --- グラフィック初期化と画面ターゲット ---
+    // DX11 のデバイスやシェーダ、メッシュ、画面サイズ依存リソースを作ります。
     void CreateDevice();
     void CreateFrameTargets();
     void ReleaseFrameTargets();
@@ -51,6 +62,8 @@ private:
     Mesh CreateMesh(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices);
     void Resize(UINT w, UINT h);
 
+    // --- ゲーム進行 ---
+    // ラン開始、Wave 進行、ボス/敵/アイテム生成など、ゲームルールの大枠です。
     void ResetGame();
     void StartGameWithDifficulty(bool hiddenBossPractice);
     void StartHiddenBoss();
@@ -58,6 +71,7 @@ private:
     void StartWave();
     void ClearWave();
     void SpawnEnemy();
+    int SpawnEnemyFormation();
     void SpawnBoss();
     void BuildStage();
     void UpdateStage(float dt);
@@ -67,6 +81,9 @@ private:
     void UseBomb();
     void UseBombFor(Player& p, int ownerIndex);
     void ApplyLoadout();
+
+    // --- 協力プレイとAI ---
+    // 1P は基本操作、2P-4P は Off/AI/Pad を切り替えて使います。
     void ApplyLoadout(Player& p, int loadoutIndex, int playerIndex, bool ai);
     void UpdateCoopPlayers(float dt);
     void UpdateAiPlayer(Player& p, int playerIndex, float dt);
@@ -79,6 +96,9 @@ private:
     Player* FindNearestPlayer(V2 pos);
     const Player* FindNearestPlayer(V2 pos) const;
     V2 FindNearestEnemyOrBoss(V2 pos) const;
+
+    // --- 照準と 2D/3D ルール ---
+    // 攻撃方向はカーソル、移動方向、近い敵オートのいずれかで決まります。
     bool FindAimTarget(V2 pos, float range, V2& out) const;
     float ResolvePlayerAim(const Player& p, int ownerIndex, V2 moveDir, V2 cursorPoint) const;
     V2 ResolvePlayerAimPoint(const Player& p, int ownerIndex, V2 cursorPoint, float range) const;
@@ -100,9 +120,12 @@ private:
     float RuleDistance(const Player& p, const Enemy& e) const;
     float RuleDistance(const Player& p, const Pickup& item) const;
     bool RuleCircleHit(V2 a, float ay, float ar, V2 b, float by, float br) const;
+    bool ResolveFieldBoundary(V2& p, float radius, V2& normal) const;
     float AddScore(int base, const Player* source = nullptr);
     void GrantBossSkill(Player& p);
 
+    // --- 毎フレーム更新 ---
+    // 画面状態ごとに必要な更新だけを呼び、タイトルではゲーム本体を動かさないようにします。
     void Update(float dt);
     void UpdateBootLoading(float dt);
     void UpdateGameplayLoading(float dt);
@@ -352,7 +375,7 @@ private:
     GameMode pendingGameMode_ = GameMode::Story;
     GameOverChoice gameOverChoice_ = GameOverChoice::Retry;
     GameplayDimension gameplayDimension_ = GameplayDimension::TwoD;
-    AimMode aimMode_ = AimMode::Cursor;
+    AimMode aimMode_ = AimMode::MoveDirection;
     DebugState debug_;
     LoadPhase loadPhase_ = LoadPhase::Boot;
     bool hiddenBossUnlocked_ = false;
@@ -368,6 +391,7 @@ private:
     bool bossWave_ = false;
     bool waveStarted_ = false;
     StageType stage_ = StageType::Donut;
+    FieldShape fieldShape_ = FieldShape::Circle;
     float stageTimer_ = 0.0f;
     float shrinkRadius_ = ArenaRadius;
     float spawnTimer_ = 0.0f;
@@ -388,6 +412,8 @@ private:
     int hiddenBossReflectCount_ = 0;
     float hiddenBossPhaseIntroT_ = 0.0f;
     float hiddenBossPhaseIntroLife_ = 0.0f;
+    int enemySerial_ = 0;
+    bool suppressEnemyKillUltGain_ = false;
     float messageT_ = 0.0f;
     float bootLoadElapsed_ = 0.0f;
     float loadPhaseElapsed_ = 0.0f;

@@ -4,6 +4,9 @@
 
 constexpr int MaxPlayers = 4;
 
+// キャラクター、敵、ボス、ステージ、アイテムなどの分類を enum で固定します。
+// int のまま扱うと「0 が何を意味するか」が分かりにくいため、コード上では
+// CharacterType::Chocolate のように名前で読める形へ寄せています。
 enum class CharacterType
 {
     Shortcake = 0,
@@ -47,6 +50,16 @@ enum class StageType
     BossArena
 };
 
+enum class FieldShape
+{
+    Circle = 0,
+    Rectangle,
+    Octagon,
+    Corridor,
+    Ring,
+    ShrinkCircle
+};
+
 enum class PickupType
 {
     Attack = 0,
@@ -68,6 +81,8 @@ enum class CoopSlotMode
     Pad
 };
 
+// 攻撃方向の決め方です。
+// Cursor はマウス照準、MoveDirection は移動方向、AutoTarget は近い敵を自動で向きます。
 enum class AimMode
 {
     Cursor = 0,
@@ -86,6 +101,8 @@ enum class BossDamageKind
     ReflectedShot
 };
 
+// UI表示用の短い名前を返すヘルパーです。
+// ここで表示名をまとめておくと、ポーズ画面など複数箇所で同じ表記を使えます。
 inline constexpr const wchar_t* AimModeName(AimMode mode)
 {
     switch (mode)
@@ -106,13 +123,17 @@ struct CharacterText
     const wchar_t* ultimate;
 };
 
+// キャラごとの説明文です。
+// キャラ選択画面ではここを参照し、性能値は GameStateTypes.h の Loadouts を参照します。
 inline constexpr std::array<CharacterText, 4> CharacterTexts{ {
-    { L"ショート", L"ST", L"追尾イチゴ弾", L"分裂チャージ", L"巨大メテオ" },
-    { L"チョコ", L"CH", L"近接回転斬り", L"斬撃波", L"時計斬り" },
-    { L"チーズ", L"CZ", L"重いチーズ弾", L"トゲ付き壁", L"無敵要塞" },
-    { L"ロール", L"RL", L"反射ロール弾", L"転がり突進", L"全画面叩きつけ" },
+    { L"ショート", L"ST", L"誘導反射苺弾", L"苺リコシェ場", L"巨大メテオ" },
+    { L"チョコ", L"CH", L"ヨーヨー反射弾", L"反射斬撃ヨーヨー", L"時計斬り" },
+    { L"チーズ", L"CZ", L"敵弾反射チーズ弾", L"前方反射壁", L"無敵要塞" },
+    { L"ロール", L"RL", L"壁反射ロール弾", L"最大溜め突進", L"全画面叩きつけ" },
 } };
 
+// ステージ名やボス名は、ゲーム内メッセージやHUD表示で使います。
+// 実装側では StageType / BossType だけを渡し、文字列はここで一元管理します。
 inline constexpr const wchar_t* StageName(StageType type)
 {
     switch (type)

@@ -3,8 +3,14 @@
 #include <filesystem>
 #include <iomanip>
 
+// MenuView.cpp は Direct2D/DirectWrite を使った文字UIとメニュー画面を担当します。
+// ゲーム本体の2D/3D表示とは分け、HUD、タイトル、キャラ選択、難易度、ポーズ、
+// デバッグパネルなど「画面上の情報」をまとめています。
+
 namespace
 {
+// TAA用の低差異列です。
+// フレームごとに投影を少しずらし、履歴と混ぜてジャギーを減らします。
 float Halton(int index, int base)
 {
     float f = 1.0f;
@@ -18,6 +24,8 @@ float Halton(int index, int base)
     return r;
 }
 
+// UIで使う画像などを、作業ディレクトリや実行ファイル周辺から探します。
+// Debug/Releaseで配置場所が違っても同じ相対パスを使えるようにしています。
 std::wstring FindAssetFile(const std::wstring& relativePath)
 {
     namespace fs = std::filesystem;
@@ -128,6 +136,8 @@ const wchar_t* PickupSpriteId(PickupType type)
 }
 }
 
+// 戦闘中HUDです。
+// プレイヤーHP/ULT/ボム、ボスHP、Wave、グレイズ、フィーバーなどをまとめて表示します。
 void SweetsApp::DrawHud()
 {
     d2dContext_->BeginDraw();
@@ -507,6 +517,8 @@ void SweetsApp::DrawHud()
     }
 }
 
+// 起動ロード画面です。
+// ウィンドウをすぐ出した後、段階ロードの進行状況をここで見せます。
 void SweetsApp::DrawBootLoading()
 {
     const float w = static_cast<float>(width_);
@@ -568,6 +580,8 @@ void SweetsApp::DrawBootLoading()
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 
+// クレジット画面です。
+// BGM素材など、明示したい表記をタイトルから確認できるようにしています。
 void SweetsApp::DrawCredits()
 {
     textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 1.0f));
@@ -616,6 +630,8 @@ void SweetsApp::DrawCredits()
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 
+// キャラクター選択画面です。
+// タイトルではゲーム背景を出さず、ここで1Pキャラと2P-4P参加設定を選びます。
 void SweetsApp::DrawCharacterSelect()
 {
     textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 1.0f));
@@ -643,6 +659,8 @@ void SweetsApp::DrawCharacterSelect()
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 
+// ポーズ画面です。
+// ゲームを止めたまま、再開、リスタート、音量、照準モード、タイトル戻りを操作します。
 void SweetsApp::DrawPauseMenu()
 {
     textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.70f));
@@ -693,6 +711,8 @@ void SweetsApp::DrawPauseMenu()
     hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 
+// タイトル/ポーズから開く設定画面です。
+// 現状は音量と攻撃方向を扱い、保存して次回起動にも反映します。
 void SweetsApp::DrawSettingsMenu()
 {
     // 画面全体を暗くする
@@ -777,6 +797,8 @@ void SweetsApp::DrawSettingsMenu()
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 
+// F1デバッグパネルです。
+// FPS、画面状態、敵数、FX調整、チート操作を開発用にまとめています。
 void SweetsApp::DrawDebugHud()
 {
 #if defined(_DEBUG)
@@ -916,6 +938,8 @@ void SweetsApp::DrawDebugHud()
 #endif
 }
 
+// 難易度選択画面です。
+// 倍率や%ではなく、弾数/弾速/ボムなど実際に使う数値を読める形で表示します。
 void SweetsApp::DrawDifficultySelection()
 {
     textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 1.0f));
@@ -1038,6 +1062,8 @@ void SweetsApp::DrawClearScreen()
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 
+// 隠しボス登場演出です。
+// クリア画面を割る演出と、10秒間の飛行/降下演出を表示します。
 void SweetsApp::DrawHiddenBossIntro()
 {
     const float w = static_cast<float>(width_);

@@ -6,6 +6,7 @@
 
 namespace
 {
+// 特殊敵は出しすぎると画面が支配されるため、通常Waveでは数を抑えます。
 bool IsEliteType(EnemyType type)
 {
     return type == EnemyType::Healer
@@ -15,6 +16,8 @@ bool IsEliteType(EnemyType type)
 }
 }
 
+// 指定範囲内の敵弾を味方弾へ変換する共通処理です。
+// チーズ壁、ショートの反射フィールド、ロールの反射弾などがこの関数を使います。
 void SweetsApp::ReflectEnemyShotsNear(V2 center, float radius, int ownerIndex, CharacterType source, Color color, float power)
 {
     int reflected = 0;
@@ -28,6 +31,7 @@ void SweetsApp::ReflectEnemyShotsNear(V2 center, float radius, int ownerIndex, C
             const Player& p = players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))];
             n = FromAngle(p.face);
         }
+        // 反射後は敵弾ではなく味方弾として扱い、スコアや反射倍率にもつなげます。
         ApplyShotReflection(s, Normalize(n), power);
         s.enemy = false;
         s.ownerIndex = std::max(0, std::min(ownerIndex, MaxPlayers - 1));
@@ -35,6 +39,17 @@ void SweetsApp::ReflectEnemyShotsNear(V2 center, float radius, int ownerIndex, C
         s.color = color;
         s.damage *= 1.18f;
         s.bounce = std::max(s.bounce, source == CharacterType::Roll ? 3 : 1);
+        if (source == CharacterType::Shortcake)
+        {
+            s.homingStrength = std::max(s.homingStrength, 3.4f);
+            s.ttl = std::max(s.ttl, 2.2f);
+        }
+        if (source == CharacterType::Chocolate)
+        {
+            s.yoyo = true;
+            s.pierce = std::max(s.pierce, 3);
+            s.ttl = std::max(s.ttl, 2.4f);
+        }
         SyncShot3D(s);
         ++reflected;
         Burst(s.pos, color, 8);
@@ -49,6 +64,8 @@ void SweetsApp::ReflectEnemyShotsNear(V2 center, float radius, int ownerIndex, C
     }
 }
 
+// 全ての弾を更新します。
+// 移動 → 壁反射 → 障害物 → 敵/プレイヤー命中、という順番で処理します。
 void SweetsApp::UpdateShots(float dt)
 {
     for (auto& s : shots_)
@@ -57,6 +74,7 @@ void SweetsApp::UpdateShots(float dt)
         s.ttl -= dt;
         if (s.ttl <= 0.0f) continue;
 
+        // 敵弾は角速度や加速度を持てます。曲がる弾や加速弾の弾幕に使います。
         if (s.enemy && (std::fabs(s.angularVel) > 0.0001f || std::fabs(s.accel) > 0.0001f))
         {
             float speed = Len(s.vel);
@@ -64,6 +82,7 @@ void SweetsApp::UpdateShots(float dt)
             speed = std::max(0.3f, speed + s.accel * dt);
             s.vel = FromAngle(angle) * speed;
         }
+        // 味方弾の追尾は、最寄りの敵/ボス方向へ少しずつ速度を曲げます。
         else if (!s.enemy && s.homingStrength > 0.0f)
         {
             const V2 target = FindNearestEnemyOrBoss(s.pos);
@@ -83,6 +102,7 @@ void SweetsApp::UpdateShots(float dt)
             s.height = ClampFloat(ShotBodyY + 0.26f * wave + 0.08f * static_cast<float>(s.reflectedCount), 0.16f, 1.15f);
         }
         SyncShot3D(s);
+        // ショートとロールは、味方弾そのものが敵弾反射の入口になります。
         if (!s.enemy)
         {
             if (s.sourceCharacter == CharacterType::Shortcake && s.charged)
@@ -94,23 +114,36 @@ void SweetsApp::UpdateShots(float dt)
                 ReflectEnemyShotsNear(s.pos, s.radius + (s.charged ? 0.58f : 0.34f), s.ownerIndex, CharacterType::Roll, Cream, 1.12f);
             }
         }
-        const float dist = Len(s.pos);
-        if (dist > ArenaRadius - s.radius)
+        V2 fieldNormal{};
+        // アリーナ外へ出た弾は、反射回数が残っていれば跳ね返り、無ければ消えます。
+        if (ResolveFieldBoundary(s.pos, s.radius, fieldNormal))
         {
             if (s.bounce > 0)
             {
-                V2 n = Normalize(s.pos);
-                s.pos = n * (ArenaRadius - s.radius);
-                ApplyShotReflection(s, n, 1.0f);
+                ApplyShotReflection(s, fieldNormal, s.sourceCharacter == CharacterType::Roll ? 1.18f : 1.0f);
                 --s.bounce;
+                if (!s.enemy)
+                {
+                    Player& owner = players_[std::max(0, std::min(s.ownerIndex, MaxPlayers - 1))];
+                    AddScore(20 + s.reflectedCount * 10, &owner);
+                    if (s.sourceCharacter == CharacterType::Roll)
+                    {
+                        s.damage *= 1.08f;
+                        message_ = L"壁反射";
+                        messageT_ = std::max(messageT_, 0.55f);
+                    }
+                }
             }
             else
             {
                 s.dead = true;
                 continue;
             }
+            SyncShot3D(s);
         }
 
+        // チーズ壁などの障害物との衝突。
+        // 敵弾がチーズ壁に当たった場合は味方弾へ変換されます。
         for (const auto& o : obstacles_)
         {
             V2 d = s.pos - o.pos;
@@ -152,6 +185,8 @@ void SweetsApp::UpdateShots(float dt)
                 const float hitDist = s.radius + p.hitboxRadius;
                 const float grazeDist = s.radius + p.grazeRadius;
                 const float d = RuleDistance(s, p);
+                // グレイズは「当たり判定には触れていないが近くをかすめた」時の報酬です。
+                // 先にグレイズを見てから被弾を見ることで、弾幕回避の手応えを出しています。
                 if (!s.grazed && d < grazeDist && d >= hitDist)
                 {
                     s.grazed = true;
@@ -184,17 +219,51 @@ void SweetsApp::UpdateShots(float dt)
                 if (RuleDistance(s, e) < s.radius + e.radius)
                 {
                     const bool wasChargedSplit = s.charged && s.sourceCharacter == CharacterType::Shortcake && s.splitCount > 0;
-                    DamageEnemy(e, ReflectedDamage(s), s.pos, 1.0f, s.reflected, s.ownerIndex);
+                    const float comboMul = s.yoyo ? (1.0f + 0.16f * static_cast<float>(std::min(s.yoyoCombo, 6))) : 1.0f;
+                    const bool prevSuppressUltGain = suppressEnemyKillUltGain_;
+                    if (s.ultimateSource) suppressEnemyKillUltGain_ = true;
+                    DamageEnemy(e, ReflectedDamage(s) * comboMul, s.pos, 1.0f, s.reflected || s.yoyo, s.ownerIndex);
+                    suppressEnemyKillUltGain_ = prevSuppressUltGain;
                     if (e.type == EnemyType::Mirror && !s.reflected)
                     {
                         Burst(e.pos, Sky, 10);
                     }
                     if (wasChargedSplit) SpawnSplitShots(s, e.pos);
-                    if (s.pierce > 0) --s.pierce;
-                    else s.dead = true;
+                    if (s.yoyo)
+                    {
+                        const bool sameTarget = s.lastHitEnemyId == e.id;
+                        s.lastHitEnemyId = e.id;
+                        s.yoyoCombo = std::min(8, s.yoyoCombo + (sameTarget ? 2 : 1));
+                        ApplyShotReflection(s, Normalize(s.vel), 1.05f + 0.03f * s.yoyoCombo);
+                        s.reflected = true;
+                        s.reflectedCount = std::max(s.reflectedCount, s.yoyoCombo);
+                        s.damage *= 1.03f;
+                        --s.pierce;
+                        Player& owner = players_[std::max(0, std::min(s.ownerIndex, MaxPlayers - 1))];
+                        AddScore(70 + s.yoyoCombo * 35, &owner);
+                        message_ = L"ヨーヨー反射コンボ x" + std::to_wstring(std::max(1, s.yoyoCombo));
+                        messageT_ = 0.85f;
+                        const V2 next = FindNearestEnemyOrBoss(s.pos);
+                        const V2 dir = Normalize((LenSq(next - s.pos) > 0.02f ? next : owner.pos) - s.pos);
+                        if (LenSq(dir) > 0.001f) s.vel = dir * std::max(9.0f, Len(s.vel));
+                        s.pos += Normalize(s.vel) * (s.radius + e.radius + 0.08f);
+                        if (s.pierce < 0) s.dead = true;
+                    }
+                    else
+                    {
+                        if (s.reflected)
+                        {
+                            Player& owner = players_[std::max(0, std::min(s.ownerIndex, MaxPlayers - 1))];
+                            AddScore(36 + s.reflectedCount * 18, &owner);
+                        }
+                        if (s.pierce > 0) --s.pierce;
+                        else s.dead = true;
+                    }
                     break;
                 }
             }
+            // ボスへの貫通弾/斬撃波は hitBoss で多段ヒットを防ぎます。
+            // これを入れないと、1発が毎フレーム当たり続けてHPを一瞬で削ってしまいます。
             if (!s.dead && !s.hitBoss && boss_.active && RuleDistance(s, boss_) < s.radius + boss_.radius)
             {
                 if (s.charged && s.sourceCharacter == CharacterType::Shortcake && s.splitCount > 0) SpawnSplitShots(s, boss_.pos);
@@ -220,6 +289,8 @@ void SweetsApp::UpdateShots(float dt)
     }
 }
 
+// アイテムの寿命、磁石吸引、取得効果を処理します。
+// 効果時間系は Player の各タイマーへ入れ、毎フレーム減らしていきます。
 void SweetsApp::UpdatePickups(float dt)
 {
     for (auto& item : pickups_)

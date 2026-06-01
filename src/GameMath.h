@@ -16,11 +16,16 @@
 using Microsoft::WRL::ComPtr;
 using namespace DirectX;
 
+// ゲーム全体で共有する基本定数です。
+// ArenaRadius は当たり判定、敵の出現位置、ステージ境界の基準になるため、
+// 変更するとゲーム全体の広さと難易度が大きく変わります。
 constexpr float Pi = 3.14159265358979323846f;
 constexpr float TwoPi = Pi * 2.0f;
 constexpr float ArenaRadius = 10.0f;
 constexpr int MaxKeys = 256;
 
+// DX11 側へ渡す色もこの構造体で統一します。
+// r/g/b/a は 0.0 - 1.0 の範囲で、a が透明度です。
 struct Color
 {
     float r;
@@ -38,6 +43,9 @@ constexpr Color Sky{ 0.30f, 0.60f, 1.0f, 1.0f };
 constexpr Color Grape{ 0.68f, 0.36f, 1.0f, 1.0f };
 constexpr Color Choco{ 0.55f, 0.32f, 0.18f, 1.0f };
 constexpr Color Red{ 1.0f, 0.24f, 0.22f, 1.0f };
+
+// 進行ルールに関わる固定値です。
+// 隠しボスは3ゲージ制なので、1ゲージHPとゲージ数を分けて持っています。
 constexpr int FinalWave = 12;
 constexpr float HiddenBossDurationSeconds = 137.14f;
 constexpr int HiddenBossBulletCap = 320;
@@ -55,6 +63,8 @@ constexpr float ShotBodyY = 0.34f;
 constexpr float PickupBodyY = 0.34f;
 constexpr float ObstacleBodyY = 0.28f;
 
+// 難易度ごとの補正値です。
+// 表示上は実数として見せますが、内部では敵HP、弾速、出現間隔などへ直接掛けます。
 struct DifficultyDef
 {
     const wchar_t* name;
@@ -78,6 +88,8 @@ inline const std::array<DifficultyDef, 5> DifficultyDefs{ {
     { L"Lunatic", L"最高難度。最後まで気を抜くな。", 1.55f, 1.70f, 1.40f, 1.55f, 0.68f, 1.55f, 1.05f, 2, Grape },
 } };
 
+// 2Dモードでは x/z だけを使い、3Dモードでは V3 に同期して高さも判定へ含めます。
+// z を使っているのは、3D空間の地面(XZ平面)と対応させるためです。
 struct V2
 {
     float x = 0.0f;

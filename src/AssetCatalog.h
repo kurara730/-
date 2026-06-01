@@ -28,6 +28,8 @@ enum class MeshKind
     Wedge
 };
 
+// 画面上の役割ごとに、テクスチャ/スプライト/モデル差し替え口を持ちます。
+// ファイルパスが空なら、コード側の図形フォールバックを使って必ず表示します。
 struct VisualAsset
 {
     VisualRole role = VisualRole::Player;
@@ -42,6 +44,8 @@ struct VisualAsset
     std::wstring modelPath; // Intended for FBX/glTF integration.
 };
 
+// 後から画像やFBX/glTFモデルへ差し替えるための入口です。
+// ゲームロジックはAssetCatalogを通じて素材を参照し、直接ファイル名へ依存しない方針です。
 class AssetCatalog
 {
 public:

@@ -5,6 +5,8 @@
 #include <string>
 #include <vector>
 
+// タイトル枠やイベント用動画を扱うクラスです。
+// 動画ファイルが無い/読めない場合は、呼び出し側が静止画や通常背景へフォールバックします。
 class VideoSystem
 {
 public:

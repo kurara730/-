@@ -4,6 +4,8 @@
 
 namespace
 {
+// XInputのスティック値を -1.0 ～ 1.0 に変換します。
+// 小さな入力はデッドゾーンとして0にし、意図しない微妙な移動を防ぎます。
 float NormalizeThumb(SHORT value)
 {
     constexpr float deadZone = 8200.0f;
@@ -13,6 +15,8 @@ float NormalizeThumb(SHORT value)
 }
 }
 
+// キャラ選択で選ばれたロードアウトをプレイヤー状態へ反映します。
+// maxHpや速度など、CSVで上書きされた性能もここから実プレイヤーに入ります。
 void SweetsApp::ApplyLoadout(Player& p, int loadoutIndex, int playerIndex, bool ai)
 {
     const int safeIndex = std::max(0, std::min(loadoutIndex, static_cast<int>(Loadouts.size()) - 1));
@@ -35,6 +39,8 @@ void SweetsApp::ApplyLoadout(Player& p, int loadoutIndex, int playerIndex, bool 
     SyncPlayer3D(p);
 }
 
+// 2P-4Pの更新入口です。
+// Offは無視、AIは自動操作、Padは接続ゲームパッド入力で動かします。
 void SweetsApp::UpdateCoopPlayers(float dt)
 {
     for (int i = 1; i < MaxPlayers; ++i)
@@ -77,6 +83,8 @@ void SweetsApp::UpdateCoopPlayers(float dt)
     TryRevivePlayers(dt);
 }
 
+// ゲームパッド操作のプレイヤー更新です。
+// Pad指定の枠は、未接続でも自動AIにはせず、明示的な入力だけを使います。
 void SweetsApp::UpdateGamepadPlayer(Player& p, int playerIndex, float dt)
 {
     XINPUT_STATE state{};
@@ -134,6 +142,8 @@ void SweetsApp::UpdateGamepadPlayer(Player& p, int playerIndex, float dt)
     if ((state.Gamepad.wButtons & XINPUT_GAMEPAD_Y) != 0) UseUltimateFor(p, playerIndex);
 }
 
+// AI操作のプレイヤー更新です。
+// 近い敵へ向かって攻撃し、危険な弾が近い時は逃げる簡易行動にしています。
 void SweetsApp::UpdateAiPlayer(Player& p, int playerIndex, float dt)
 {
     V2 target = FindNearestEnemyOrBoss(p.pos);
@@ -188,6 +198,8 @@ void SweetsApp::UpdateAiPlayer(Player& p, int playerIndex, float dt)
     }
 }
 
+// ダウン中の味方救助処理です。
+// 近くに生存プレイヤーが一定時間いると復帰します。
 void SweetsApp::TryRevivePlayers(float dt)
 {
     for (auto& downed : players_)
@@ -248,6 +260,8 @@ int SweetsApp::ActivePlayerCount() const
     return std::max(1, count);
 }
 
+// 協力人数による敵HP補正です。
+// Offの枠は数えず、実際に参加しているAI/Padだけで増やします。
 float SweetsApp::MultiplayerHpMultiplier() const
 {
     switch (std::min(4, ActivePlayerCount()))
@@ -259,6 +273,8 @@ float SweetsApp::MultiplayerHpMultiplier() const
     }
 }
 
+// Storyで隠しボスへ到達した時だけ、平均レベルに応じてHPを上げます。
+// Practiceでは練習しやすいよう、この補正を掛けません。
 float SweetsApp::HiddenBossLevelHpMultiplier() const
 {
     if (hiddenBossPractice_) return 1.0f;
@@ -327,6 +343,8 @@ V2 SweetsApp::FindNearestEnemyOrBoss(V2 pos) const
     return best;
 }
 
+// スコア加算の共通処理です。
+// ScoreDouble中は倍率を掛け、最終的な加算値を返します。
 float SweetsApp::AddScore(int base, const Player* source)
 {
     float mul = 1.0f;
@@ -339,6 +357,8 @@ float SweetsApp::AddScore(int base, const Player* source)
     return mul;
 }
 
+// ボス撃破報酬として、プレイヤーのコア性能を少し伸ばします。
+// 雑魚戦の爽快感とボス戦を越えた成長感をつなぐ役割です。
 void SweetsApp::GrantBossSkill(Player& p)
 {
     ++p.skillCount;

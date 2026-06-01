@@ -2,8 +2,12 @@
 
 #include <algorithm>
 
+// AppWindow.cpp はWin32アプリとしての外枠です。
+// ウィンドウ作成、メッセージ処理、メインループを担当し、ゲーム内容は他ファイルへ任せます。
+
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
+// 最小限の初期化を行い、重い素材読み込みはロード画面へ回します。
 bool SweetsApp::Initialize(HINSTANCE instance, int showCmd)
 {
     const HRESULT coHr = CoInitializeEx(nullptr, COINITBASE_MULTITHREADED);
@@ -53,6 +57,7 @@ bool SweetsApp::Initialize(HINSTANCE instance, int showCmd)
     return true;
 }
 
+// Windowsメッセージを処理しつつ、毎フレームの経過時間を計算してUpdate/PresentFrameを呼びます。
 int SweetsApp::Run()
 {
     MSG msg{};
@@ -99,6 +104,7 @@ int SweetsApp::Run()
     return static_cast<int>(msg.wParam);
 }
 
+// Win32から届く入力やリサイズ通知をゲーム側の状態へ変換します。
 LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     switch (msg)

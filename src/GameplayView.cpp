@@ -2,8 +2,12 @@
 
 #include <filesystem>
 
+// GameplayView.cpp は戦闘画面の表示を担当します。
+// 2Dモードではスプライト、3Dモードではメッシュを使い、ゲームルール側の状態を見た目へ変換します。
+
 namespace
 {
+// TAA用のジッター値です。2D/3Dどちらの戦闘画面にも使えます。
 float Halton(int index, int base)
 {
     float f = 1.0f;
@@ -107,6 +111,8 @@ const wchar_t* PickupSpriteId(PickupType type)
 }
 }
 
+// 3Dモードの戦闘表示です。
+// ルール側も3D判定に切り替わるため、高さ付きの敵弾やボス攻撃を確認できます。
 void SweetsApp::DrawGameplay3D()
 {
     float blendFactor[4]{ 0, 0, 0, 0 };
@@ -310,6 +316,8 @@ void SweetsApp::DrawGameplay3D()
 #endif
 }
 
+// 2Dスプライトを1枚描く共通処理です。
+// 画像が読み込めない時は、呼び出し側が図形フォールバックを出す前提です。
 void SweetsApp::DrawSprite2D(const std::wstring& spriteId, V2 pos, V2 size, float rotation, Color tint, float depth)
 {
     const SpriteAsset* sprite = spriteLibrary_.Find(spriteId);
@@ -351,6 +359,8 @@ void SweetsApp::DrawCylinder(V2 p, float radius, float height, Color c)
     DrawMesh(cylinderMesh_, XMMatrixScaling(radius, height, radius) * XMMatrixTranslation(p.x, 0.0f, p.z), c);
 }
 
+// 2Dアイテム表示です。
+// 色だけでなく形を変え、敵や弾と見間違えにくくしています。
 void SweetsApp::DrawPickupShape(const Pickup& p)
 {
     const float bob = 0.34f + 0.10f * std::sin(gameTime_ * 5.0f + p.pos.x * 1.7f);
@@ -483,11 +493,15 @@ void SweetsApp::DrawPickupShape(const Pickup& p)
     }
 }
 
+// 3Dモード用のアイテム表示です。
+// 2Dと同じ意味の形を、既存メッシュの組み合わせで表現します。
 void SweetsApp::DrawPickupShape3D(const Pickup& p)
 {
     DrawPickupShape(p);
 }
 
+// 2Dの扇形斬撃表示です。
+// チョコ剣攻撃はEffekseerを主表示にするため、Hidden指定ならここでは描きません。
 void SweetsApp::DrawSector(const Slash& s)
 {
     const float alpha = ClampFloat(s.ttl / s.life, 0.0f, 1.0f) * 0.60f;
@@ -523,6 +537,8 @@ void SweetsApp::DrawSector3D(const Slash& s)
         WithAlpha(Cream, alpha * 0.28f));
 }
 
+// 必殺技の範囲プレビューです。
+// 「どこまで当たるか分からない」問題を減らすため、発動前に範囲を見せます。
 void SweetsApp::DrawUltimatePreview(const Player& p, int ownerIndex)
 {
     if (!p.active || p.downed || p.ult < 100.0f)
@@ -586,6 +602,8 @@ void SweetsApp::DrawUltimatePreview(const Player& p, int ownerIndex)
     }
 }
 
+// マウス座標をゲーム内座標へ変換します。
+// 2Dでは正射影、3Dではカメラレイと地面の交点として扱います。
 V2 SweetsApp::ScreenToWorld(float sx, float sy) const
 {
     const float nx = (2.0f * sx / std::max(1u, width_)) - 1.0f;

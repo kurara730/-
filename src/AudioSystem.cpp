@@ -19,6 +19,9 @@
 
 using Microsoft::WRL::ComPtr;
 
+// AudioSystem.cpp はBGMのストリーミング再生と、短いSEのキャッシュ再生を担当します。
+// MP3/WAVの読み込みに失敗しても例外で止めず、LastErrorへ理由を残して無音継続します。
+
 namespace
 {
 constexpr DWORD FirstAudioStream = static_cast<DWORD>(MF_SOURCE_READER_FIRST_AUDIO_STREAM);
@@ -32,6 +35,8 @@ struct StreamPacket
     bool endOfStream = false;
 };
 
+// SEは短い想定なので、初回読み込み時にPCMへ展開して保持します。
+// BGMは長いため、全展開せず小さなチャンクを順番に送ります。
 struct CachedSound
 {
     std::vector<BYTE> format;
@@ -71,6 +76,8 @@ struct AudioSystem::Impl
         }
     }
 
+    // Media FoundationとXAudio2を初期化します。
+    // 初回再生時に遅延初期化することで、起動時の処理を軽くしています。
     bool Initialize()
     {
         if (initialized) return ready;
@@ -102,6 +109,7 @@ struct AudioSystem::Impl
         return true;
     }
 
+    // assets/ の場所は実行方法で変わるため、複数候補から実在するファイルを探します。
     std::wstring ResolveAssetPath(const std::wstring& relativePath) const
     {
         namespace fs = std::filesystem;
@@ -130,6 +138,7 @@ struct AudioSystem::Impl
         return {};
     }
 
+    // Media Foundation Source Readerを開き、音声ストリームをPCM形式へ変換できる状態にします。
     bool OpenReader(const std::wstring& path)
     {
         reader.Reset();
