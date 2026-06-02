@@ -575,7 +575,7 @@ void SweetsApp::DrawUltimatePreview(const Player& p, int ownerIndex)
     {
     case Weapon::Strawberry:
     {
-        const V2 target = ownerIndex == 0 ? ScreenToWorld(mouseX_, mouseY_) : FindNearestEnemyOrBoss(p.pos);
+        const V2 target = ownerIndex == 0 ? (aimAtCursor_ ? ScreenToWorld(mouseX_, mouseY_) : p.pos + FromAngle(p.face) * 4.5f) : FindNearestEnemyOrBoss(p.pos);
         drawRing(target, 3.4f, Berry, 0.62f);
         drawRing(target, 1.7f, Cream, 0.32f);
         spriteCanvas_.DrawCircle(target, 0.11f, WithAlpha(Berry, 0.80f), 0.08f, 18);

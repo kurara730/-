@@ -542,6 +542,23 @@ void SweetsApp::DrawCharacterSelect()
     d2dContext_->DrawTextW(guide, static_cast<UINT32>(wcslen(guide)), hudFormat_.Get(),
         D2D1::RectF(0.0f, static_cast<float>(height_) * 0.28f, static_cast<float>(width_), static_cast<float>(height_) * 0.34f), textBrush_.Get());
 
+    // 攻撃方向トグル
+    {
+        const float bw = 340.0f;
+        const float bh = 34.0f;
+        const float bx = (static_cast<float>(width_) - bw) * 0.5f;
+        const float by = static_cast<float>(height_) * 0.355f;
+        const D2D1_RECT_F rect = D2D1::RectF(bx, by, bx + bw, by + bh);
+        textBrush_->SetColor(D2D1::ColorF(0.16f, 0.07f, 0.11f, 0.94f));
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get());
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), 1.5f);
+        const std::wstring t = std::wstring(L"攻撃方向: ") + (aimAtCursor_ ? L"カーソル方向" : L"前方（移動方向）") + L"  ▶クリックで切替";
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f));
+        d2dContext_->DrawTextW(t.c_str(), static_cast<UINT32>(t.size()), smallFormat_.Get(),
+            D2D1::RectF(bx, by + 7.0f, bx + bw, by + bh), textBrush_.Get());
+    }
+
     DrawLoadoutSelection();
     DrawCoopSlotSelection();
 
@@ -613,6 +630,25 @@ void SweetsApp::DrawPauseMenu()
         const std::wstring pctText = pct.str();
         d2dContext_->DrawTextW(pctText.c_str(), static_cast<UINT32>(pctText.size()), smallFormat_.Get(),
             D2D1::RectF(sliderRight + 10.0f, y - 10.0f, left + panelW - 8.0f, y + 14.0f), textBrush_.Get());
+    }
+
+    // 攻撃方向トグル
+    {
+        const float aimBh = 30.0f;
+        const float aimY = top + panelH - aimBh - 8.0f;
+        const float aimBx = left + 44.0f;
+        const float aimBw = panelW - 88.0f;
+        const D2D1_RECT_F rect = D2D1::RectF(aimBx, aimY, aimBx + aimBw, aimY + aimBh);
+        textBrush_->SetColor(D2D1::ColorF(0.16f, 0.07f, 0.11f, 0.94f));
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get());
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), 1.2f);
+        smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        const std::wstring t = std::wstring(L"攻撃方向: ") + (aimAtCursor_ ? L"カーソル方向" : L"前方（移動方向）") + L"  ▶切替";
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f));
+        d2dContext_->DrawTextW(t.c_str(), static_cast<UINT32>(t.size()), smallFormat_.Get(),
+            D2D1::RectF(aimBx, aimY + 6.0f, aimBx + aimBw, aimY + aimBh), textBrush_.Get());
+        smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     }
 }
 

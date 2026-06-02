@@ -196,6 +196,7 @@ private:
     void PlayVideo(const std::wstring& relativePath, Screen nextScreen, bool skippable);
     bool SelectLoadoutAt(float sx, float sy);
     bool SelectCoopSlotAt(float sx, float sy);
+    bool SelectAimModeAt(float sx, float sy);
     bool SelectTitleMenuAt(float sx, float sy);
     bool SelectDifficultyAt(float sx, float sy);
     bool KeyDown(int key) const;
@@ -315,6 +316,7 @@ private:
     GameMode pendingGameMode_ = GameMode::Story;
     GameOverChoice gameOverChoice_ = GameOverChoice::Retry;
     GameplayDimension gameplayDimension_ = GameplayDimension::TwoD;
+    bool aimAtCursor_ = false; // 攻撃方向: false=前方(移動方向), true=カーソル方向
     DebugState debug_;
     LoadPhase loadPhase_ = LoadPhase::Boot;
     bool hiddenBossUnlocked_ = false;

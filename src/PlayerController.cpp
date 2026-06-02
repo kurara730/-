@@ -53,8 +53,17 @@ void SweetsApp::UpdatePlayer(float dt)
         }
     }
 
-    const V2 aimPoint = ScreenToWorld(mouseX_, mouseY_);
-    player_.face = AngleOf(aimPoint - player_.pos);
+    V2 aimPoint;
+    if (aimAtCursor_)
+    {
+        aimPoint = ScreenToWorld(mouseX_, mouseY_);
+        player_.face = AngleOf(aimPoint - player_.pos);
+    }
+    else
+    {
+        if (LenSq(dir) > 0.001f) player_.face = AngleOf(dir); // 攻撃方向＝向いている方向（移動方向）
+        aimPoint = player_.pos + FromAngle(player_.face) * 3.0f;
+    }
 
     if (player_.fireCd > 0.0f) player_.fireCd -= dt;
     const bool primaryHeld = mouseLeft_ || KeyDown(VK_SPACE);
@@ -517,7 +526,7 @@ void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
     const auto weapon = p.weapon;
     if (weapon == Weapon::Strawberry)
     {
-        const V2 target = ownerIndex == 0 ? ScreenToWorld(mouseX_, mouseY_) : FindNearestEnemyOrBoss(p.pos);
+        const V2 target = ownerIndex == 0 ? (aimAtCursor_ ? ScreenToWorld(mouseX_, mouseY_) : p.pos + FromAngle(p.face) * 4.5f) : FindNearestEnemyOrBoss(p.pos);
         for (auto& e : enemies_)
         {
             if (!e.dead && RuleDistance(e.pos, e.height, target, ShotBodyY) < 3.2f) DamageEnemy(e, 210.0f + wave_ * 18.0f, target, 2.0f, false, ownerIndex);

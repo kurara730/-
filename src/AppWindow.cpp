@@ -148,6 +148,10 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         {
             return 0;
         }
+        if (screen_ == Screen::CharacterSelect && SelectAimModeAt(mouseX_, mouseY_))
+        {
+            return 0;
+        }
         if (screen_ == Screen::CharacterSelect && SelectCoopSlotAt(mouseX_, mouseY_))
         {
             return 0;

@@ -443,6 +443,16 @@ bool SweetsApp::HandlePauseClick(float sx, float sy)
             return true;
         }
     }
+
+    const float aimBh = 30.0f;
+    const float aimY = top + panelH - aimBh - 8.0f;
+    const float aimBx = left + 44.0f;
+    const float aimBw = panelW - 88.0f;
+    if (PointInRect(sx, sy, aimBx, aimY, aimBx + aimBw, aimY + aimBh))
+    {
+        aimAtCursor_ = !aimAtCursor_;
+        return true;
+    }
     return true;
 }
 
@@ -549,6 +559,20 @@ bool SweetsApp::SelectLoadoutAt(float sx, float sy)
             screen_ = Screen::DifficultySelect;
             return true;
         }
+    }
+    return false;
+}
+
+bool SweetsApp::SelectAimModeAt(float sx, float sy)
+{
+    const float bw = 340.0f;
+    const float bh = 34.0f;
+    const float bx = (static_cast<float>(width_) - bw) * 0.5f;
+    const float by = static_cast<float>(height_) * 0.355f;
+    if (PointInRect(sx, sy, bx, by, bx + bw, by + bh))
+    {
+        aimAtCursor_ = !aimAtCursor_;
+        return true;
     }
     return false;
 }

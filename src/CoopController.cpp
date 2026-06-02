@@ -96,12 +96,16 @@ void SweetsApp::UpdateGamepadPlayer(Player& p, int playerIndex, float dt)
     ClampInside(p.pos, p.radius);
     SyncPlayer3D(p);
 
-    V2 aim{ NormalizeThumb(state.Gamepad.sThumbRX), NormalizeThumb(state.Gamepad.sThumbRY) };
-    if (LenSq(aim) < 0.05f)
+    if (aimAtCursor_)
     {
-        aim = Normalize(FindNearestEnemyOrBoss(p.pos) - p.pos);
+        V2 aim{ NormalizeThumb(state.Gamepad.sThumbRX), NormalizeThumb(state.Gamepad.sThumbRY) };
+        if (LenSq(aim) < 0.05f) aim = Normalize(FindNearestEnemyOrBoss(p.pos) - p.pos);
+        if (LenSq(aim) > 0.001f) p.face = AngleOf(aim);
     }
-    if (LenSq(aim) > 0.001f) p.face = AngleOf(aim);
+    else if (LenSq(move) > 0.001f)
+    {
+        p.face = AngleOf(move); // 攻撃方向＝向いている方向（移動方向）
+    }
 
     const bool attackHeld = state.Gamepad.bRightTrigger > 40 || (state.Gamepad.wButtons & XINPUT_GAMEPAD_A);
     if (attackHeld && p.fireCd <= 0.0f)
