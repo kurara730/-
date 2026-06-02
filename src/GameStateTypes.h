@@ -6,6 +6,15 @@
 #include "GameDefs.h"
 #include "GameMath.h"
 
+// ショートのヒート（撃ち続けて到達する最大秒数）。0〜この値で連射速度・威力・反射・サイズを補間します。
+// この値に達するとオーバーヒートし、StrawberryOverheatLock 秒だけ発射ロックされます。
+// レッドゾーン到達までは普通に上がるが、ゾーン内は過熱が StrawberryRedlineHeatMul 倍に減速し、
+// 最大火力を長く維持できる（＝最高火力になってからの過熱を緩やかにする）。
+constexpr float StrawberryHeatMax = 4.2f;        // 最大威力(レッドゾーン)到達まで約2.5秒
+constexpr float StrawberryOverheatLock = 2.2f;   // オーバーヒート時の発射ロック秒数
+constexpr float StrawberryRedline = 0.6f;        // この比率以上はレッドゾーン（最大火力＝金弾）
+constexpr float StrawberryRedlineHeatMul = 0.6f;  // レッドゾーン中の過熱進行倍率（小さいほど長く維持できる）
+
 enum class Weapon
 {
     Strawberry = 0,
@@ -52,7 +61,7 @@ struct LoadoutPreset
 
 // CSV(assets/data/characters.csv)で実行時に上書き可能。詳細は DataTables.h を参照。
 inline std::array<LoadoutPreset, 4> Loadouts{ {
-    { L"ショート", L"誘導", L"跳ねたいちご弾が敵へ誘導する", Weapon::Strawberry, CharacterType::Shortcake, 92.0f, 6.15f, 0.92f, 0.82f, 18.0f, Berry },
+    { L"ショート", L"ヒート連射", L"止まって撃ち続け反射弾を強化する", Weapon::Strawberry, CharacterType::Shortcake, 92.0f, 6.15f, 0.92f, 0.82f, 18.0f, Berry },
     { L"チョコ", L"ヨーヨー", L"敵で跳ねる弾をコンボさせる", Weapon::Chocolate, CharacterType::Chocolate, 145.0f, 4.55f, 1.10f, 1.06f, 8.0f, Choco },
     { L"チーズ", L"敵弾キャッチ", L"壁で敵弾を味方弾へ変える", Weapon::Cheese, CharacterType::Cheese, 112.0f, 4.95f, 1.28f, 1.14f, 12.0f, Gold },
     { L"ロール", L"壁バウンド", L"壁と境界で跳ねる弾を操る", Weapon::Roll, CharacterType::Roll, 108.0f, 5.35f, 1.00f, 0.98f, 24.0f, Cream },
@@ -94,6 +103,9 @@ struct Player
     float reviveT = 0.0f;
     float warpCd = 0.0f;
     float bombCharge = 0.0f;    // チョコ爆弾のチャージ量（長押し時間）
+    float fireHeat = 0.0f;      // ショートのヒート（撃ち続けた時間。移動でリセット）
+    float overheatT = 0.0f;     // オーバーヒート中の発射ロック残時間（>0なら撃てない）
+    bool firing = false;        // ショートが発射入力中か（移動中=ヒート0でもゲージ表示するため）
     float fever = 0.0f;
     float feverT = 0.0f;
     float corePower = 0.0f;

@@ -170,6 +170,60 @@ void SweetsApp::UpdatePlayer(float dt)
             player_.fireCd = 0.15f;
         }
     }
+    else if (player_.weapon == Weapon::Strawberry)
+    {
+        // ショート（ミニガン）：足を止めて撃ち続けるほどヒートが上がり、連射速度・威力・反射・サイズが増す。
+        // 上限まで振り切るとオーバーヒートして一定時間撃てない。動くと熱が冷めてリセット。
+        const bool moving = LenSq(dir) > 0.0001f;
+        player_.firing = primaryHeld; // 移動中(ヒート0)でもゲージを出すための発射中フラグ
+        if (player_.overheatT > 0.0f)
+        {
+            // オーバーヒート中：発射ロック。ロック時間をかけて完全冷却する。
+            player_.overheatT -= dt;
+            player_.fireHeat = std::max(0.0f, player_.fireHeat - dt * (StrawberryHeatMax / StrawberryOverheatLock));
+            if (player_.overheatT <= 0.0f)
+            {
+                player_.overheatT = 0.0f;
+                player_.fireHeat = 0.0f;
+            }
+        }
+        else if (primaryHeld)
+        {
+            if (moving)
+            {
+                // 移動しながらでも撃てるが、ヒートは溜まらずリセット（tier0固定）
+                player_.fireHeat = 0.0f;
+            }
+            else
+            {
+                // レッドゾーンに入ったら過熱の進みを大きく落とし、最大火力を長く保てるようにする
+                const float gain = player_.fireHeat >= StrawberryHeatMax * StrawberryRedline
+                    ? dt * StrawberryRedlineHeatMul
+                    : dt;
+                player_.fireHeat += gain;
+                if (player_.fireHeat >= StrawberryHeatMax)
+                {
+                    // 振り切った→オーバーヒート発動。しばらく撃てなくなる隙。
+                    player_.fireHeat = StrawberryHeatMax;
+                    player_.overheatT = StrawberryOverheatLock;
+                    Burst(player_.pos, Gold, 26);
+                    PlayCombatEffect(L"sword_slash", player_.pos, 0.5f, player_.face, 1.0f, Red, 14);
+                    message_ = L"オーバーヒート!";
+                    messageT_ = std::max(messageT_, 1.0f);
+                }
+            }
+            // 移動中・停止中どちらでも発射（オーバーヒート発動フレームは撃たない）
+            if (player_.overheatT <= 0.0f && player_.fireCd <= 0.0f)
+            {
+                FireStrawberryHeat(player_, 0, player_.face);
+            }
+        }
+        else
+        {
+            // 撃つのをやめると徐々に冷める＝レッドゾーン手前で小休止すれば過熱を回避できる
+            player_.fireHeat = std::max(0.0f, player_.fireHeat - dt * 1.4f);
+        }
+    }
     else if (primaryHeld && player_.fireCd <= 0.0f)
     {
         FirePrimaryFor(player_, 0, player_.face);
@@ -328,6 +382,40 @@ void SweetsApp::FireChocoBomb(Player& p, int ownerIndex, float aim, float charge
     s.growStage = stage;
     SyncShot3D(s);
     shots_.push_back(s);
+}
+
+// ショートのヒート射撃。撃ち続けた時間(p.fireHeat)に応じて連射速度・威力・反射回数・弾サイズが上がり、
+// 最大ヒートでは着弾/反射時に苺片へ分裂する。発射ごとに次弾までのクールダウンを設定する。
+void SweetsApp::FireStrawberryHeat(Player& p, int ownerIndex, float aim)
+{
+    const float t = std::min(1.0f, p.fireHeat / StrawberryHeatMax); // 0..1 のヒート比率
+    const int tier = t >= StrawberryRedline ? 3 : (t >= 0.38f ? 2 : (t >= 0.18f ? 1 : 0));
+
+    float dmgScale = 1.0f + (p.level - 1) * 0.18f + p.corePower;
+    dmgScale *= p.damageMul;
+    if (p.dmgBuffT > 0.0f) dmgScale *= 1.6f;
+
+    const WeaponDef& def = Weapons[static_cast<int>(Weapon::Strawberry)];
+
+    Shot s{};
+    s.pos = p.pos + FromAngle(aim) * (p.radius + 0.18f);
+    s.vel = FromAngle(aim) * (def.speed + 6.0f * t);                 // ヒートで弾速も上昇
+    s.radius = (0.12f + 0.20f * t) * (1.0f + p.level * 0.04f);       // ヒートで弾サイズ上昇
+    s.damage = def.damage * dmgScale * (1.0f + 1.6f * t);            // 威力 ×1.0〜×2.6
+    s.pierce = def.pierce + (p.level >= 5 ? 1 : 0) + static_cast<int>(p.corePierce);
+    s.bounce = tier + static_cast<int>(p.coreBounce);               // 反射回数 0〜3(+コア)
+    s.ttl = 2.4f + 0.8f * t;
+    s.color = tier >= 3 ? Gold : (tier >= 2 ? Red : (tier >= 1 ? Berry : Rose));
+    s.ownerIndex = ownerIndex;
+    s.sourceCharacter = CharacterType::Shortcake;
+    s.homingStrength = 0.0f;
+    s.reflectSplit = tier >= 3 ? 3 : 0;                             // 最大ヒートのみ反射で分裂
+    SyncShot3D(s);
+    shots_.push_back(s);
+
+    // 連射クールダウン：ヒートで 0.22s → 0.06s まで短縮
+    p.fireCd = (0.22f - 0.16f * t) * p.cooldownMul;
+    if (tier >= 3) audio_.PlaySoundEffect(SoundEffect::Reflect);
 }
 
 void SweetsApp::DetonateChocoBomb(Shot& bomb, int ownerIndex)

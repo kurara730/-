@@ -178,6 +178,7 @@ private:
     void FirePrimaryFor(Player& p, int ownerIndex, float aim);
     void FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint);
     void FireChocoBomb(Player& p, int ownerIndex, float aim, float charge);
+    void FireStrawberryHeat(Player& p, int ownerIndex, float aim);
     void DetonateChocoBomb(Shot& bomb, int ownerIndex);
     void SpawnSplitShots(const Shot& source, V2 at);
     void DoMelee(float aim);

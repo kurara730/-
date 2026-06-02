@@ -238,6 +238,59 @@ void SweetsApp::DrawHud()
         extra << L"ボム " << p.bombs << L"   グレイズ " << p.graze;
         hudText(extra.str(), 612.0f, top + 3.0f, static_cast<float>(width_) - 18.0f,
             D2D1::ColorF(0.86f, 0.90f, 1.0f, 0.92f));
+
+        // ショートのヒートゲージ（自機の頭上。撃ち続けると伸び、レッドゾーンで最大火力、振り切るとオーバーヒート）
+        if (p.weapon == Weapon::Strawberry && !p.downed && (p.fireHeat > 0.02f || p.overheatT > 0.0f || p.firing))
+        {
+            const V2 head = WorldToScreen(p.pos);
+            const float bw = 72.0f;          // 見やすく拡大
+            const float bh = 10.0f;
+            const float bx = head.x - bw * 0.5f;
+            const float by = head.z - 48.0f;
+            // 濃い縁取り付きの背景（視認性アップ）
+            textBrush_->SetColor(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.85f));
+            d2dContext_->FillRectangle(D2D1::RectF(bx - 2.0f, by - 2.0f, bx + bw + 2.0f, by + bh + 2.0f), textBrush_.Get());
+            textBrush_->SetColor(D2D1::ColorF(0.16f, 0.07f, 0.10f, 0.95f));
+            d2dContext_->FillRectangle(D2D1::RectF(bx, by, bx + bw, by + bh), textBrush_.Get());
+            if (p.overheatT > 0.0f)
+            {
+                // オーバーヒート中：冷却の進み具合を青系で表示＋赤点滅枠＋"OVERHEAT"表示
+                const float cool = 1.0f - ClampFloat(p.overheatT / StrawberryOverheatLock, 0.0f, 1.0f);
+                textBrush_->SetColor(D2D1::ColorF(0.35f, 0.66f, 1.0f, 0.97f));
+                d2dContext_->FillRectangle(D2D1::RectF(bx, by, bx + bw * cool, by + bh), textBrush_.Get());
+                const float blink = 0.45f + 0.55f * std::sin(gameTime_ * 14.0f);
+                textBrush_->SetColor(D2D1::ColorF(1.0f, 0.28f, 0.24f, ClampFloat(blink, 0.0f, 1.0f)));
+                d2dContext_->DrawRectangle(D2D1::RectF(bx - 2.0f, by - 2.0f, bx + bw + 2.0f, by + bh + 2.0f), textBrush_.Get(), 2.2f);
+                textBrush_->SetColor(D2D1::ColorF(1.0f, 0.45f, 0.40f, ClampFloat(0.55f + blink * 0.45f, 0.0f, 1.0f)));
+                d2dContext_->DrawTextW(L"OVERHEAT", 8, smallFormat_.Get(),
+                    D2D1::RectF(bx - 20.0f, by - 22.0f, bx + bw + 20.0f, by - 2.0f), textBrush_.Get());
+            }
+            else
+            {
+                const float hr = ClampFloat(p.fireHeat / StrawberryHeatMax, 0.0f, 1.0f);
+                const bool redline = hr >= StrawberryRedline;
+                const D2D1::ColorF heatCol = redline ? D2D1::ColorF(1.0f, 0.72f, 0.20f, 0.98f)
+                    : hr >= 0.38f ? D2D1::ColorF(1.0f, 0.30f, 0.26f, 0.96f)
+                    : hr >= 0.18f ? D2D1::ColorF(1.0f, 0.40f, 0.60f, 0.94f)
+                    : D2D1::ColorF(0.95f, 0.92f, 0.92f, 0.90f);
+                textBrush_->SetColor(heatCol);
+                d2dContext_->FillRectangle(D2D1::RectF(bx, by, bx + bw * hr, by + bh), textBrush_.Get());
+                // レッドゾーンの境界マーカー（縦線）
+                const float rx = bx + bw * StrawberryRedline;
+                textBrush_->SetColor(D2D1::ColorF(1.0f, 0.95f, 0.55f, 0.95f));
+                d2dContext_->FillRectangle(D2D1::RectF(rx - 1.0f, by - 2.0f, rx + 1.0f, by + bh + 2.0f), textBrush_.Get());
+                // 外枠（常時）
+                textBrush_->SetColor(D2D1::ColorF(1.0f, 0.96f, 0.90f, 0.85f));
+                d2dContext_->DrawRectangle(D2D1::RectF(bx, by, bx + bw, by + bh), textBrush_.Get(), 1.0f);
+                if (redline)
+                {
+                    // レッドゾーンは点滅枠で「もうすぐ過熱」を警告
+                    const float blink = 0.55f + 0.45f * std::sin(gameTime_ * 16.0f);
+                    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.85f, 0.30f, ClampFloat(blink, 0.0f, 1.0f)));
+                    d2dContext_->DrawRectangle(D2D1::RectF(bx - 2.0f, by - 2.0f, bx + bw + 2.0f, by + bh + 2.0f), textBrush_.Get(), 2.0f);
+                }
+            }
+        }
     }
 
     if (boss_.active)
