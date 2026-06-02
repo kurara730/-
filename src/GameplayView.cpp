@@ -179,6 +179,18 @@ void SweetsApp::DrawGameplay3D()
 
     for (const auto& s : shots_)
     {
+        if (s.chocoBomb)
+        {
+            // バウンドで巨大化する爆弾弾（段階1〜3）
+            const int stage = s.growStage;
+            const Color bc = stage >= 3 ? Gold : (stage >= 2 ? Berry : Choco);
+            DrawSphere(s.pos, s.height, s.radius * 1.8f, bc);
+            for (int r = 0; r < stage; ++r)
+            {
+                ringAt(s.pos, s.radius * (1.9f + r * 0.5f), s.height + 0.01f, WithAlpha(Cream, 0.55f - r * 0.12f));
+            }
+            continue;
+        }
         const float scale = s.charged ? 1.55f : 1.0f;
         DrawSphere(s.pos, s.height, s.radius * 1.75f * scale, s.color);
         if (s.enemy)
@@ -270,6 +282,16 @@ void SweetsApp::DrawGameplay3D()
         DrawSphere(nose, PlayerBodyY + 0.03f, p.radius * 0.16f, Cream);
         const V2 line = p.pos + FromAngle(p.face) * (p.radius * 1.55f);
         DrawCylinder(line, p.radius * 0.08f, 0.10f, WithAlpha(Cream, 0.65f));
+        if (p.bombCharge > 0.0f && !p.downed)
+        {
+            // チョコ爆弾チャージのプレビュー（溜め段階で前方の弾が大きくなる）
+            const int cs = p.bombCharge >= 1.0f ? 3 : (p.bombCharge >= 0.6f ? 2 : (p.bombCharge >= 0.3f ? 1 : 0));
+            const Color cc = cs >= 3 ? Gold : (cs >= 2 ? Berry : Choco);
+            const float cr = 0.26f + 0.28f * static_cast<float>(cs);
+            const V2 at = p.pos + FromAngle(p.face) * (p.radius + 0.3f + cr);
+            DrawSphere(at, PlayerBodyY, cr, cc);
+            ringAt(at, cr * 1.25f, PlayerBodyY + 0.01f, WithAlpha(Cream, 0.55f));
+        }
         if (p.charging && !p.downed)
         {
             // チャージ進行に応じて外側のリングが機体へ収束し、溜まり具合を可視化する。

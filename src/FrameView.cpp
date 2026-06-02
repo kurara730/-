@@ -293,6 +293,19 @@ void SweetsApp::DrawScene()
     }
     for (const auto& s : shots_)
     {
+        if (s.chocoBomb)
+        {
+            // バウンドで巨大化する爆弾弾（専用イラスト・段階で大きさと色が変わる）
+            const int stage = s.growStage;
+            const Color bc = stage >= 3 ? Gold : (stage >= 2 ? Berry : Choco);
+            const float bsize = s.radius * 3.4f;
+            DrawSprite2D(L"2d_pickup_bomb", s.pos, { bsize, bsize }, gameTime_ * 3.0f, bc, 0.24f);
+            for (int r = 0; r < stage; ++r)
+            {
+                spriteCanvas_.DrawRing(s.pos, s.radius * (1.4f + r * 0.5f), 0.06f, WithAlpha(Cream, 0.6f - r * 0.12f), 0.25f, 32);
+            }
+            continue;
+        }
         const wchar_t* id = s.enemy ? L"2d_shot_enemy" : L"2d_shot_player";
         const float size = s.radius * (s.enemy ? 3.35f : 3.05f) * (s.charged ? 1.55f : 1.0f);
         DrawSprite2D(id, s.pos, { size, size }, AngleOf(s.vel), s.color, s.enemy ? 0.25f : 0.24f);
@@ -394,6 +407,16 @@ void SweetsApp::DrawScene()
         DrawSprite2D(CharacterSpriteId(p.character), p.pos, { p.radius * 2.45f, p.radius * 2.45f }, p.face - Pi * 0.5f, bodyColor, 0.14f);
         DrawSprite2D(L"2d_shot_player", p.pos + FromAngle(p.face) * (p.radius * 0.88f), { p.radius * 0.55f, p.radius * 0.55f }, p.face, faceColor, 0.13f);
         DrawSprite2D(L"2d_shot_player", p.pos + FromAngle(p.face) * (p.radius * 1.55f), { p.radius * 1.75f, p.radius * 0.18f }, p.face, WithAlpha(Cream, 0.58f), 0.12f);
+        if (p.bombCharge > 0.0f && !p.downed)
+        {
+            // チョコ爆弾チャージのプレビュー（溜め段階で前方の弾が大きくなる）
+            const int cs = p.bombCharge >= 1.0f ? 3 : (p.bombCharge >= 0.6f ? 2 : (p.bombCharge >= 0.3f ? 1 : 0));
+            const Color cc = cs >= 3 ? Gold : (cs >= 2 ? Berry : Choco);
+            const float cr = 0.26f + 0.28f * static_cast<float>(cs);
+            const V2 at = p.pos + FromAngle(p.face) * (p.radius + 0.3f + cr);
+            DrawSprite2D(L"2d_pickup_bomb", at, { cr * 3.2f, cr * 3.2f }, gameTime_ * 3.0f, cc, 0.13f);
+            spriteCanvas_.DrawRing(at, cr * 1.3f, 0.05f, WithAlpha(Cream, 0.6f), 0.12f, 28);
+        }
         if (p.charging && !p.downed)
         {
             // チャージ進行に応じて外側のリングが機体へ収束し、溜まり具合を可視化する。

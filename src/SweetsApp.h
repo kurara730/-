@@ -150,6 +150,7 @@ private:
     void UpdateEnemies(float dt);
     void UpdateBoss(float dt);
     void UpdateShots(float dt);
+    void ReleaseCaughtIfNoBomb();
     void UpdatePickups(float dt);
     void UpdateParticles(float dt);
     void UpdateEffectVisuals(float dt);
@@ -176,6 +177,8 @@ private:
     void FirePrimary();
     void FirePrimaryFor(Player& p, int ownerIndex, float aim);
     void FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint);
+    void FireChocoBomb(Player& p, int ownerIndex, float aim, float charge);
+    void DetonateChocoBomb(Shot& bomb, int ownerIndex);
     void SpawnSplitShots(const Shot& source, V2 at);
     void DoMelee(float aim);
     void DoMeleeFor(Player& p, int ownerIndex, float aim);

@@ -93,6 +93,7 @@ struct Player
     float dashT = 0.0f;
     float reviveT = 0.0f;
     float warpCd = 0.0f;
+    float bombCharge = 0.0f;    // チョコ爆弾のチャージ量（長押し時間）
     float fever = 0.0f;
     float feverT = 0.0f;
     float corePower = 0.0f;
@@ -147,6 +148,8 @@ struct Enemy
     int score = 100;
     Color color = Rose;
     bool dead = false;
+    bool caught = false;        // チョコ最大弾に巻き込まれて固定中
+    V2 caughtOffset{};          // 弾中心からの相対位置
 };
 
 // 通常ボスと隠しボスで共通利用する状態です。
@@ -214,6 +217,8 @@ struct Shot
     int yoyoCombo = 0;
     int lastHitEnemyId = -1;
     int reflectSplit = 0;       // 反射した瞬間に分裂する子弾数（ショート用）
+    bool chocoBomb = false;     // チャージで撃つ爆弾弾（チョコ用）
+    int growStage = 0;          // 爆弾のチャージ段階（0〜3）
     float angularVel = 0.0f;
     float accel = 0.0f;
     float homingStrength = 0.0f;

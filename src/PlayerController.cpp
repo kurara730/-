@@ -140,7 +140,37 @@ void SweetsApp::UpdatePlayer(float dt)
     if (player_.fireCd > 0.0f) player_.fireCd -= dt;
     // 左クリック/Spaceは通常弾専用です。長押ししてもチャージ弾は出しません。
     const bool primaryHeld = mouseLeft_ || KeyDown(VK_SPACE);
-    if (primaryHeld && player_.fireCd <= 0.0f)
+    const bool primaryPressed = primaryHeld && !prevMouseLeft_;
+    const bool primaryReleased = !primaryHeld && prevMouseLeft_;
+    if (player_.weapon == Weapon::Chocolate)
+    {
+        // 長押しでチャージ→離して発射（サイズはチャージ段階）。飛行中はクリックで爆発
+        Shot* bomb = nullptr;
+        for (auto& bs : shots_)
+        {
+            if (!bs.dead && bs.chocoBomb && bs.ownerIndex == 0) { bomb = &bs; break; }
+        }
+        if (bomb)
+        {
+            if (primaryPressed && player_.fireCd <= 0.0f)
+            {
+                DetonateChocoBomb(*bomb, 0);
+                player_.fireCd = 0.2f;
+            }
+            player_.bombCharge = 0.0f;
+        }
+        else if (primaryHeld)
+        {
+            player_.bombCharge = std::min(1.3f, player_.bombCharge + dt);
+        }
+        else if (primaryReleased && player_.bombCharge > 0.05f && player_.fireCd <= 0.0f)
+        {
+            FireChocoBomb(player_, 0, player_.face, player_.bombCharge);
+            player_.bombCharge = 0.0f;
+            player_.fireCd = 0.15f;
+        }
+    }
+    else if (primaryHeld && player_.fireCd <= 0.0f)
     {
         FirePrimaryFor(player_, 0, player_.face);
     }
@@ -200,6 +230,20 @@ void SweetsApp::FirePrimaryFor(Player& p, int ownerIndex, float aim)
     if (p.dmgBuffT > 0.0f) dmgScale *= 1.6f;
 
     p.fireCd = def.cooldown * p.cooldownMul;
+    if (p.weapon == Weapon::Chocolate)
+    {
+        // 協力/AI向け：飛んでいる爆弾があれば爆発、なければ中チャージで発射
+        p.fireCd = 0.5f * p.cooldownMul;
+        Shot* bomb = nullptr;
+        for (auto& bs : shots_)
+        {
+            if (!bs.dead && bs.chocoBomb && bs.ownerIndex == ownerIndex) { bomb = &bs; break; }
+        }
+        if (bomb) DetonateChocoBomb(*bomb, ownerIndex);
+        else FireChocoBomb(p, ownerIndex, aim, 0.7f);
+        return;
+    }
+
     // レベルや拡散アイテムで弾数と角度を増やし、雑魚戦で強化の気持ちよさを出します。
     int count = 1;
     float spread = 0.0f;
@@ -258,6 +302,139 @@ void SweetsApp::FirePrimaryFor(Player& p, int ownerIndex, float aim)
         SyncShot3D(s);
         shots_.push_back(s);
     }
+}
+
+int ChocoBombStage(float charge)
+{
+    return charge >= 1.0f ? 3 : (charge >= 0.6f ? 2 : (charge >= 0.3f ? 1 : 0));
+}
+
+void SweetsApp::FireChocoBomb(Player& p, int ownerIndex, float aim, float charge)
+{
+    float dmgScale = 1.0f + (p.level - 1) * 0.18f + p.corePower;
+    dmgScale *= p.damageMul;
+    if (p.dmgBuffT > 0.0f) dmgScale *= 1.6f;
+    const int stage = ChocoBombStage(charge);
+    Shot s{};
+    s.pos = p.pos + FromAngle(aim) * (p.radius + 0.2f);
+    s.vel = FromAngle(aim) * 11.0f;
+    s.radius = 0.26f + 0.28f * static_cast<float>(stage); // チャージ段階でサイズ決定（0.26/0.54/0.82/1.10）
+    s.damage = 24.0f * dmgScale;
+    s.ttl = 12.0f;
+    s.color = Choco;
+    s.ownerIndex = ownerIndex;
+    s.sourceCharacter = CharacterType::Chocolate;
+    s.chocoBomb = true;
+    s.growStage = stage;
+    SyncShot3D(s);
+    shots_.push_back(s);
+}
+
+void SweetsApp::DetonateChocoBomb(Shot& bomb, int ownerIndex)
+{
+    const Player& p = players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))];
+    float dmgScale = 1.0f + (p.level - 1) * 0.18f + p.corePower;
+    dmgScale *= p.damageMul;
+    if (p.dmgBuffT > 0.0f) dmgScale *= 1.6f;
+    const int stage = bomb.growStage;                          // 0..3
+    const float mult = 1.0f + 0.1f * static_cast<float>(stage); // 1.0/1.1/1.2/1.3倍
+    const float exDmg = 90.0f * dmgScale * mult;
+    const float exR = 2.8f * mult;
+
+    // ボスへのダメージ：ボスと95%以上重なって爆発するとクリティカル（1.25〜2倍）
+    bool didCrit = false;
+    auto damageBossMaybeCrit = [&]()
+    {
+        if (!boss_.active) return;
+        const float d = RuleDistance(boss_.pos, boss_.height, bomb.pos, bomb.height);
+        if (d >= exR + boss_.radius) return;
+        const float inside = (boss_.radius + bomb.radius - d) / (2.0f * bomb.radius); // 弾がボスに入っている割合
+        if (inside >= 0.95f)
+        {
+            const float crit = Rand(1.25f, 2.0f);
+            DamageBoss(exDmg * crit, false, ownerIndex);
+            Burst(boss_.pos, Gold, 50);
+            didCrit = true;
+        }
+        else
+        {
+            DamageBoss(exDmg, false, ownerIndex);
+        }
+    };
+
+    if (stage >= 3)
+    {
+        // 最大チャージ：巻き込んだ敵ほど一体あたりのダメージがアップ＋生存敵を吹き飛ばす
+        std::vector<int> caught;
+        for (int i = 0; i < static_cast<int>(enemies_.size()); ++i)
+        {
+            const Enemy& e = enemies_[i];
+            if (!e.dead && RuleDistance(e.pos, e.height, bomb.pos, bomb.height) < exR + e.radius) caught.push_back(i);
+        }
+        // ザコは巻き込むほど一体あたりのダメージがアップ（最大3倍）
+        const int count = static_cast<int>(caught.size());
+        const float per = exDmg * std::min(3.0f, 1.0f + 0.2f * static_cast<float>(std::max(0, count - 1)));
+        for (int i : caught)
+        {
+            if (enemies_[i].dead) continue;
+            DamageEnemy(enemies_[i], per, bomb.pos, 1.0f, false, ownerIndex);
+            if (!enemies_[i].dead)
+            {
+                V2 away = Normalize(enemies_[i].pos - bomb.pos);
+                if (LenSq(away) < 0.001f) away = FromAngle(0.0f);
+                enemies_[i].pos += away * 3.2f; // 吹き飛ばし
+                ClampInside(enemies_[i].pos, enemies_[i].radius);
+                SyncEnemy3D(enemies_[i]);
+            }
+        }
+        for (auto& e : enemies_) e.caught = false; // 爆発で全解放
+        damageBossMaybeCrit(); // ボスは巻き込まないが範囲内なら巻き添え（クリティカル対象）
+    }
+    else
+    {
+        for (auto& e : enemies_)
+        {
+            if (!e.dead && RuleDistance(e.pos, e.height, bomb.pos, bomb.height) < exR + e.radius)
+            {
+                DamageEnemy(e, exDmg, bomb.pos, 2.5f, false, ownerIndex);
+            }
+        }
+        damageBossMaybeCrit();
+    }
+    // 爆発範囲内の敵弾を消去
+    for (auto& bs : shots_)
+    {
+        if (bs.enemy && !bs.dead && RuleDistance(bs.pos, bs.height, bomb.pos, bomb.height) < exR)
+        {
+            bs.dead = true;
+        }
+    }
+    const Color exCol = stage >= 3 ? Gold : (stage >= 2 ? Berry : Choco);
+    EffectPulse shock{};
+    shock.pos = bomb.pos;
+    shock.startRadius = exR * 0.25f;
+    shock.endRadius = exR;
+    shock.ttl = 0.34f;
+    shock.life = 0.34f;
+    shock.y = bomb.height + 0.05f;
+    shock.color = exCol;
+    shock.pos3 = Grounded3D(shock.pos, shock.y);
+    effectPulses_.push_back(shock);
+    EffectPulse core{};
+    core.pos = bomb.pos;
+    core.startRadius = exR * 0.6f;
+    core.endRadius = exR * 0.15f;
+    core.ttl = 0.20f;
+    core.life = 0.20f;
+    core.y = bomb.height + 0.10f;
+    core.color = Cream;
+    core.pos3 = Grounded3D(core.pos, core.y);
+    effectPulses_.push_back(core);
+    Burst(bomb.pos, exCol, 18 + stage * 34);
+    Burst(bomb.pos, Cream, 8 + stage * 6);
+    bomb.dead = true;
+    message_ = didCrit ? L"クリティカル爆発!!" : (stage >= 3 ? L"特大チョコ爆発!!" : (stage >= 2 ? L"大チョコ爆発!" : L"チョコ爆発"));
+    messageT_ = std::max(messageT_, didCrit ? 1.0f : 0.7f);
 }
 
 void SweetsApp::DoMelee(float aim)

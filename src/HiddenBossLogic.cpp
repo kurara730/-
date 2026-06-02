@@ -470,6 +470,7 @@ void SweetsApp::UpdateHiddenBoss(float dt)
     }
 
     UpdateShots(dt);
+    ReleaseCaughtIfNoBomb();
     UpdatePickups(dt);
     UpdateParticles(dt);
     UpdateCamera(dt);

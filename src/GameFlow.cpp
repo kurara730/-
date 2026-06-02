@@ -555,6 +555,7 @@ void SweetsApp::UpdatePlaying(float dt)
     UpdateEnemies(dt);
     UpdateBoss(dt);
     UpdateShots(dt);
+    ReleaseCaughtIfNoBomb();
     UpdatePickups(dt);
     UpdateParticles(dt);
     UpdateCamera(dt);

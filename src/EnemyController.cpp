@@ -359,6 +359,7 @@ void SweetsApp::UpdateEnemies(float dt)
         if (e.flash > 0.0f) e.flash -= dt;
         if (e.touchCd > 0.0f) e.touchCd -= dt;
         if (e.barrierT > 0.0f) e.barrierT -= dt;
+        if (e.caught) { SyncEnemy3D(e); continue; } // 巻き込まれ中は行動停止（弾に固定）
 
         // 敵は最も近い生存プレイヤーを狙います。協力プレイでもターゲットが分散します。
         Player* targetPlayer = FindNearestPlayer(e.pos);
