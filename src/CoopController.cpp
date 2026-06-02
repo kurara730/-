@@ -293,7 +293,7 @@ float SweetsApp::HiddenBossLevelHpMultiplier() const
     if (count <= 0) return 1.0f;
     const float avgLevel = totalLevel / static_cast<float>(count);
     const float bonusLevels = std::min(std::max(0.0f, avgLevel - 1.0f), 20.0f);
-    return std::min(1.7f, 1.0f + bonusLevels * 0.035f);
+    return std::min(2.05f, 1.0f + bonusLevels * 0.055f);
 }
 
 Player* SweetsApp::FindNearestPlayer(V2 pos)

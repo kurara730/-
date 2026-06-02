@@ -249,14 +249,37 @@ void SweetsApp::DrawHud()
         float pct = ClampFloat(boss_.hp / boss_.maxHp, 0.0f, 1.0f);
         if (boss_.bossType == BossType::HiddenBoss)
         {
-            const int remainingGauge = std::max(1, std::min(HiddenBossGaugeCount, static_cast<int>(std::ceil(std::max(1.0f, boss_.hp) / hiddenBossGaugeHp_))));
-            const float activeGaugeHp = boss_.hp - hiddenBossGaugeHp_ * static_cast<float>(remainingGauge - 1);
-            pct = ClampFloat(activeGaugeHp / hiddenBossGaugeHp_, 0.0f, 1.0f);
+            textBrush_->SetColor(D2D1::ColorF(0.12f, 0.04f, 0.09f, 0.92f));
+            d2dContext_->FillRectangle(D2D1::RectF(left, top, left + bw, top + 14.0f), textBrush_.Get());
+            const D2D1::ColorF gaugeColors[HiddenBossGaugeCount] =
+            {
+                D2D1::ColorF(1.0f, 0.24f, 0.35f, 0.96f),
+                D2D1::ColorF(1.0f, 0.70f, 0.25f, 0.94f),
+                D2D1::ColorF(0.68f, 0.36f, 1.0f, 0.92f)
+            };
+            const float gap = 1.0f;
+            const float stripH = (14.0f - gap * static_cast<float>(HiddenBossGaugeCount - 1)) / static_cast<float>(HiddenBossGaugeCount);
+            for (int gauge = 0; gauge < HiddenBossGaugeCount; ++gauge)
+            {
+                const float y = top + static_cast<float>(HiddenBossGaugeCount - 1 - gauge) * (stripH + gap);
+                const float amount = ClampFloat((boss_.hp - hiddenBossGaugeHp_ * static_cast<float>(gauge)) / hiddenBossGaugeHp_, 0.0f, 1.0f);
+                const D2D1_RECT_F strip = D2D1::RectF(left + 1.0f, y, left + bw - 1.0f, y + stripH);
+                textBrush_->SetColor(D2D1::ColorF(0.22f, 0.08f, 0.12f, 0.70f));
+                d2dContext_->FillRectangle(strip, textBrush_.Get());
+                if (amount > 0.0f)
+                {
+                    textBrush_->SetColor(gaugeColors[gauge]);
+                    d2dContext_->FillRectangle(D2D1::RectF(strip.left, strip.top, strip.left + (strip.right - strip.left) * amount, strip.bottom), textBrush_.Get());
+                }
+            }
         }
-        textBrush_->SetColor(D2D1::ColorF(0.28f, 0.08f, 0.14f, 0.85f));
-        d2dContext_->FillRectangle(D2D1::RectF(left, top, left + bw, top + 14.0f), textBrush_.Get());
-        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.24f, 0.35f, 0.95f));
-        d2dContext_->FillRectangle(D2D1::RectF(left, top, left + bw * pct, top + 14.0f), textBrush_.Get());
+        else
+        {
+            textBrush_->SetColor(D2D1::ColorF(0.28f, 0.08f, 0.14f, 0.85f));
+            d2dContext_->FillRectangle(D2D1::RectF(left, top, left + bw, top + 14.0f), textBrush_.Get());
+            textBrush_->SetColor(D2D1::ColorF(1.0f, 0.24f, 0.35f, 0.95f));
+            d2dContext_->FillRectangle(D2D1::RectF(left, top, left + bw * pct, top + 14.0f), textBrush_.Get());
+        }
         textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f));
         const wchar_t* bossName = BossName(boss_.bossType);
         d2dContext_->DrawTextW(bossName, static_cast<UINT32>(wcslen(bossName)), smallFormat_.Get(), D2D1::RectF(left, top + 16, left + 220, top + 40), textBrush_.Get());
@@ -275,7 +298,7 @@ void SweetsApp::DrawHud()
             else if (hiddenBossForm_ == 2 && hiddenBossAuraBreakT_ <= 0.0f)
             {
                 std::wostringstream ss;
-                ss << L"LOCK: 金色弾反射 " << hiddenBossReflectCount_ << L"/" << HiddenBossReflectBreakCount << L"  本体ダメージ軽減中";
+                ss << L"LOCK: 金色キー弾反射 " << hiddenBossReflectCount_ << L"/" << HiddenBossReflectBreakCount << L"  本体ダメージ軽減中";
                 lockText = ss.str();
             }
             else if (hiddenBossForm_ <= 2)
@@ -1121,6 +1144,10 @@ void SweetsApp::DrawHiddenBossIntro()
     const float ease = openT * openT * (3.0f - 2.0f * openT);
     const float split = ease * w * 0.34f;
     const float flash = ClampFloat(1.0f - std::fabs(hiddenIntroT_ - 0.36f) / 0.18f, 0.0f, 1.0f);
+    const float sigilT = ClampFloat((hiddenIntroT_ - 1.05f) / 4.8f, 0.0f, 1.0f);
+    const float dropT = ClampFloat((hiddenIntroT_ / HiddenBossIntroDuration - 0.70f) / 0.30f, 0.0f, 1.0f);
+    const float landingFlash = ClampFloat(1.0f - std::fabs(hiddenIntroT_ - HiddenBossIntroDuration * 0.90f) / 0.34f, 0.0f, 1.0f);
+    const float bossRevealT = ClampFloat((hiddenIntroT_ - 0.62f) / 1.05f, 0.0f, 1.0f);
     const bool mono = flash > 0.03f;
 
     textBrush_->SetColor(mono ? D2D1::ColorF(0.02f, 0.02f, 0.02f, 1.0f) : D2D1::ColorF(0.05f, 0.02f, 0.04f, 1.0f));
@@ -1182,15 +1209,89 @@ void SweetsApp::DrawHiddenBossIntro()
         d2dContext_->DrawLine(a, b, textBrush_.Get(), 2.0f);
     }
 
-    const float bossT = ClampFloat((hiddenIntroT_ - 0.62f) / 1.05f, 0.0f, 1.0f);
-    if (bossT > 0.0f)
+    if (sigilT > 0.0f)
     {
-        textBrush_->SetColor(mono ? D2D1::ColorF(0.10f, 0.10f, 0.10f, 0.82f) : D2D1::ColorF(0.22f, 0.02f, 0.32f, 0.82f));
-        const float r = 64.0f + bossT * 48.0f;
-        d2dContext_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy - 18.0f), r * 0.72f, r), textBrush_.Get());
-        textBrush_->SetColor(mono ? D2D1::ColorF(0.92f, 0.92f, 0.92f, bossT) : D2D1::ColorF(0.68f, 0.36f, 1.0f, bossT));
-        d2dContext_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy - 18.0f), r * 0.76f, r * 1.02f), textBrush_.Get(), 3.0f);
+        const float alpha = mono ? 0.70f : (0.22f + sigilT * 0.58f);
+        const D2D1_POINT_2F center = D2D1::Point2F(cx, cy - 18.0f + dropT * 26.0f);
+        for (int ring = 0; ring < 4; ++ring)
+        {
+            const float rr = (70.0f + ring * 30.0f) * (0.78f + sigilT * 0.36f + dropT * 0.22f);
+            const float wobble = std::sin(hiddenIntroT_ * (1.6f + ring * 0.35f)) * 8.0f;
+            textBrush_->SetColor(mono
+                ? D2D1::ColorF(0.04f, 0.04f, 0.04f, alpha * (0.95f - ring * 0.14f))
+                : D2D1::ColorF(0.70f, 0.34f + ring * 0.05f, 1.0f, alpha * (0.82f - ring * 0.12f)));
+            d2dContext_->DrawEllipse(D2D1::Ellipse(center, rr + wobble, rr * 0.34f + ring * 4.0f), textBrush_.Get(), 2.0f + sigilT * 2.0f);
+        }
+        textBrush_->SetColor(mono ? D2D1::ColorF(0.02f, 0.02f, 0.02f, alpha) : D2D1::ColorF(1.0f, 0.78f, 0.28f, alpha));
+        for (int i = 0; i < 18; ++i)
+        {
+            const float a = hiddenIntroT_ * (0.42f + (i % 3) * 0.11f) + TwoPi * i / 18.0f;
+            const float inner = 58.0f + 10.0f * std::sin(hiddenIntroT_ * 2.0f + i);
+            const float outer = 142.0f + dropT * 78.0f + 18.0f * std::cos(hiddenIntroT_ * 1.3f + i);
+            const D2D1_POINT_2F p0 = D2D1::Point2F(center.x + std::cos(a) * inner, center.y + std::sin(a) * inner * 0.42f);
+            const D2D1_POINT_2F p1 = D2D1::Point2F(center.x + std::cos(a) * outer, center.y + std::sin(a) * outer * 0.42f);
+            d2dContext_->DrawLine(p0, p1, textBrush_.Get(), 1.2f + sigilT * 1.8f);
+        }
+        if (dropT > 0.0f)
+        {
+            textBrush_->SetColor(mono ? D2D1::ColorF(0.08f, 0.08f, 0.08f, 0.36f + dropT * 0.32f) : D2D1::ColorF(0.82f, 0.52f, 1.0f, 0.18f + dropT * 0.30f));
+            for (int i = -3; i <= 3; ++i)
+            {
+                const float x = cx + i * 46.0f + std::sin(hiddenIntroT_ * 3.0f + i) * 10.0f;
+                d2dContext_->DrawLine(D2D1::Point2F(x, 0.0f), D2D1::Point2F(cx + i * 14.0f, cy + 132.0f + dropT * 70.0f), textBrush_.Get(), 2.0f + dropT * 4.0f);
+            }
+            const float shock = ClampFloat((dropT - 0.78f) / 0.22f, 0.0f, 1.0f);
+            if (shock > 0.0f)
+            {
+                textBrush_->SetColor(mono ? D2D1::ColorF(0.02f, 0.02f, 0.02f, 0.82f * (1.0f - shock * 0.35f)) : D2D1::ColorF(1.0f, 0.72f, 0.30f, 0.72f * (1.0f - shock * 0.25f)));
+                d2dContext_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy + 118.0f), 84.0f + shock * 260.0f, 18.0f + shock * 58.0f), textBrush_.Get(), 6.0f - shock * 2.0f);
+                textBrush_->SetColor(mono ? D2D1::ColorF(0.92f, 0.92f, 0.92f, 0.26f * (1.0f - shock)) : D2D1::ColorF(0.70f, 0.34f, 1.0f, 0.34f * (1.0f - shock)));
+                d2dContext_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy + 118.0f), 78.0f + shock * 210.0f, 13.0f + shock * 42.0f), textBrush_.Get());
+            }
+        }
     }
+
+    auto drawIntroBoss = [&](float alphaMul, bool outlineOnly)
+    {
+        if (bossRevealT <= 0.0f) return;
+        const float alpha = ClampFloat((0.42f + bossRevealT * 0.58f + dropT * 0.25f) * alphaMul, 0.0f, 1.0f);
+        const float r = 64.0f + bossRevealT * 48.0f + dropT * 18.0f;
+        const D2D1_POINT_2F center = D2D1::Point2F(cx, cy - 18.0f + dropT * 52.0f);
+        const D2D1_COLOR_F body = mono
+            ? D2D1::ColorF(0.08f, 0.08f, 0.08f, alpha * 0.90f)
+            : D2D1::ColorF(0.16f, 0.02f, 0.26f, alpha * 0.92f);
+        const D2D1_COLOR_F rim = mono
+            ? D2D1::ColorF(0.92f, 0.92f, 0.92f, alpha)
+            : D2D1::ColorF(0.78f, 0.42f, 1.0f, alpha);
+        const D2D1_COLOR_F gold = mono
+            ? D2D1::ColorF(0.02f, 0.02f, 0.02f, alpha)
+            : D2D1::ColorF(1.0f, 0.76f, 0.28f, alpha);
+
+        if (!outlineOnly)
+        {
+            textBrush_->SetColor(D2D1::ColorF(0.0f, 0.0f, 0.0f, alpha * 0.34f));
+            d2dContext_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(cx, cy + 118.0f), r * 1.05f, r * 0.20f), textBrush_.Get());
+            textBrush_->SetColor(body);
+            d2dContext_->FillEllipse(D2D1::Ellipse(center, r * (0.72f + dropT * 0.12f), r * (1.00f + dropT * 0.10f)), textBrush_.Get());
+            d2dContext_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(center.x, center.y - r * 0.56f), r * 0.42f, r * 0.34f), textBrush_.Get());
+        }
+
+        textBrush_->SetColor(rim);
+        d2dContext_->DrawEllipse(D2D1::Ellipse(center, r * 0.78f, r * 1.04f), textBrush_.Get(), 3.0f + dropT * 2.0f);
+        d2dContext_->DrawEllipse(D2D1::Ellipse(D2D1::Point2F(center.x, center.y - r * 0.56f), r * 0.44f, r * 0.36f), textBrush_.Get(), 2.4f);
+        textBrush_->SetColor(gold);
+        for (int side = -1; side <= 1; side += 2)
+        {
+            const D2D1_POINT_2F horn0 = D2D1::Point2F(center.x + side * r * 0.20f, center.y - r * 0.80f);
+            const D2D1_POINT_2F horn1 = D2D1::Point2F(center.x + side * r * 0.62f, center.y - r * (1.13f + 0.08f * dropT));
+            const D2D1_POINT_2F horn2 = D2D1::Point2F(center.x + side * r * 0.34f, center.y - r * 0.50f);
+            d2dContext_->DrawLine(horn0, horn1, textBrush_.Get(), 3.0f);
+            d2dContext_->DrawLine(horn1, horn2, textBrush_.Get(), 2.0f);
+            d2dContext_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(center.x + side * r * 0.20f, center.y - r * 0.58f), r * 0.055f, r * 0.038f), textBrush_.Get());
+        }
+        d2dContext_->DrawEllipse(D2D1::Ellipse(center, r * (1.05f + dropT * 0.35f), r * (0.42f + dropT * 0.16f)), textBrush_.Get(), 2.0f);
+    };
+    drawIntroBoss(1.0f, false);
 
     titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
     hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
@@ -1207,13 +1308,22 @@ void SweetsApp::DrawHiddenBossIntro()
     d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), titleFormat_.Get(),
         D2D1::RectF(0, h * 0.72f, w, h * 0.84f), textBrush_.Get());
 
-    if (flash > 0.0f)
+    if (landingFlash > 0.0f)
     {
-        textBrush_->SetColor(D2D1::ColorF(1.0f, 1.0f, 1.0f, flash * 0.55f));
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 1.0f, 1.0f, landingFlash * 0.42f));
         d2dContext_->FillRectangle(D2D1::RectF(0, 0, w, h), textBrush_.Get());
-        textBrush_->SetColor(D2D1::ColorF(0.0f, 0.0f, 0.0f, flash * 0.22f));
+        textBrush_->SetColor(D2D1::ColorF(0.0f, 0.0f, 0.0f, landingFlash * 0.20f));
         d2dContext_->FillRectangle(D2D1::RectF(0, 0, w, h), textBrush_.Get());
     }
+
+    if (flash > 0.0f)
+    {
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 1.0f, 1.0f, flash * 0.42f));
+        d2dContext_->FillRectangle(D2D1::RectF(0, 0, w, h), textBrush_.Get());
+        textBrush_->SetColor(D2D1::ColorF(0.0f, 0.0f, 0.0f, flash * 0.16f));
+        d2dContext_->FillRectangle(D2D1::RectF(0, 0, w, h), textBrush_.Get());
+    }
+    drawIntroBoss(0.62f, true);
 
     titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
