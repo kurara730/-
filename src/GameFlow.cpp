@@ -108,6 +108,7 @@ void SweetsApp::ResetGame()
     hiddenBossDashChainDuration_ = 0.0f;
     hiddenBossDashChainSpeed_ = 0.0f;
     hiddenBossDashGlobalCd_ = 0.0f;
+    hiddenBossEdgePressureCd_ = 0.0f;
     hiddenBossReflectT_ = 0.0f;
     hiddenBossCloneCd_ = 0.0f;
     hiddenBossIdleBasePos_ = {};
