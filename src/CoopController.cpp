@@ -108,10 +108,10 @@ void SweetsApp::UpdateGamepadPlayer(Player& p, int playerIndex, float dt)
     ClampInside(p.pos, p.radius);
     SyncPlayer3D(p);
 
-    if (aimAtCursor_)
+    if (aimMode_ != AimMode::MoveDirection)
     {
         V2 aim{ NormalizeThumb(state.Gamepad.sThumbRX), NormalizeThumb(state.Gamepad.sThumbRY) };
-        if (LenSq(aim) < 0.05f) aim = Normalize(FindNearestEnemyOrBoss(p.pos) - p.pos);
+        if (aimMode_ == AimMode::AutoTarget || LenSq(aim) < 0.05f) aim = Normalize(FindNearestEnemyOrBoss(p.pos) - p.pos);
         if (LenSq(aim) > 0.001f) p.face = AngleOf(aim);
     }
     else if (LenSq(move) > 0.001f)
