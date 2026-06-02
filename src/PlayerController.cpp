@@ -261,14 +261,16 @@ void SweetsApp::DetonateChocoBomb(Shot& bomb, int ownerIndex)
 
     if (stage >= 3)
     {
-        // 最大チャージ：巻き込んだ敵に分散ダメージ（多いほど一体あたり減）＋生存敵を吹き飛ばす
+        // 最大チャージ：巻き込んだ敵ほど一体あたりのダメージがアップ＋生存敵を吹き飛ばす
         std::vector<int> caught;
         for (int i = 0; i < static_cast<int>(enemies_.size()); ++i)
         {
             const Enemy& e = enemies_[i];
             if (!e.dead && RuleDistance(e.pos, e.height, bomb.pos, bomb.height) < exR + e.radius) caught.push_back(i);
         }
-        const float per = exDmg / static_cast<float>(std::max<size_t>(1, caught.size()));
+        // ザコは巻き込むほど一体あたりのダメージがアップ（最大3倍）
+        const int count = static_cast<int>(caught.size());
+        const float per = exDmg * std::min(3.0f, 1.0f + 0.2f * static_cast<float>(std::max(0, count - 1)));
         for (int i : caught)
         {
             if (enemies_[i].dead) continue;
