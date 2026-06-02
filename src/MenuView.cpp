@@ -727,7 +727,7 @@ void SweetsApp::DrawPauseMenu()
 
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
     textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.88f));
-    const wchar_t* hint = L"Escでタイトル / Pで再開";
+    const wchar_t* hint = L"Esc / Pで再開。タイトルへ戻る場合はボタンをクリック。";
     d2dContext_->DrawTextW(hint, static_cast<UINT32>(wcslen(hint)), smallFormat_.Get(),
         D2D1::RectF(left, top + panelH - 36.0f, left + panelW, top + panelH - 12.0f), textBrush_.Get());
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);

@@ -79,10 +79,9 @@ void SweetsApp::OnKeyDown(WPARAM key)
     {
         if (key == VK_ESCAPE)
         {
-            // Esc → タイトルに戻る
-            SaveSettings();
+            // Esc はポーズを閉じてゲームへ戻す。タイトルへ戻る場合は明示ボタンだけにする。
             draggingVolume_ = -1;
-            screen_ = Screen::Title;
+            screen_ = Screen::Playing;
             return;
         }
         if (key == 'P')
