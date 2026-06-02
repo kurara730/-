@@ -58,7 +58,7 @@ void SweetsApp::ReflectEnemyShotsNear(V2 center, float radius, int ownerIndex, C
     {
         audio_.PlaySoundEffect(SoundEffect::Reflect);
         AddScore(reflected * 24, &players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))]);
-        message_ = L"反射";
+        message_ = L"跳ね返し";
         messageT_ = std::max(messageT_, 0.65f);
         effectPulses_.push_back({ center, Grounded3D(center, 0.24f), radius * 0.55f, radius * 1.55f, 0.22f, 0.22f, 0.24f, color });
     }
@@ -68,13 +68,74 @@ void SweetsApp::ReflectEnemyShotsNear(V2 center, float radius, int ownerIndex, C
 // 移動 → 壁反射 → 障害物 → 敵/プレイヤー命中、という順番で処理します。
 void SweetsApp::UpdateShots(float dt)
 {
+    std::vector<Shot> spawned; // 反射分裂などイテレーション中に増える弾を遅延追加
     for (auto& s : shots_)
     {
         if (s.dead) continue;
         s.ttl -= dt;
         if (s.ttl <= 0.0f) continue;
-
         // 敵弾は角速度や加速度を持てます。曲がる弾や加速弾の弾幕に使います。
+        const int reflectBefore = s.reflectedCount;
+
+        if (s.chocoBomb)
+        {
+            // 壁・障害物では反射する（敵では反射しない）。サイズはチャージで確定済み
+            s.pos += s.vel * dt;
+            bool bounced = false;
+            V2 n{};
+            if (Len(s.pos) > ArenaRadius - s.radius)
+            {
+                n = Normalize(s.pos);
+                s.pos = n * (ArenaRadius - s.radius);
+                s.vel = s.vel - n * (2.0f * Dot(s.vel, n));
+                bounced = true;
+            }
+            if (!bounced)
+            {
+                for (auto& o : obstacles_)
+                {
+                    if (o.damageField || o.warpId >= 0) continue;
+                    if (RuleDistance(s.pos, s.height, o.pos, o.height) < s.radius + o.radius)
+                    {
+                        n = Normalize(s.pos - o.pos);
+                        if (LenSq(n) < 0.001f) n = FromAngle(0.0f);
+                        s.pos = o.pos + n * (s.radius + o.radius + 0.02f);
+                        s.vel = s.vel - n * (2.0f * Dot(s.vel, n));
+                        bounced = true;
+                        break;
+                    }
+                }
+            }
+            if (bounced)
+            {
+                const float sp = std::max(7.0f, Len(s.vel));
+                if (LenSq(s.vel) > 0.0001f) s.vel = Normalize(s.vel) * sp;
+            }
+            // 最大チャージ弾：近くの敵を巻き込み、一度掴んだら弾に固定して逃がさない（ボスは対象外）
+            if (s.growStage >= 3)
+            {
+                const float catchR = s.radius + 0.6f;
+                for (auto& e : enemies_)
+                {
+                    if (e.dead) continue;
+                    if (!e.caught && RuleDistance(s, e) < catchR + e.radius)
+                    {
+                        e.caught = true;
+                        e.caughtOffset = e.pos - s.pos; // 掴んだ瞬間の相対位置で固定開始
+                    }
+                    if (e.caught)
+                    {
+                        e.caughtOffset = e.caughtOffset * 0.9f; // 徐々に中心へ引き込む
+                        e.pos = s.pos + e.caughtOffset;         // 弾に追従（逃げられない）
+                        ClampInside(e.pos, e.radius);
+                        SyncEnemy3D(e);
+                    }
+                }
+            }
+            SyncShot3D(s);
+            continue;
+        }
+
         if (s.enemy && (std::fabs(s.angularVel) > 0.0001f || std::fabs(s.accel) > 0.0001f))
         {
             float speed = Len(s.vel);
@@ -129,7 +190,7 @@ void SweetsApp::UpdateShots(float dt)
                     if (s.sourceCharacter == CharacterType::Roll)
                     {
                         s.damage *= 1.08f;
-                        message_ = L"壁反射";
+                        message_ = L"壁ボーナス";
                         messageT_ = std::max(messageT_, 0.55f);
                     }
                 }
@@ -144,14 +205,28 @@ void SweetsApp::UpdateShots(float dt)
 
         // チーズ壁などの障害物との衝突。
         // 敵弾がチーズ壁に当たった場合は味方弾へ変換されます。
-        for (const auto& o : obstacles_)
+        for (auto& o : obstacles_)
         {
             V2 d = s.pos - o.pos;
             const float l = RuleDistance(s.pos, s.height, o.pos, o.height);
             if (l < s.radius + o.radius)
             {
+                // ワープポータルは弾を通す（自機専用の回避ギミック）
+                if (o.warpId >= 0)
+                {
+                    continue;
+                }
+
                 V2 n = Normalize(d);
                 s.pos = o.pos + n * (s.radius + o.radius + 0.01f);
+
+                // 破壊可能オブジェへのダメージ（プレイヤー弾のみ）
+                if (o.breakable && !s.enemy)
+                {
+                    o.hp -= s.damage;
+                    o.flash = 1.0f;
+                }
+
                 if (s.enemy && o.cheeseWall)
                 {
                     ApplyShotReflection(s, n, std::max(1.15f, o.reflectPower));
@@ -161,6 +236,22 @@ void SweetsApp::UpdateShots(float dt)
                     s.color = Gold;
                     s.damage *= 1.25f;
                     s.bounce = std::max(s.bounce, 2);
+                }
+                else if (o.bumper)
+                {
+                    // バンパー：加速して大きく反射＋発光・スコア
+                    ApplyShotReflection(s, n, std::max(1.55f, o.reflectPower));
+                    const float sp = Len(s.vel);
+                    s.vel = Normalize(s.vel) * std::min(sp * 1.3f + 1.5f, 26.0f);
+                    o.flash = 1.0f;
+                    Burst(s.pos, Gold, 10);
+                    if (!s.enemy)
+                    {
+                        AddScore(12, &players_[std::max(0, std::min(s.ownerIndex, MaxPlayers - 1))]);
+                        message_ = L"バンパーボーナス!";
+                        messageT_ = std::max(messageT_, 0.6f);
+                    }
+                    if (s.bounce > 0) --s.bounce;
                 }
                 else if (s.bounce > 0 || s.enemy)
                 {
@@ -176,6 +267,31 @@ void SweetsApp::UpdateShots(float dt)
         }
 
         if (s.dead) continue;
+
+        // ショート弾：反射した瞬間に小さな追尾弾へ分裂（面制圧）
+        if (!s.enemy && s.reflectSplit > 0 && s.reflectedCount > reflectBefore)
+        {
+            const float baseAng = AngleOf(s.vel);
+            const int n = s.reflectSplit;
+            for (int i = 0; i < n; ++i)
+            {
+                const float a = baseAng + (static_cast<float>(i) / std::max(1, n - 1) - 0.5f) * 1.1f;
+                Shot child{};
+                child.pos = s.pos;
+                child.vel = FromAngle(a) * 8.5f;
+                child.radius = 0.11f;
+                child.damage = s.damage * 0.42f;
+                child.ttl = 1.4f;
+                child.homingStrength = 1.6f;
+                child.ownerIndex = s.ownerIndex;
+                child.sourceCharacter = CharacterType::Shortcake;
+                child.color = Berry;
+                SyncShot3D(child);
+                spawned.push_back(child);
+            }
+            Burst(s.pos, Berry, 12);
+            s.reflectSplit = 0;
+        }
 
         if (s.enemy)
         {
@@ -241,7 +357,7 @@ void SweetsApp::UpdateShots(float dt)
                         --s.pierce;
                         Player& owner = players_[std::max(0, std::min(s.ownerIndex, MaxPlayers - 1))];
                         AddScore(70 + s.yoyoCombo * 35, &owner);
-                        message_ = L"ヨーヨー反射コンボ x" + std::to_wstring(std::max(1, s.yoyoCombo));
+                        message_ = L"ヨーヨーコンボ x" + std::to_wstring(std::max(1, s.yoyoCombo));
                         messageT_ = 0.85f;
                         const V2 next = FindNearestEnemyOrBoss(s.pos);
                         const V2 dir = Normalize((LenSq(next - s.pos) > 0.02f ? next : owner.pos) - s.pos);
@@ -286,6 +402,22 @@ void SweetsApp::UpdateShots(float dt)
                 else s.dead = true;
             }
         }
+    }
+
+    for (const auto& sp : spawned) shots_.push_back(sp);
+}
+
+void SweetsApp::ReleaseCaughtIfNoBomb()
+{
+    // 巻き込み弾が無くなったら（爆発/消滅）捕まっていた敵を解放する
+    bool engulf = false;
+    for (const auto& s : shots_)
+    {
+        if (!s.dead && s.chocoBomb && s.growStage >= 3 && s.ttl > 0.0f) { engulf = true; break; }
+    }
+    if (!engulf)
+    {
+        for (auto& e : enemies_) e.caught = false;
     }
 }
 

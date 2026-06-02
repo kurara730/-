@@ -21,7 +21,7 @@ using namespace DirectX;
 // 変更するとゲーム全体の広さと難易度が大きく変わります。
 constexpr float Pi = 3.14159265358979323846f;
 constexpr float TwoPi = Pi * 2.0f;
-constexpr float ArenaRadius = 10.0f;
+constexpr float ArenaRadius = 14.0f;
 constexpr int MaxKeys = 256;
 
 // DX11 側へ渡す色もこの構造体で統一します。
@@ -48,7 +48,7 @@ constexpr Color Red{ 1.0f, 0.24f, 0.22f, 1.0f };
 // 隠しボスは3ゲージ制なので、1ゲージHPとゲージ数を分けて持っています。
 constexpr int FinalWave = 12;
 constexpr float HiddenBossDurationSeconds = 137.14f;
-constexpr int HiddenBossBulletCap = 320;
+constexpr int HiddenBossBulletCap = 380;
 constexpr int HiddenBossGaugeCount = 3;
 constexpr float HiddenBossBaseGaugeHp = 4800.0f;
 constexpr float HiddenBossIntroDuration = 10.0f;
@@ -83,9 +83,9 @@ struct DifficultyDef
 inline const std::array<DifficultyDef, 5> DifficultyDefs{ {
     { L"Easy", L"弾幕を抑えた練習向け", 0.75f, 0.65f, 0.75f, 0.75f, 1.25f, 0.75f, 1.35f, 5, Mint },
     { L"Normal", L"標準難易度", 1.00f, 1.00f, 0.88f, 1.00f, 1.00f, 1.00f, 1.00f, 3, Cream },
-    { L"Hard", L"敵の圧が強くなる", 1.15f, 1.20f, 1.10f, 1.15f, 0.90f, 1.15f, 1.12f, 3, Gold },
-    { L"Expert", L"弾速と出現頻度が高い", 1.35f, 1.45f, 1.25f, 1.30f, 0.78f, 1.35f, 1.08f, 2, Sky },
-    { L"Lunatic", L"最高難度。最後まで気を抜くな。", 1.55f, 1.70f, 1.40f, 1.55f, 0.68f, 1.55f, 1.05f, 2, Grape },
+    { L"Hard", L"敵の圧が増える", 1.25f, 1.30f, 1.18f, 1.25f, 0.82f, 1.30f, 1.12f, 3, Gold },
+    { L"Expert", L"弾幕と出現が速い", 1.55f, 1.65f, 1.42f, 1.55f, 0.66f, 1.65f, 1.08f, 2, Sky },
+    { L"Lunatic", L"最高難度。最後まで気を抜くな。", 1.90f, 2.05f, 1.72f, 2.05f, 0.50f, 2.05f, 1.05f, 2, Grape },
 } };
 
 // 2Dモードでは x/z だけを使い、3Dモードでは V3 に同期して高さも判定へ含めます。

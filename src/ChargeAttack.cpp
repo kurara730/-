@@ -110,7 +110,7 @@ void SweetsApp::FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint)
             SyncShot3D(s);
             shots_.push_back(s);
         }
-        message_ = fullCharge ? L"転がり突進" : L"反射ロール弾";
+        message_ = fullCharge ? L"転がり突進" : L"バウンドロール弾";
     }
     messageT_ = 1.4f;
 }

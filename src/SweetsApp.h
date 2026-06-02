@@ -76,6 +76,7 @@ private:
     void BuildStage();
     void UpdateStage(float dt);
     void SpawnPickup();
+    void SpawnPickupAt(V2 pos);
     void UseUltimate();
     void UseUltimateFor(Player& p, int ownerIndex);
     void UseBomb();
@@ -149,6 +150,7 @@ private:
     void UpdateEnemies(float dt);
     void UpdateBoss(float dt);
     void UpdateShots(float dt);
+    void ReleaseCaughtIfNoBomb();
     void UpdatePickups(float dt);
     void UpdateParticles(float dt);
     void UpdateEffectVisuals(float dt);
@@ -175,6 +177,8 @@ private:
     void FirePrimary();
     void FirePrimaryFor(Player& p, int ownerIndex, float aim);
     void FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint);
+    void FireChocoBomb(Player& p, int ownerIndex, float aim, float charge);
+    void DetonateChocoBomb(Shot& bomb, int ownerIndex);
     void SpawnSplitShots(const Shot& source, V2 at);
     void DoMelee(float aim);
     void DoMeleeFor(Player& p, int ownerIndex, float aim);
@@ -212,6 +216,11 @@ private:
     void DrawUltimatePreview(const Player& p, int ownerIndex);
     void DrawSprite2D(const std::wstring& spriteId, V2 pos, V2 size, float rotation, Color tint, float depth = 0.5f);
     V2 ScreenToWorld(float sx, float sy) const;
+    V2 WorldToScreen(V2 world) const;
+    SettingsLayout BuildSettingsLayout() const;
+    void UpdateCamera(float dt);
+    float GameplayViewHalfWidth() const;
+    float GameplayViewHalfHeight() const;
 
     void OnKeyDown(WPARAM key);
     bool HandleDebugKey(WPARAM key);
@@ -325,6 +334,7 @@ private:
     XMMATRIX view_{ XMMatrixIdentity() };
     XMMATRIX proj_{ XMMatrixIdentity() };
     XMFLOAT3 cameraPos_{ 0.0f, 15.5f, -18.5f };
+    CameraState camera_;
 
     bool keys_[MaxKeys]{};
     bool mouseLeft_ = false;
@@ -348,6 +358,16 @@ private:
     std::vector<EffectPulse> effectPulses_;
     std::vector<SwordEffectVisual> swordEffectVisuals_;
     std::array<HiddenBossCore, HiddenBossCoreCount> hiddenBossCores_{};
+    BossGimmickState bossGimmick_{};
+    V2 bossSkyLaserPos_{}; // キャプテンサンダーの「上から降る極太レーザー」の落下地点(予告で固定)
+    std::vector<PendingSkyLaser> pendingSkyLasers_; // 予約済みレーザー雨(即着待ち)
+    float bossSkyRainCd_ = 0.0f;   // 次のレーザー雨までの間隔(10秒で5発=2秒)
+    float bossMeleeT_ = 0.0f;      // 突進(殴り)モードの残り時間。>0で殴りモード
+    float bossMeleeCd_ = 0.0f;     // 次の突進モードまでの間隔
+    float bossPunchWindup_ = 0.0f; // 殴りの予備動作タイマー(0.3秒)
+    float bossPunchCd_ = 0.0f;     // 殴りの間隔
+    std::vector<CombatNotice> combatNotices_;
+    std::vector<WorldTelegraph> worldTelegraphs_;
     AssetCatalog assetCatalog_;
     EffekseerSystem effekseer_;
     AudioSystem audio_;

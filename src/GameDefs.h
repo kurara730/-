@@ -35,6 +35,7 @@ enum class BossType
     GravityPudding,
     TerritoryCake,
     DemonParfait,
+    ThunderCaptain,
     HiddenBoss
 };
 
@@ -101,6 +102,21 @@ enum class BossDamageKind
     ReflectedShot
 };
 
+enum class BossPatternId
+{
+    Radial = 0,
+    Aimed,
+    Spiral,
+    Curve,
+    Seal,
+    GuardRing,
+    MirrorSplit,
+    GravityWell,
+    TerritoryZone,
+    Beam,
+    SkyLaser
+};
+
 // UI表示用の短い名前を返すヘルパーです。
 // ここで表示名をまとめておくと、ポーズ画面など複数箇所で同じ表記を使えます。
 inline constexpr const wchar_t* AimModeName(AimMode mode)
@@ -126,10 +142,10 @@ struct CharacterText
 // キャラごとの説明文です。
 // キャラ選択画面ではここを参照し、性能値は GameStateTypes.h の Loadouts を参照します。
 inline constexpr std::array<CharacterText, 4> CharacterTexts{ {
-    { L"ショート", L"ST", L"誘導反射苺弾", L"苺リコシェ場", L"巨大メテオ" },
-    { L"チョコ", L"CH", L"ヨーヨー反射弾", L"反射斬撃ヨーヨー", L"時計斬り" },
-    { L"チーズ", L"CZ", L"敵弾反射チーズ弾", L"前方反射壁", L"無敵要塞" },
-    { L"ロール", L"RL", L"壁反射ロール弾", L"最大溜め突進", L"全画面叩きつけ" },
+    { L"ショート", L"ST", L"誘導いちご弾", L"苺リコシェ場", L"巨大メテオ" },
+    { L"チョコ", L"CH", L"ヨーヨー弾", L"斬撃ヨーヨー", L"時計斬り" },
+    { L"チーズ", L"CZ", L"敵弾キャッチ", L"前方チーズ壁", L"無敵要塞" },
+    { L"ロール", L"RL", L"バウンドロール弾", L"最大溜め突進", L"全画面叩きつけ" },
 } };
 
 // ステージ名やボス名は、ゲーム内メッセージやHUD表示で使います。
@@ -160,6 +176,7 @@ inline constexpr const wchar_t* BossName(BossType type)
     case BossType::GravityPudding: return L"グラビティプリン";
     case BossType::TerritoryCake: return L"テリトリーケーキ";
     case BossType::DemonParfait: return L"魔王パフェ";
+    case BossType::ThunderCaptain: return L"キャプテンサンダー";
     case BossType::HiddenBoss: return L"隠しボス";
     default: return L"ボス";
     }

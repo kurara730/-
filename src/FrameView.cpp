@@ -140,23 +140,23 @@ void SweetsApp::DrawScene()
     vp.MaxDepth = 1.0f;
     context_->RSSetViewports(1, &vp);
 
-    const float halfH = GameplayHalfHeight();
-    const float halfW = GameplayHalfWidth(width_, height_);
+    const float halfH = GameplayViewHalfHeight();
+    const float halfW = GameplayViewHalfWidth();
     if (Use3DRules())
     {
         SyncAll3DState();
-        const XMVECTOR eye = XMVectorSet(0.0f, 15.8f, -17.8f, 1.0f);
-        const XMVECTOR at = XMVectorSet(0.0f, 0.0f, 0.8f, 1.0f);
+        const XMVECTOR eye = XMVectorSet(camera_.center.x, 15.8f, camera_.center.z - 17.8f, 1.0f);
+        const XMVECTOR at = XMVectorSet(camera_.center.x, 0.0f, camera_.center.z + 0.8f, 1.0f);
         const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
         view_ = XMMatrixLookAtLH(eye, at, up);
         proj_ = XMMatrixPerspectiveFovLH(XMConvertToRadians(48.0f), static_cast<float>(std::max(1u, width_)) / std::max(1.0f, static_cast<float>(height_)), 0.1f, 80.0f);
-        cameraPos_ = { 0.0f, 15.8f, -17.8f };
+        cameraPos_ = { camera_.center.x, 15.8f, camera_.center.z - 17.8f };
     }
     else
     {
-        view_ = XMMatrixIdentity();
+        view_ = XMMatrixTranslation(-camera_.center.x, -camera_.center.z, 0.0f);
         proj_ = XMMatrixOrthographicOffCenterLH(-halfW, halfW, -halfH, halfH, 0.0f, 10.0f);
-        cameraPos_ = { 0.0f, 15.5f, -18.5f };
+        cameraPos_ = { camera_.center.x, 15.5f, camera_.center.z - 18.5f };
     }
 #if defined(_DEBUG)
     if (debug_.taa)
@@ -204,8 +204,8 @@ void SweetsApp::DrawScene()
     const Color fieldFill{ 0.18f, 0.07f, 0.12f, 1.0f };
     if (fieldShape_ == FieldShape::Rectangle || fieldShape_ == FieldShape::Corridor)
     {
-        const float halfX = fieldShape_ == FieldShape::Corridor ? 4.1f : 8.8f;
-        const float halfZ = fieldShape_ == FieldShape::Corridor ? 9.4f : 6.0f;
+        const float halfX = fieldShape_ == FieldShape::Corridor ? 5.8f : 12.6f;
+        const float halfZ = fieldShape_ == FieldShape::Corridor ? 13.4f : 8.8f;
         spriteCanvas_.DrawQuad(nullptr, { 0.0f, 0.0f }, { halfX * 2.0f, halfZ * 2.0f }, 0.0f, WithAlpha(fieldFill, 0.92f), 0.94f);
         drawBoundaryLine({ -halfX, -halfZ }, { halfX, -halfZ }, WithAlpha(Gold, 0.76f), 0.16f);
         drawBoundaryLine({ halfX, -halfZ }, { halfX, halfZ }, WithAlpha(Gold, 0.76f), 0.16f);
@@ -233,9 +233,9 @@ void SweetsApp::DrawScene()
     {
         spriteCanvas_.DrawCircle({ 0.0f, 0.0f }, ArenaRadius + 1.3f, WithAlpha(Rose, 0.20f), 0.95f, 96);
         spriteCanvas_.DrawCircle({ 0.0f, 0.0f }, ArenaRadius, WithAlpha(fieldFill, 0.92f), 0.94f, 96);
-        spriteCanvas_.DrawCircle({ 0.0f, 0.0f }, 3.05f, WithAlpha({ 0.04f, 0.02f, 0.03f, 1.0f }, 0.98f), 0.93f, 72);
+        spriteCanvas_.DrawCircle({ 0.0f, 0.0f }, 4.15f, WithAlpha({ 0.04f, 0.02f, 0.03f, 1.0f }, 0.98f), 0.93f, 72);
         spriteCanvas_.DrawRing({ 0.0f, 0.0f }, ArenaRadius, 0.16f, WithAlpha(Gold, 0.76f), 0.20f, 128);
-        spriteCanvas_.DrawRing({ 0.0f, 0.0f }, 3.05f, 0.14f, WithAlpha(Sky, 0.66f), 0.21f, 96);
+        spriteCanvas_.DrawRing({ 0.0f, 0.0f }, 4.15f, 0.14f, WithAlpha(Sky, 0.66f), 0.21f, 96);
     }
     else
     {
@@ -247,17 +247,42 @@ void SweetsApp::DrawScene()
         spriteCanvas_.DrawRing({ 0.0f, 0.0f }, fieldRadius * 0.36f, 0.035f, WithAlpha(Cream, 0.13f), 0.30f, 72);
     }
 
+    for (const auto& telegraph : worldTelegraphs_)
+    {
+        const float t = 1.0f - ClampFloat(telegraph.ttl / std::max(0.01f, telegraph.life), 0.0f, 1.0f);
+        const float alpha = 0.22f + 0.46f * t;
+        if (telegraph.length > 0.01f)
+        {
+            const V2 mid = telegraph.pos + Normalize(telegraph.dir) * (telegraph.length * 0.5f);
+            spriteCanvas_.DrawQuad(nullptr, mid, { telegraph.radius, telegraph.length }, AngleOf(telegraph.dir) - Pi * 0.5f, WithAlpha(telegraph.color, alpha), 0.29f);
+        }
+        else
+        {
+            spriteCanvas_.DrawRing(telegraph.pos, telegraph.radius * (0.72f + t * 0.34f), 0.08f + 0.04f * t, WithAlpha(telegraph.color, alpha), 0.29f, 72);
+            spriteCanvas_.DrawCircle(telegraph.pos, telegraph.radius * 0.42f, WithAlpha(telegraph.color, alpha * 0.18f), 0.30f, 48);
+        }
+    }
+
     for (const auto& o : obstacles_)
     {
         if (o.damageField)
         {
+            spriteCanvas_.DrawCircle(o.pos, o.radius, WithAlpha(Red, 0.22f), 0.33f, 40);
             spriteCanvas_.DrawRing(o.pos, o.radius, 0.18f, WithAlpha(Red, 0.68f), 0.32f);
+        }
+        else if (o.warpId >= 0)
+        {
+            // ワープポータル
+            spriteCanvas_.DrawCircle(o.pos, o.radius * 0.6f, WithAlpha(o.color, o.flash > 0.0f ? 0.6f : 0.30f), 0.33f, 32);
+            spriteCanvas_.DrawRing(o.pos, o.radius * 1.1f, 0.10f, WithAlpha(o.color, 0.85f), 0.31f, 48);
+            spriteCanvas_.DrawRing(o.pos, o.radius * (0.7f + 0.15f * std::sin(o.spin * 4.0f)), 0.07f, WithAlpha(Cream, 0.6f), 0.30f, 40);
         }
         else
         {
+            const Color c = o.flash > 0.0f ? Cream : o.color;
             const float size = o.radius * (o.cheeseWall ? 2.35f : 2.05f);
-            DrawSprite2D(L"2d_obstacle_wall", o.pos, { size, size }, o.ttl * 0.35f, WithAlpha(o.color, 0.92f), 0.38f);
-            spriteCanvas_.DrawRing(o.pos, o.radius, 0.08f, WithAlpha(Cream, 0.28f), 0.36f);
+            DrawSprite2D(L"2d_obstacle_wall", o.pos, { size, size }, o.ttl * 0.35f + o.spin * 0.2f, WithAlpha(c, 0.92f), 0.38f);
+            spriteCanvas_.DrawRing(o.pos, o.radius, 0.08f, WithAlpha(o.bumper ? Gold : Cream, o.bumper ? 0.55f : 0.28f), 0.36f);
         }
     }
     for (const auto& p : pickups_)
@@ -268,6 +293,19 @@ void SweetsApp::DrawScene()
     }
     for (const auto& s : shots_)
     {
+        if (s.chocoBomb)
+        {
+            // バウンドで巨大化する爆弾弾（専用イラスト・段階で大きさと色が変わる）
+            const int stage = s.growStage;
+            const Color bc = stage >= 3 ? Gold : (stage >= 2 ? Berry : Choco);
+            const float bsize = s.radius * 3.4f;
+            DrawSprite2D(L"2d_pickup_bomb", s.pos, { bsize, bsize }, gameTime_ * 3.0f, bc, 0.24f);
+            for (int r = 0; r < stage; ++r)
+            {
+                spriteCanvas_.DrawRing(s.pos, s.radius * (1.4f + r * 0.5f), 0.06f, WithAlpha(Cream, 0.6f - r * 0.12f), 0.25f, 32);
+            }
+            continue;
+        }
         const wchar_t* id = s.enemy ? L"2d_shot_enemy" : L"2d_shot_player";
         const float size = s.radius * (s.enemy ? 3.35f : 3.05f) * (s.charged ? 1.55f : 1.0f);
         DrawSprite2D(id, s.pos, { size, size }, AngleOf(s.vel), s.color, s.enemy ? 0.25f : 0.24f);
@@ -369,13 +407,31 @@ void SweetsApp::DrawScene()
         DrawSprite2D(CharacterSpriteId(p.character), p.pos, { p.radius * 2.45f, p.radius * 2.45f }, p.face - Pi * 0.5f, bodyColor, 0.14f);
         DrawSprite2D(L"2d_shot_player", p.pos + FromAngle(p.face) * (p.radius * 0.88f), { p.radius * 0.55f, p.radius * 0.55f }, p.face, faceColor, 0.13f);
         DrawSprite2D(L"2d_shot_player", p.pos + FromAngle(p.face) * (p.radius * 1.55f), { p.radius * 1.75f, p.radius * 0.18f }, p.face, WithAlpha(Cream, 0.58f), 0.12f);
-        if (p.chargeFull)
+        if (p.bombCharge > 0.0f && !p.downed)
         {
-            spriteCanvas_.DrawRing(p.pos, p.radius * 1.85f, 0.10f, WithAlpha(Gold, 0.84f), 0.10f, 64);
+            // チョコ爆弾チャージのプレビュー（溜め段階で前方の弾が大きくなる）
+            const int cs = p.bombCharge >= 1.0f ? 3 : (p.bombCharge >= 0.6f ? 2 : (p.bombCharge >= 0.3f ? 1 : 0));
+            const Color cc = cs >= 3 ? Gold : (cs >= 2 ? Berry : Choco);
+            const float cr = 0.26f + 0.28f * static_cast<float>(cs);
+            const V2 at = p.pos + FromAngle(p.face) * (p.radius + 0.3f + cr);
+            DrawSprite2D(L"2d_pickup_bomb", at, { cr * 3.2f, cr * 3.2f }, gameTime_ * 3.0f, cc, 0.13f);
+            spriteCanvas_.DrawRing(at, cr * 1.3f, 0.05f, WithAlpha(Cream, 0.6f), 0.12f, 28);
         }
-        else if (p.chargeReady)
+        if (p.charging && !p.downed)
         {
-            spriteCanvas_.DrawRing(p.pos, p.radius * 1.55f, 0.07f, WithAlpha(Sky, 0.58f), 0.10f, 48);
+            // チャージ進行に応じて外側のリングが機体へ収束し、溜まり具合を可視化する。
+            const float chargeProgress = ClampFloat(p.chargeT / 1.15f, 0.0f, 1.0f);
+            const Color chargeColor = p.chargeFull ? Gold : (p.chargeReady ? Sky : playerColor);
+            const float outer = p.radius * (2.6f - 1.3f * chargeProgress);
+            spriteCanvas_.DrawRing(p.pos, outer, 0.05f + 0.07f * chargeProgress,
+                WithAlpha(chargeColor, 0.30f + 0.45f * chargeProgress), 0.125f, 48);
+            if (p.chargeReady)
+            {
+                // 発動可能になったら機体周りで脈動させ、撃てる合図を明確に出す。
+                const float pulse = 0.45f + 0.35f * std::sin(gameTime_ * 18.0f);
+                spriteCanvas_.DrawRing(p.pos, p.chargeFull ? p.radius * 1.85f : p.radius * 1.28f,
+                    p.chargeFull ? 0.10f : 0.09f, WithAlpha(p.chargeFull ? Gold : Cream, pulse), 0.122f, 48);
+            }
         }
         if ((p.focus || screen_ == Screen::HiddenBoss) && !p.downed)
         {

@@ -72,7 +72,7 @@ void SweetsApp::StartHiddenBoss()
     hiddenBossPhaseIntroLife_ = 0.0f;
     ResetHiddenBossCores();
     screen_ = Screen::HiddenBoss;
-    message_ = L"Hidden Boss Phase 1";
+    message_ = L"炎核を見つけろ";
     messageT_ = 3.0f;
 }
 
@@ -126,6 +126,7 @@ void SweetsApp::UpdateHiddenBossIntro(float dt)
         particles_.push_back(p);
     }
     UpdateParticles(dt);
+    UpdateCamera(dt);
     particles_.erase(std::remove_if(particles_.begin(), particles_.end(), [](const Particle& p) { return p.ttl <= 0.0f || p.y < -0.1f; }), particles_.end());
     if (hiddenIntroT_ >= HiddenBossIntroDuration)
     {
@@ -265,6 +266,7 @@ void SweetsApp::UpdateHiddenBoss(float dt)
         boss_.flash = std::max(boss_.flash, 0.08f);
         boss_.spin += dt * (hiddenBossForm_ >= 3 ? 3.6f : 2.6f);
         UpdateParticles(dt);
+        UpdateCamera(dt);
         particles_.erase(std::remove_if(particles_.begin(), particles_.end(), [](const Particle& p) { return p.ttl <= 0.0f || p.y < -0.1f; }), particles_.end());
         return;
     }
@@ -297,7 +299,7 @@ void SweetsApp::UpdateHiddenBoss(float dt)
         {
             if (s.enemy) s.dead = true;
         }
-        message_ = hiddenBossPhase_ == 0 ? L"炎核を壊せ" : (hiddenBossPhase_ == 1 ? L"金色弾を反射しろ" : L"回避して攻めろ");
+        message_ = hiddenBossPhase_ == 0 ? L"炎核を壊せ" : (hiddenBossPhase_ == 1 ? L"金色弾を返せ" : L"回避して攻めろ");
         messageT_ = 2.0f;
     }
 
@@ -317,7 +319,7 @@ void SweetsApp::UpdateHiddenBoss(float dt)
             else
             {
                 std::wostringstream ss;
-                ss << L"金色弾を反射しろ " << hiddenBossReflectCount_ << L"/" << HiddenBossReflectBreakCount;
+                ss << L"金色弾を返せ " << hiddenBossReflectCount_ << L"/" << HiddenBossReflectBreakCount;
                 message_ = ss.str();
             }
             messageT_ = 1.2f;
@@ -334,15 +336,38 @@ void SweetsApp::UpdateHiddenBoss(float dt)
     {
         const int enemyBullets = static_cast<int>(std::count_if(shots_.begin(), shots_.end(), [](const Shot& s) { return s.enemy && !s.dead; }));
         int remaining = std::max(0, HiddenBossBulletCap - enemyBullets);
-        auto spawn = [&](float angle, float speed, float radius, Color color, float ttl, float curve = 0.0f, float accel = 0.0f)
+        auto spawnAt = [&](V2 origin, float angle, float speed, float radius, Color color, float ttl, float curve = 0.0f, float accel = 0.0f)
         {
             if (remaining <= 0) return;
-            SpawnEnemyShot(boss_.pos + FromAngle(angle) * (boss_.radius + 0.18f), angle, speed, boss_.atk * 0.62f, radius, color, ttl, curve, accel);
+            SpawnEnemyShot(origin, angle, speed, boss_.atk * 0.62f, radius, color, ttl, curve, accel);
             --remaining;
+        };
+        auto spawn = [&](float angle, float speed, float radius, Color color, float ttl, float curve = 0.0f, float accel = 0.0f)
+        {
+            spawnAt(boss_.pos + FromAngle(angle) * (boss_.radius + 0.18f), angle, speed, radius, color, ttl, curve, accel);
+        };
+
+        Player* targetPlayer = FindNearestPlayer(boss_.pos);
+        const V2 targetPos = targetPlayer ? targetPlayer->pos : player_.pos;
+        auto edgeOrigin = [&](float angleOffset)
+        {
+            V2 origin = targetPos + FromAngle(AngleOf(targetPos - boss_.pos) + angleOffset) * 7.8f;
+            ClampInside(origin, 0.75f);
+            return origin;
+        };
+        auto spawnPressureFan = [&](float sideAngle, int lanes, Color color, float speed, float ttl)
+        {
+            const V2 origin = edgeOrigin(sideAngle);
+            const float toTarget = AngleOf(targetPos - origin);
+            const int half = lanes / 2;
+            for (int i = -half; i <= half; ++i)
+            {
+                spawnAt(origin, toTarget + i * 0.105f, speed + 0.06f * std::abs(i), 0.066f, color, ttl, 0.0f, -0.018f);
+            }
         };
 
         const int phase = hiddenBossPhase_;
-        const float aimed = AngleOf(player_.pos - boss_.pos);
+        const float aimed = AngleOf(targetPos - boss_.pos);
         const int pattern = hiddenPatternStep_ % 3;
         // 第1形態: 炎核を壊すギミック。
         // 核破壊前は弾密度を抑え、核を見つけて壊す余裕を残します。
@@ -355,7 +380,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                 for (int i = -fan; i <= fan; ++i) spawn(aimed + i * 0.15f, open ? 3.45f : 2.70f, 0.073f, open ? Gold : Sky, 5.8f);
                 const int ringCount = open ? 14 : 8;
                 for (int i = 0; i < ringCount; ++i) spawn(boss_.spin + TwoPi * i / static_cast<float>(ringCount), open ? 2.20f : 1.65f, 0.070f, open ? Red : Grape, 6.2f, open ? 0.06f : 0.03f);
-                hiddenPatternCd_ = open ? 0.68f : 0.95f;
+                if ((hiddenPatternStep_ % 2) == 0) spawnPressureFan(Pi * 0.56f, open ? 7 : 5, Mint, open ? 3.95f : 3.20f, 7.0f);
+                hiddenPatternCd_ = open ? 0.58f : 0.82f;
             }
             else if (pattern == 1)
             {
@@ -365,7 +391,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                     spawn(a, open ? 3.00f : 2.25f, 0.070f, open ? Gold : Mint, 6.4f, 0.04f);
                     if (open && std::abs(lane) == 2) spawn(a + 0.32f, 2.25f, 0.068f, Sky, 6.2f, -0.04f);
                 }
-                hiddenPatternCd_ = open ? 0.62f : 0.90f;
+                spawnPressureFan(-Pi * 0.62f, open ? 7 : 5, open ? Sky : Grape, open ? 3.85f : 3.15f, 6.8f);
+                hiddenPatternCd_ = open ? 0.54f : 0.78f;
             }
             else
             {
@@ -375,7 +402,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                     const float speed = (i & 1) ? (open ? 3.05f : 2.35f) : (open ? 1.80f : 1.45f);
                     spawn(boss_.spin * 0.9f + TwoPi * i / static_cast<float>(count), speed, 0.072f, (i & 1) ? Gold : Grape, 6.8f, (i & 1) ? 0.08f : -0.04f);
                 }
-                hiddenPatternCd_ = open ? 0.72f : 1.05f;
+                if (open) spawnPressureFan((hiddenPatternStep_ & 1) ? Pi * 0.70f : -Pi * 0.70f, 7, Cream, 3.60f, 7.2f);
+                hiddenPatternCd_ = open ? 0.62f : 0.90f;
             }
         }
         // 第2形態: 金色弾を反射してオーラを剥がすギミック。
@@ -386,7 +414,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
             if (!broken && pattern == 0)
             {
                 for (int i = -1; i <= 1; ++i) spawn(aimed + i * 0.24f, 2.45f, 0.088f, Gold, 7.0f, 0.0f, -0.015f);
-                hiddenPatternCd_ = 0.95f;
+                spawnPressureFan(Pi * 0.54f, 5, Mint, 3.20f, 7.0f);
+                hiddenPatternCd_ = 0.82f;
             }
             else if (pattern == 0)
             {
@@ -396,13 +425,15 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                     spawn(a, 2.85f, 0.074f, Gold, 6.4f, (arm & 1) ? -0.14f : 0.14f, 0.02f);
                     spawn(a + 0.22f, 3.25f, 0.070f, Red, 5.4f, (arm & 1) ? -0.08f : 0.08f);
                 }
-                hiddenPatternCd_ = 0.66f;
+                spawnPressureFan(-Pi * 0.58f, 7, Gold, 3.90f, 6.8f);
+                hiddenPatternCd_ = 0.56f;
             }
             else if (!broken && pattern == 1)
             {
                 for (int i = 0; i < 8; ++i) spawn(boss_.spin + TwoPi * i / 8.0f, 1.85f, 0.070f, (i % 4 == 0) ? Gold : Mint, 7.0f, 0.08f);
                 for (int i = -1; i <= 1; i += 2) spawn(aimed + i * 0.18f, 2.65f, 0.086f, Gold, 6.8f);
-                hiddenPatternCd_ = 0.85f;
+                spawnPressureFan(-Pi * 0.64f, 5, Sky, 3.25f, 7.0f);
+                hiddenPatternCd_ = 0.74f;
             }
             else if (pattern == 1)
             {
@@ -412,7 +443,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                     spawn(aimed + i * 0.095f, 3.85f, 0.068f, i % 3 == 0 ? Gold : Cream, 5.0f, 0.0f, -0.025f);
                 }
                 for (int i = 0; i < 8; ++i) spawn(boss_.spin + TwoPi * i / 8.0f, 2.0f, 0.072f, Gold, 6.6f, 0.10f);
-                hiddenPatternCd_ = 0.62f;
+                spawnPressureFan(Pi * 0.64f, 7, Red, 4.05f, 6.4f);
+                hiddenPatternCd_ = 0.54f;
             }
             else
             {
@@ -424,7 +456,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                     if (i % 5 == 0) continue;
                     spawn(a, broken ? 3.05f : 2.35f, 0.076f, (i % 4 == 0) ? Gold : Mint, 6.2f);
                 }
-                hiddenPatternCd_ = broken ? 0.68f : 0.95f;
+                spawnPressureFan((hiddenPatternStep_ & 1) ? Pi * 0.72f : -Pi * 0.72f, broken ? 7 : 5, Cream, broken ? 3.85f : 3.10f, 7.0f);
+                hiddenPatternCd_ = broken ? 0.58f : 0.82f;
             }
         }
         // 第3形態: ギミック無しの殴り合いです。
@@ -441,7 +474,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                     spawn(a, 2.35f + (i % 3) * 0.16f, 0.066f, Cream, 6.8f, 0.025f * std::sin(i * 1.7f));
                 }
                 for (int i = -2; i <= 2; ++i) spawn(aimed + i * 0.10f, 4.20f, 0.066f, Red, 4.0f, 0.0f, -0.025f);
-                hiddenPatternCd_ = 0.72f;
+                spawnPressureFan(Pi * 0.50f, 7, Sky, 4.15f, 6.2f);
+                hiddenPatternCd_ = 0.58f;
             }
             else if (pattern == 1)
             {
@@ -451,7 +485,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                     spawn(a, 2.85f + 0.08f * (i % 4), 0.066f, (i & 1) ? Gold : Grape, 5.2f, (i & 1) ? 0.14f : -0.14f, 0.03f);
                     if (i % 2 == 0) spawn(a + 0.09f, 2.20f, 0.064f, Cream, 6.0f, (i & 1) ? -0.08f : 0.08f);
                 }
-                hiddenPatternCd_ = 0.68f;
+                spawnPressureFan(-Pi * 0.50f, 7, Gold, 4.00f, 6.4f);
+                hiddenPatternCd_ = 0.56f;
             }
             else
             {
@@ -461,15 +496,18 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                     const float a = boss_.spin * -1.15f + i * (TwoPi / 14.0f);
                     spawn(a, 2.75f, 0.066f, (i % 3 == 0) ? Grape : Cream, 6.0f, -0.14f);
                 }
-                hiddenPatternCd_ = 0.75f;
+                spawnPressureFan((hiddenPatternStep_ & 1) ? Pi * 0.62f : -Pi * 0.62f, 9, Red, 4.25f, 6.2f);
+                hiddenPatternCd_ = 0.60f;
             }
         }
         ++hiddenPatternStep_;
     }
 
     UpdateShots(dt);
+    ReleaseCaughtIfNoBomb();
     UpdatePickups(dt);
     UpdateParticles(dt);
+    UpdateCamera(dt);
     for (auto& s : slashes_)
     {
         s.ttl -= dt;

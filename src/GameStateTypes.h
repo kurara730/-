@@ -29,7 +29,7 @@ struct WeaponDef
 };
 
 inline const std::array<WeaponDef, 4> Weapons{ {
-    { L"イチゴ", Berry, 0.15f, 15.0f, 18.0f, 0.13f, 0, 0 },
+    { L"イチゴ", Berry, 0.19f, 15.0f, 18.0f, 0.13f, 0, 0 },
     { L"チョコ", Choco, 0.38f, 0.0f, 38.0f, 0.0f, 0, 0 },
     { L"チーズ", Gold, 0.32f, 10.0f, 31.0f, 0.22f, 1, 0 },
     { L"ロール", Cream, 0.54f, 11.5f, 34.0f, 0.19f, 0, 5 },
@@ -52,10 +52,10 @@ struct LoadoutPreset
 
 // CSV(assets/data/characters.csv)で実行時に上書き可能。詳細は DataTables.h を参照。
 inline std::array<LoadoutPreset, 4> Loadouts{ {
-    { L"ショート", L"誘導反射", L"反射した苺弾が敵へ誘導する", Weapon::Strawberry, CharacterType::Shortcake, 92.0f, 6.15f, 0.92f, 0.82f, 18.0f, Berry },
-    { L"チョコ", L"ヨーヨー反射", L"敵で跳ねる弾をコンボさせる", Weapon::Chocolate, CharacterType::Chocolate, 145.0f, 4.55f, 1.10f, 1.06f, 8.0f, Choco },
-    { L"チーズ", L"敵弾反射", L"壁で敵弾を味方弾へ変える", Weapon::Cheese, CharacterType::Cheese, 112.0f, 4.95f, 1.28f, 1.14f, 12.0f, Gold },
-    { L"ロール", L"壁反射", L"壁と境界で跳ねる弾を操る", Weapon::Roll, CharacterType::Roll, 108.0f, 5.35f, 1.00f, 0.98f, 24.0f, Cream },
+    { L"ショート", L"誘導", L"跳ねたいちご弾が敵へ誘導する", Weapon::Strawberry, CharacterType::Shortcake, 92.0f, 6.15f, 0.92f, 0.82f, 18.0f, Berry },
+    { L"チョコ", L"ヨーヨー", L"敵で跳ねる弾をコンボさせる", Weapon::Chocolate, CharacterType::Chocolate, 145.0f, 4.55f, 1.10f, 1.06f, 8.0f, Choco },
+    { L"チーズ", L"敵弾キャッチ", L"壁で敵弾を味方弾へ変える", Weapon::Cheese, CharacterType::Cheese, 112.0f, 4.95f, 1.28f, 1.14f, 12.0f, Gold },
+    { L"ロール", L"壁バウンド", L"壁と境界で跳ねる弾を操る", Weapon::Roll, CharacterType::Roll, 108.0f, 5.35f, 1.00f, 0.98f, 24.0f, Cream },
 } };
 
 // プレイヤー1人分の実行時状態です。
@@ -92,6 +92,8 @@ struct Player
     float chargeCd = 0.0f;
     float dashT = 0.0f;
     float reviveT = 0.0f;
+    float warpCd = 0.0f;
+    float bombCharge = 0.0f;    // チョコ爆弾のチャージ量（長押し時間）
     float fever = 0.0f;
     float feverT = 0.0f;
     float corePower = 0.0f;
@@ -146,6 +148,8 @@ struct Enemy
     int score = 100;
     Color color = Rose;
     bool dead = false;
+    bool caught = false;        // チョコ最大弾に巻き込まれて固定中
+    V2 caughtOffset{};          // 弾中心からの相対位置
 };
 
 // 通常ボスと隠しボスで共通利用する状態です。
@@ -165,6 +169,7 @@ struct Boss
     float attackCd = 1.2f;
     float telegraphT = 0.0f;
     float telegraphLife = 0.0f;
+    float telegraphAngle = 0.0f; // 予告したビーム等の方向を固定するための角度
     float spin = 0.0f;
     float flash = 0.0f;
     int phase = 1;
@@ -177,9 +182,33 @@ struct Boss
     bool active = false;
 };
 
+struct BossGimmickState
+{
+    BossType type = BossType::Demon;
+    BossPatternId nextPattern = BossPatternId::Radial;
+    int patternStep = 0;
+    int sealHits = 0;
+    int mirrorIndex = 0;
+    float timer = 0.0f;
+    float vulnerableT = 0.0f;
+    float guardAngle = 0.0f;
+    float gravityT = 0.0f;
+    float territoryT = 0.0f;
+    bool mirrorOpen = false;
+};
+
 // 弾1発分の状態です。
 // enemy=true は敵弾、false は味方弾です。反射すると enemy が false になり ownerIndex が入ります。
 // hitBoss は貫通弾や斬撃波が同じボスへ毎フレーム多段ヒットしないための印です。
+// キャプテンサンダーの「上空から降る極太レーザー」一発分の予約。
+// fuse(予告残り時間)が0になった瞬間に、その場(pos)へ即着で範囲ダメージを与える。
+struct PendingSkyLaser
+{
+    V2 pos{};
+    float fuse = 0.0f;
+    float radius = 3.0f;
+};
+
 struct Shot
 {
     V2 pos{};
@@ -197,10 +226,14 @@ struct Shot
     int splitCount = 0;
     int yoyoCombo = 0;
     int lastHitEnemyId = -1;
+    int reflectSplit = 0;       // 反射した瞬間に分裂する子弾数（ショート用）
+    bool chocoBomb = false;     // チャージで撃つ爆弾弾（チョコ用）
+    int growStage = 0;          // 爆弾のチャージ段階（0〜3）
     float angularVel = 0.0f;
     float accel = 0.0f;
     float homingStrength = 0.0f;
     float yoyoRetargetT = 0.0f;
+    float warpCd = 0.0f;
     CharacterType sourceCharacter = CharacterType::Shortcake;
     bool enemy = false;
     bool dead = false;
@@ -236,6 +269,7 @@ struct Slash
     Color color = Choco;
     SlashVisualMode visualMode = SlashVisualMode::Sector;
     bool hitBoss = false;
+    bool sweep = false;         // 薙ぎ払い：刃が弧を端から端へ振り抜ける演出
 };
 
 // フィールド上のアイテムです。
@@ -271,6 +305,21 @@ struct Obstacle
     bool moving = false;
     bool cheeseWall = false;
     bool damageField = false;
+    bool bumper = false;        // 反射ブースト台
+    bool breakable = false;     // 破壊可能（壊すとドロップ）
+    float maxHp = 140.0f;
+    float flash = 0.0f;         // ヒット時の発光
+    float spin = 0.0f;          // 見た目の回転
+    float pushForce = 0.0f;     // コンベア/突風（vel方向へ押す）
+    float gravity = 0.0f;       // 重力井戸（>0で引き寄せ）
+    V2 orbitCenter{};           // 公転中心
+    float orbitRadius = 0.0f;
+    float orbitAngle = 0.0f;
+    float orbitSpeed = 0.0f;    // 0以外で公転
+    bool flipper = false;       // フリッパー（往復スイング）
+    float swingBase = 0.0f;     // スイングの中心角
+    float swingAmp = 0.0f;      // スイングの振れ幅
+    int warpId = -1;            // ワープ対（同一idどうしが対）
 };
 
 // 軽量な粒子です。爆発、反射、被弾などの短い演出に使います。

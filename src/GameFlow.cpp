@@ -101,6 +101,11 @@ void SweetsApp::ResetGame()
     message_ = L"";
     messageT_ = 0.0f;
     screenFlashT_ = 0.0f;
+    combatNotices_.clear();
+    worldTelegraphs_.clear();
+    pendingSkyLasers_.clear();
+    camera_.center = player_.pos;
+    camera_.target = player_.pos;
     SyncAll3DState();
     StartWave();
 }
@@ -225,10 +230,11 @@ void SweetsApp::ClearWave()
 
 // アイテムはPickupTypeごとに効果が違います。
 // 表示は GameplayView.cpp 側で形も変え、敵と見分けやすくしています。
-void SweetsApp::SpawnPickup()
+void SweetsApp::SpawnPickupAt(V2 pos)
 {
     Pickup p{};
-    p.pos = RandInArena(1.5f);
+    p.pos = pos;
+    ClampInside(p.pos, 1.0f);
     p.type = RandInt(0, 9);
     p.pickupType = static_cast<PickupType>(p.type);
     switch (p.pickupType)
@@ -246,6 +252,11 @@ void SweetsApp::SpawnPickup()
     }
     SyncPickup3D(p);
     pickups_.push_back(p);
+}
+
+void SweetsApp::SpawnPickup()
+{
+    SpawnPickupAt(RandInArena(1.5f));
 }
 
 // アプリ全体の更新入口です。
@@ -545,8 +556,10 @@ void SweetsApp::UpdatePlaying(float dt)
     UpdateEnemies(dt);
     UpdateBoss(dt);
     UpdateShots(dt);
+    ReleaseCaughtIfNoBomb();
     UpdatePickups(dt);
     UpdateParticles(dt);
+    UpdateCamera(dt);
     for (auto& s : slashes_)
     {
         s.ttl -= dt;
