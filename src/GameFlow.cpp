@@ -1,9 +1,14 @@
 #include "SweetsApp.h"
+#include "DataTables.h"
 #include "ReflectionSystem.h"
 #include "StageFactory.h"
 
+#include <filesystem>
+
 namespace
 {
+// 特殊敵は出しすぎると爽快感よりストレスが勝つため、
+// 通常Waveでは同時出現数を制限するために判定をまとめています。
 bool IsEliteType(EnemyType type)
 {
     return type == EnemyType::Healer
@@ -11,10 +16,37 @@ bool IsEliteType(EnemyType type)
         || type == EnemyType::Mirror
         || type == EnemyType::Teleport;
 }
+
+bool AssetExists(const std::wstring& relativePath)
+{
+    namespace fs = std::filesystem;
+    const fs::path rel(relativePath);
+    std::array<fs::path, 5> candidates{};
+    candidates[0] = fs::current_path() / rel;
+
+    wchar_t modulePath[MAX_PATH]{};
+    GetModuleFileNameW(nullptr, modulePath, MAX_PATH);
+    const fs::path exeDir = fs::path(modulePath).parent_path();
+    candidates[1] = exeDir / rel;
+    candidates[2] = exeDir.parent_path() / rel;
+    candidates[3] = exeDir.parent_path().parent_path() / rel;
+    candidates[4] = rel;
+
+    for (const auto& path : candidates)
+    {
+        std::error_code ec;
+        if (fs::exists(path, ec)) return true;
+    }
+    return false;
+}
 }
 
+// ランを最初から作り直します。
+// タイトルや難易度選択では呼ばず、実際にゲーム開始/リトライする時だけ呼ぶことで、
+// 初回起動時の待ち時間を短くしています。
 void SweetsApp::ResetGame()
 {
+    // 1Pは必ず有効。2P-4Pはキャラ選択画面で Off/AI/Pad が選ばれている時だけ参加します。
     ApplyLoadout(players_[0], loadoutIndex_, 0, false);
     player_.bombs = CurrentDifficulty().initialBombs;
     for (int i = 1; i < MaxPlayers; ++i)
@@ -34,6 +66,7 @@ void SweetsApp::ResetGame()
     boss_ = {};
     enemies_.clear();
     enemies_.reserve(256);
+    enemySerial_ = 0;
     shots_.clear();
     slashes_.clear();
     pickups_.clear();
@@ -55,14 +88,29 @@ void SweetsApp::ResetGame()
     hiddenPatternCd_ = 0.0f;
     hiddenPatternStep_ = 0;
     hiddenBossPhase_ = -1;
+    hiddenBossForm_ = 1;
+    hiddenBossGaugeHp_ = HiddenBossBaseGaugeHp;
+    hiddenBossTotalHp_ = HiddenBossBaseGaugeHp * HiddenBossGaugeCount;
+    hiddenBossCoreOpenT_ = 0.0f;
+    hiddenBossAuraBreakT_ = 0.0f;
+    hiddenBossReflectCount_ = 0;
+    hiddenBossCores_ = {};
+    hiddenBossPhaseIntroT_ = 0.0f;
+    hiddenBossPhaseIntroLife_ = 0.0f;
     pendingHiddenBoss_ = false;
     message_ = L"";
     messageT_ = 0.0f;
     screenFlashT_ = 0.0f;
+    combatNotices_.clear();
+    worldTelegraphs_.clear();
+    camera_.center = player_.pos;
+    camera_.target = player_.pos;
     SyncAll3DState();
     StartWave();
 }
 
+// 難易度が決まった後のゲーム開始入口です。
+// 素材がまだ読み終わっていない場合は、ゲーム画面へ入る前に専用ロード画面へ移します。
 void SweetsApp::StartGameWithDifficulty(bool hiddenBossPractice)
 {
     if (!gameplayAssetsLoaded_ || !effectAssetsLoaded_)
@@ -99,11 +147,15 @@ void SweetsApp::StartGameWithDifficulty(bool hiddenBossPractice)
     }
 }
 
+// 1Pの選択キャラを現在のロードアウトに反映します。
+// 複数人分の反映は ResetGame 内で ApplyLoadout(Player&, ...) を個別に呼びます。
 void SweetsApp::ApplyLoadout()
 {
     ApplyLoadout(player_, loadoutIndex_, 0, false);
 }
 
+// Waveごとにステージ形状と敵構成を作り直します。
+// 3の倍数は通常ボス戦、それ以外は雑魚戦として扱います。
 void SweetsApp::StartWave()
 {
     waveStarted_ = true;
@@ -133,6 +185,8 @@ void SweetsApp::StartWave()
     messageT_ = 2.0f;
 }
 
+// Waveクリア時の報酬と次画面への遷移です。
+// StoryはFinalWaveで区切り、Endlessはそのまま次Waveへ進みます。
 void SweetsApp::ClearWave()
 {
     AddScore(750 + wave_ * 180, &player_);
@@ -173,6 +227,8 @@ void SweetsApp::ClearWave()
     StartWave();
 }
 
+// アイテムはPickupTypeごとに効果が違います。
+// 表示は GameplayView.cpp 側で形も変え、敵と見分けやすくしています。
 void SweetsApp::SpawnPickupAt(V2 pos)
 {
     Pickup p{};
@@ -202,6 +258,8 @@ void SweetsApp::SpawnPickup()
     SpawnPickupAt(RandInArena(1.5f));
 }
 
+// アプリ全体の更新入口です。
+// screen_ ごとに必要な処理だけを動かすことで、メニュー背景でゲームが進まないようにしています。
 void SweetsApp::Update(float dt)
 {
     if (screen_ == Screen::BootLoading)
@@ -240,6 +298,8 @@ void SweetsApp::Update(float dt)
     UpdateAudioForScreen();
 }
 
+// 起動直後のロード処理です。
+// 1フレームで全部読むのではなく段階を分け、ロード画面をすぐ表示できるようにしています。
 void SweetsApp::UpdateBootLoading(float dt)
 {
     bootLoadElapsed_ += dt;
@@ -252,6 +312,7 @@ void SweetsApp::UpdateBootLoading(float dt)
         break;
     case LoadPhase::Graphics:
         LoadProgress();
+        LoadCharacterTableFromCsv();
         ApplyAudioVolume();
         AdvanceLoadPhase(LoadPhase::TitleAssets, L"Save data and settings loaded");
         break;
@@ -261,6 +322,9 @@ void SweetsApp::UpdateBootLoading(float dt)
         break;
     case LoadPhase::Audio:
         ApplyAudioVolume();
+        audio_.LoadSoundEffect(SoundEffect::ChocoSlash, L"assets/audio/se/choco_slash.mp3");
+        audio_.LoadSoundEffect(SoundEffect::UltimateSlash, L"assets/audio/se/ultimate_slash.mp3");
+        audio_.LoadSoundEffect(SoundEffect::Reflect, L"assets/audio/se/reflect.mp3");
         AdvanceLoadPhase(LoadPhase::Ready, L"Audio streaming ready");
         break;
     case LoadPhase::Ready:
@@ -277,6 +341,7 @@ void SweetsApp::UpdateBootLoading(float dt)
     }
 }
 
+// ロードフェーズを進め、デバッグ表示用に最後の処理名と経過時間を残します。
 void SweetsApp::AdvanceLoadPhase(LoadPhase nextPhase, std::wstring step)
 {
     const size_t index = static_cast<size_t>(loadPhase_);
@@ -297,6 +362,8 @@ void SweetsApp::AdvanceLoadPhase(LoadPhase nextPhase, std::wstring step)
     lastLoadStep_ = std::move(step);
 }
 
+// ゲーム開始直前のロードです。
+// タイトルで不要なGameplay素材やEffekseer素材は、ここで初めて読み込みます。
 void SweetsApp::UpdateGameplayLoading(float dt)
 {
     loadPhaseElapsed_ += dt;
@@ -319,6 +386,7 @@ void SweetsApp::UpdateGameplayLoading(float dt)
     StartGameWithDifficulty(pendingStartHiddenBossPractice_);
 }
 
+// タイトル中はゲーム本体を動かさず、タイトル動画だけ準備できたら再生を始めます。
 void SweetsApp::UpdateTitle(float dt)
 {
     OpenTitleVideoIfReady(dt);
@@ -372,6 +440,8 @@ void SweetsApp::UpdateDebugTiming(float dt)
 #endif
 }
 
+// 画面状態に合わせてBGMを切り替えます。
+// 同じ曲への再要求はAudioSystem側で抑え、余計な再読み込みを避けています。
 void SweetsApp::UpdateAudioForScreen()
 {
     ApplyAudioVolume();
@@ -390,8 +460,32 @@ void SweetsApp::UpdateAudioForScreen()
     case Screen::GameOver:
         audio_.PlayLoop(MusicTrack::GameOver, L"assets/audio/ruins.mp3");
         break;
+    case Screen::HiddenBossIntro:
+        audio_.PlayLoop(MusicTrack::HiddenBossGauge1, L"assets/audio/hidden_gauge1.mp3");
+        break;
     case Screen::HiddenBoss:
-        audio_.PlayOnce(MusicTrack::HiddenBoss, L"assets/audio/Lonery boy.wav");
+        if (hiddenBossForm_ <= 1)
+        {
+            audio_.PlayLoop(MusicTrack::HiddenBossGauge1, L"assets/audio/hidden_gauge1.mp3");
+        }
+        else if (hiddenBossForm_ == 2)
+        {
+            audio_.PlayLoop(MusicTrack::HiddenBossGauge2, L"assets/audio/hidden_gauge2.mp3");
+        }
+        else
+        {
+            audio_.PlayLoop(MusicTrack::HiddenBossGauge3, L"assets/audio/hidden_gauge3.mp3");
+        }
+        break;
+    case Screen::CompleteClear:
+        if (AssetExists(L"assets/audio/hidden_clear.mp3"))
+        {
+            audio_.PlayLoop(MusicTrack::HiddenBossClear, L"assets/audio/hidden_clear.mp3");
+        }
+        else
+        {
+            audio_.PlayLoop(MusicTrack::Title, L"assets/audio/333_BPM177.mp3");
+        }
         break;
     default:
         audio_.Stop();
@@ -399,11 +493,16 @@ void SweetsApp::UpdateAudioForScreen()
     }
 }
 
+// セーブされた音量設定をAudioSystemへ反映します。
+// 現時点で実音に効くのは主に Master と BGM/SE ですが、UI音量も将来用に保存します。
 void SweetsApp::ApplyAudioVolume()
 {
     audio_.SetVolume(ClampFloat(masterVolume_, 0.0f, 1.0f) * ClampFloat(bgmVolume_, 0.0f, 1.0f));
+    audio_.SetSoundVolume(ClampFloat(masterVolume_, 0.0f, 1.0f) * ClampFloat(seVolume_, 0.0f, 1.0f));
 }
 
+// HPが0以下なのに動ける、という不整合を防ぐための保険処理です。
+// 戦闘更新の最後に呼び、ソロまたは全員ダウンならゲームオーバーへ進めます。
 void SweetsApp::NormalizePlayerLifeStates()
 {
     for (auto& p : players_)
@@ -430,6 +529,8 @@ void SweetsApp::UpdateClear(float dt)
     }
 }
 
+// 通常プレイ中の更新をまとめています。
+// 入力、AI、ステージ、敵、弾、アイテム、演出の順で進めることで判定順を安定させています。
 void SweetsApp::UpdatePlaying(float dt)
 {
     gameTime_ += dt;
@@ -457,6 +558,7 @@ void SweetsApp::UpdatePlaying(float dt)
     ReleaseCaughtIfNoBomb();
     UpdatePickups(dt);
     UpdateParticles(dt);
+    UpdateCamera(dt);
     for (auto& s : slashes_)
     {
         s.ttl -= dt;
@@ -467,8 +569,16 @@ void SweetsApp::UpdatePlaying(float dt)
         spawnTimer_ -= dt;
         if (spawnTimer_ <= 0.0f)
         {
-            SpawnEnemy();
-            --remainingToSpawn_;
+            int spawned = 1;
+            if (!bossWave_ && remainingToSpawn_ >= 3 && Rand(0.0f, 1.0f) < 0.48f)
+            {
+                spawned = SpawnEnemyFormation();
+            }
+            else
+            {
+                SpawnEnemy();
+            }
+            remainingToSpawn_ = std::max(0, remainingToSpawn_ - spawned);
             spawnTimer_ = (bossWave_ ? Rand(1.4f, 2.4f) : Rand(0.38f, 0.82f)) * CurrentDifficulty().spawnIntervalMul;
         }
     }

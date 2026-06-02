@@ -1,6 +1,7 @@
 #pragma once
 
 #include <array>
+#include <string>
 
 #include "GameDefs.h"
 #include "GameMath.h"
@@ -13,6 +14,8 @@ enum class Weapon
     Roll = 3
 };
 
+// 通常攻撃の基礎性能です。
+// キャラクター固有の補正は LoadoutPreset 側にあり、最終火力は両方を組み合わせます。
 struct WeaponDef
 {
     const wchar_t* name;
@@ -34,9 +37,9 @@ inline const std::array<WeaponDef, 4> Weapons{ {
 
 struct LoadoutPreset
 {
-    const wchar_t* name;
-    const wchar_t* role;
-    const wchar_t* summary;
+    std::wstring name;
+    std::wstring role;
+    std::wstring summary;
     Weapon weapon;
     CharacterType character;
     float maxHp;
@@ -47,13 +50,17 @@ struct LoadoutPreset
     Color color;
 };
 
-inline const std::array<LoadoutPreset, 4> Loadouts{ {
-    { L"ショート", L"速度 / 連射", L"追尾弾と分裂弾で攻める", Weapon::Strawberry, CharacterType::Shortcake, 92.0f, 6.15f, 0.92f, 0.82f, 18.0f, Berry },
-    { L"チョコ", L"体力 / 近接", L"近距離で広く薙ぎ払う", Weapon::Chocolate, CharacterType::Chocolate, 145.0f, 4.55f, 1.10f, 1.06f, 8.0f, Choco },
-    { L"チーズ", L"火力 / 反射壁", L"壁で敵弾を跳ね返す", Weapon::Cheese, CharacterType::Cheese, 112.0f, 4.95f, 1.28f, 1.14f, 12.0f, Gold },
-    { L"ロール", L"制御 / 反射", L"跳ねる弾と突進で崩す", Weapon::Roll, CharacterType::Roll, 108.0f, 5.35f, 1.00f, 0.98f, 24.0f, Cream },
+// CSV(assets/data/characters.csv)で実行時に上書き可能。詳細は DataTables.h を参照。
+inline std::array<LoadoutPreset, 4> Loadouts{ {
+    { L"ショート", L"誘導反射", L"反射した苺弾が敵へ誘導する", Weapon::Strawberry, CharacterType::Shortcake, 92.0f, 6.15f, 0.92f, 0.82f, 18.0f, Berry },
+    { L"チョコ", L"ヨーヨー反射", L"敵で跳ねる弾をコンボさせる", Weapon::Chocolate, CharacterType::Chocolate, 145.0f, 4.55f, 1.10f, 1.06f, 8.0f, Choco },
+    { L"チーズ", L"敵弾反射", L"壁で敵弾を味方弾へ変える", Weapon::Cheese, CharacterType::Cheese, 112.0f, 4.95f, 1.28f, 1.14f, 12.0f, Gold },
+    { L"ロール", L"壁反射", L"壁と境界で跳ねる弾を操る", Weapon::Roll, CharacterType::Roll, 108.0f, 5.35f, 1.00f, 0.98f, 24.0f, Cream },
 } };
 
+// プレイヤー1人分の実行時状態です。
+// pos/vel は2Dルール用、pos3/vel3 は3Dルール用で、DimensionRules.cpp で同期します。
+// hp、ult、bombs などの戦闘値もここに集め、UI表示とゲーム判定の両方から参照します。
 struct Player
 {
     V2 pos{};
@@ -108,10 +115,13 @@ struct Player
     bool focus = false;
     bool charging = false;
     bool chargeReady = false;
+    bool chargeFull = false;
     bool downed = false;
     bool alive = true;
 };
 
+// 雑魚敵の状態です。
+// type が敵の種類、kind は旧実装互換の番号です。新しい処理では type を優先します。
 struct Enemy
 {
     V2 pos{};
@@ -133,6 +143,7 @@ struct Enemy
     float face = 0.0f;
     float flash = 0.0f;
     int kind = 0;
+    int id = 0;
     EnemyType type = EnemyType::Normal;
     int score = 100;
     Color color = Rose;
@@ -141,6 +152,8 @@ struct Enemy
     V2 caughtOffset{};          // 弾中心からの相対位置
 };
 
+// 通常ボスと隠しボスで共通利用する状態です。
+// 隠しボス固有のギミックは HiddenBossCore など別構造に分け、ここは本体HPと攻撃状態を持ちます。
 struct Boss
 {
     V2 pos{};
@@ -168,6 +181,24 @@ struct Boss
     bool active = false;
 };
 
+struct BossGimmickState
+{
+    BossType type = BossType::Demon;
+    BossPatternId nextPattern = BossPatternId::Radial;
+    int patternStep = 0;
+    int sealHits = 0;
+    int mirrorIndex = 0;
+    float timer = 0.0f;
+    float vulnerableT = 0.0f;
+    float guardAngle = 0.0f;
+    float gravityT = 0.0f;
+    float territoryT = 0.0f;
+    bool mirrorOpen = false;
+};
+
+// 弾1発分の状態です。
+// enemy=true は敵弾、false は味方弾です。反射すると enemy が false になり ownerIndex が入ります。
+// hitBoss は貫通弾や斬撃波が同じボスへ毎フレーム多段ヒットしないための印です。
 struct Shot
 {
     V2 pos{};
@@ -183,12 +214,15 @@ struct Shot
     int ownerIndex = 0;
     int reflectedCount = 0;
     int splitCount = 0;
+    int yoyoCombo = 0;
+    int lastHitEnemyId = -1;
     int reflectSplit = 0;       // 反射した瞬間に分裂する子弾数（ショート用）
     bool chocoBomb = false;     // チャージで撃つ爆弾弾（チョコ用）
     int growStage = 0;          // 爆弾のチャージ段階（0〜3）
     float angularVel = 0.0f;
     float accel = 0.0f;
     float homingStrength = 0.0f;
+    float yoyoRetargetT = 0.0f;
     float warpCd = 0.0f;
     CharacterType sourceCharacter = CharacterType::Shortcake;
     bool enemy = false;
@@ -196,6 +230,9 @@ struct Shot
     bool grazed = false;
     bool reflected = false;
     bool charged = false;
+    bool hitBoss = false;
+    bool yoyo = false;
+    bool ultimateSource = false;
     Color color = Cream;
 };
 
@@ -206,6 +243,8 @@ enum class SlashVisualMode
     Line
 };
 
+// チョコの近接斬りなど、扇形の短時間判定です。
+// 見た目をEffekseerや別スプライトに任せる場合でも、当たり判定だけはこの構造を使います。
 struct Slash
 {
     V2 pos{};
@@ -223,6 +262,8 @@ struct Slash
     bool sweep = false;         // 薙ぎ払い：刃が弧を端から端へ振り抜ける演出
 };
 
+// フィールド上のアイテムです。
+// 色だけでなく PickupType ごとに形も変え、敵や弾と見間違えにくくしています。
 struct Pickup
 {
     V2 pos{};
@@ -235,6 +276,8 @@ struct Pickup
     Color color = Gold;
 };
 
+// ステージ障害物やチーズ壁を表します。
+// cheeseWall=true の壁は敵弾を味方弾へ変換できるため、反射体験の重要な要素です。
 struct Obstacle
 {
     V2 pos{};
@@ -269,6 +312,7 @@ struct Obstacle
     int warpId = -1;            // ワープ対（同一idどうしが対）
 };
 
+// 軽量な粒子です。爆発、反射、被弾などの短い演出に使います。
 struct Particle
 {
     V2 pos{};
@@ -281,6 +325,23 @@ struct Particle
     Color color = Cream;
 };
 
+// 隠しボス1ゲージ目の炎核ギミックです。
+// core を壊すことで本体へ大きくダメージが通る攻撃チャンスを作ります。
+struct HiddenBossCore
+{
+    V2 pos{};
+    V3 pos3{};
+    float angle = 0.0f;
+    float orbitRadius = 2.7f;
+    float radius = 0.34f;
+    float hp = 220.0f;
+    float maxHp = 220.0f;
+    float flash = 0.0f;
+    bool active = false;
+};
+
+// 加算表示用のリング/衝撃波です。
+// Effekseerが読み込めない場合でも、ここで最低限の派手さを維持します。
 struct EffectPulse
 {
     V2 pos{};
@@ -293,6 +354,8 @@ struct EffectPulse
     Color color = Cream;
 };
 
+// Sword9由来の剣エフェクトを補助する2D表示データです。
+// angle/range/arc を Slash と揃えることで、見た目と攻撃判定の向きを一致させます。
 struct SwordEffectVisual
 {
     V2 pos{};

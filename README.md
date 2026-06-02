@@ -9,6 +9,7 @@
 - 5段階難易度とLunaticクリア後の隠しボス耐久戦
 - タイトルBGM、Story/Endless開始項目、ゲームオーバー時のRetry/Title選択
 - Debugビルド限定のF1クリック式デバッグパネル、FPS表示、RT/TAA確認、開発チート
+- F1デバッグパネルの表示/FX調整は、倍率や%ではなく実際に使われる小数値で表示
 - 反射倍率、反射キル、鏡敵、チーズ壁による敵弾反射
 - 1Pキーボード/マウスだけで遊べるソロ優先
 - 直感的な4キャラカード式の性能選択
@@ -73,7 +74,14 @@
 | `assets/audio/333_BPM177.mp3` | タイトル/メニューBGM |
 | `assets/audio/233_BPM163.mp3` | ゲームプレイ中BGM |
 | `assets/audio/ruins.mp3` | ゲームオーバーBGM |
-| `assets/audio/Lonery boy.wav` | 隠しボスBGM |
+| `assets/audio/hidden_gauge1.mp3` | 隠しボス1ゲージ目BGM |
+| `assets/audio/hidden_gauge2.mp3` | 隠しボス2ゲージ目BGM |
+| `assets/audio/hidden_gauge3.mp3` | 隠しボス3ゲージ目BGM |
+| `assets/audio/hidden_clear.mp3` | 隠しボス撃破後BGM。未配置時はタイトルBGMへフォールバック |
+| `assets/audio/Lonery boy.wav` | 旧隠しボスBGM素材 |
+| `assets/audio/se/choco_slash.mp3` | チョコ通常攻撃SE |
+| `assets/audio/se/ultimate_slash.mp3` | 必殺技SE |
+| `assets/audio/se/reflect.mp3` | 反射SE差し替え口。未配置時は無音 |
 | `assets/video/title.mp4` | 任意配置のタイトル画面動画 |
 
 ## クレジット

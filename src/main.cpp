@@ -2,6 +2,8 @@
 
 SweetsApp* g_app = nullptr;
 
+// Win32のウィンドウプロシージャからSweetsAppへ処理を渡します。
+// C APIのコールバックはクラスメンバー関数を直接指定できないため、g_appを中継にしています。
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
     if (g_app)
@@ -11,6 +13,8 @@ LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     return DefWindowProc(hwnd, msg, wp, lp);
 }
 
+// Windowsアプリの開始点です。
+// ここではSweetsAppを作って起動するだけにし、実際の処理はSweetsApp側へ任せます。
 int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int showCmd)
 {
     try

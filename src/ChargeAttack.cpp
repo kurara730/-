@@ -1,5 +1,7 @@
 #include "SweetsApp.h"
 
+// 右クリック長押しなどで発動するキャラ別チャージ攻撃です。
+// 同じ入口からキャラごとの処理へ分岐し、ショート/チョコ/チーズ/ロールの個性を作っています。
 void SweetsApp::FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint)
 {
     (void)aimPoint;
@@ -7,9 +9,13 @@ void SweetsApp::FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint)
     p.chargeCd = 0.55f;
     p.fireCd = std::max(p.fireCd, 0.18f);
 
+    // レベル、コア強化、キャラ火力、アイテムバフをまとめてダメージに掛けます。
+    // 雑魚戦では成長の手応えが出ますが、ボス側では DamageBoss で別途上限を掛けます。
     const float dmgScale = (1.0f + (p.level - 1) * 0.20f + p.corePower) * p.damageMul * (p.dmgBuffT > 0.0f ? 1.6f : 1.0f);
     if (p.character == CharacterType::Shortcake)
     {
+        // ショートは追尾し、命中時に分裂する大きな苺弾です。
+        // charged=true の弾は CombatLoop 側で周囲の敵弾を反射するフィールドも持ちます。
         Shot s{};
         s.pos = p.pos + FromAngle(aim) * (p.radius + 0.28f);
         s.vel = FromAngle(aim) * 11.5f;
@@ -30,6 +36,8 @@ void SweetsApp::FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint)
     }
     else if (p.character == CharacterType::Chocolate)
     {
+        // チョコは剣エフェクトを出しつつ、判定としては前方へ斬撃波を飛ばします。
+        // 見た目はEffekseerと補助スプライト、ダメージはShotとして管理します。
         PlayCombatEffect(L"sword_slash", p.pos, 0.56f, aim, 1.45f, Choco, 28);
         for (int i = -1; i <= 1; ++i)
         {
@@ -43,6 +51,8 @@ void SweetsApp::FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint)
             s.pierce = 5 + static_cast<int>(p.corePierce);
             s.bounce = static_cast<int>(p.coreBounce);
             s.charged = true;
+            s.yoyo = true;
+            s.bounce = std::max(s.bounce, 4);
             s.ownerIndex = ownerIndex;
             s.sourceCharacter = CharacterType::Chocolate;
             s.color = Choco;
@@ -53,6 +63,8 @@ void SweetsApp::FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint)
     }
     else if (p.character == CharacterType::Cheese)
     {
+        // チーズは移動する壁を置きます。
+        // cheeseWall=true なので、敵弾が当たると味方弾へ反射できます。
         Obstacle wall{};
         wall.pos = p.pos + FromAngle(aim) * 1.1f;
         wall.vel = FromAngle(aim) * 2.2f;
@@ -71,9 +83,16 @@ void SweetsApp::FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint)
     }
     else
     {
-        p.dashT = 0.55f;
-        p.dashVel = FromAngle(aim) * (15.0f + p.speed * 0.5f);
-        p.inv = std::max(p.inv, 0.45f);
+        // ロールは最大溜めの時だけ突進と無敵が付きます。
+        // 短い溜めでは反射弾だけを撃つため、短押し無敵でバランスが壊れないようにしています。
+        const bool fullCharge = p.chargeFull || p.chargeT >= 1.15f;
+        if (fullCharge)
+        {
+            p.dashT = 0.55f;
+            p.dashVel = FromAngle(aim) * (15.0f + p.speed * 0.5f);
+            p.inv = std::max(p.inv, 0.45f);
+            ReflectEnemyShotsNear(p.pos, p.radius + 0.95f, ownerIndex, CharacterType::Roll, Cream, 1.35f);
+        }
         for (int i = -1; i <= 1; ++i)
         {
             const float a = aim + i * 0.18f;
@@ -91,11 +110,13 @@ void SweetsApp::FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint)
             SyncShot3D(s);
             shots_.push_back(s);
         }
-        message_ = L"転がり突進";
+        message_ = fullCharge ? L"転がり突進" : L"反射ロール弾";
     }
     messageT_ = 1.4f;
 }
 
+// ショートのチャージ弾が命中した時に分裂弾を作ります。
+// 分裂後も追尾を持たせ、雑魚戦で成長火力を感じやすくしています。
 void SweetsApp::SpawnSplitShots(const Shot& source, V2 at)
 {
     for (int i = 0; i < source.splitCount; ++i)

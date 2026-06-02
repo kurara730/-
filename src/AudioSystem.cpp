@@ -19,6 +19,9 @@
 
 using Microsoft::WRL::ComPtr;
 
+// AudioSystem.cpp はBGMのストリーミング再生と、短いSEのキャッシュ再生を担当します。
+// MP3/WAVの読み込みに失敗しても例外で止めず、LastErrorへ理由を残して無音継続します。
+
 namespace
 {
 constexpr DWORD FirstAudioStream = static_cast<DWORD>(MF_SOURCE_READER_FIRST_AUDIO_STREAM);
@@ -30,6 +33,21 @@ struct StreamPacket
 {
     std::vector<BYTE> bytes;
     bool endOfStream = false;
+};
+
+// SEは短い想定なので、初回読み込み時にPCMへ展開して保持します。
+// BGMは長いため、全展開せず小さなチャンクを順番に送ります。
+struct CachedSound
+{
+    std::vector<BYTE> format;
+    std::vector<BYTE> pcm;
+    std::wstring path;
+    bool attempted = false;
+};
+
+struct ActiveSound
+{
+    IXAudio2SourceVoice* voice = nullptr;
 };
 
 std::wstring HrText(const wchar_t* prefix, HRESULT hr)
@@ -58,6 +76,8 @@ struct AudioSystem::Impl
         }
     }
 
+    // Media FoundationとXAudio2を初期化します。
+    // 初回再生時に遅延初期化することで、起動時の処理を軽くしています。
     bool Initialize()
     {
         if (initialized) return ready;
@@ -89,6 +109,7 @@ struct AudioSystem::Impl
         return true;
     }
 
+    // assets/ の場所は実行方法で変わるため、複数候補から実在するファイルを探します。
     std::wstring ResolveAssetPath(const std::wstring& relativePath) const
     {
         namespace fs = std::filesystem;
@@ -117,6 +138,7 @@ struct AudioSystem::Impl
         return {};
     }
 
+    // Media Foundation Source Readerを開き、音声ストリームをPCM形式へ変換できる状態にします。
     bool OpenReader(const std::wstring& path)
     {
         reader.Reset();
@@ -182,6 +204,123 @@ struct AudioSystem::Impl
         activeFormat.resize(waveSize);
         std::memcpy(activeFormat.data(), wave, waveSize);
         CoTaskMemFree(wave);
+        return true;
+    }
+
+    bool DecodeFile(const std::wstring& relativePath, CachedSound& out)
+    {
+        out.attempted = true;
+        out.path = relativePath;
+        out.format.clear();
+        out.pcm.clear();
+
+        if (!Initialize())
+        {
+            return false;
+        }
+
+        const std::wstring path = ResolveAssetPath(relativePath);
+        if (path.empty())
+        {
+            SetError(L"SE asset not found: " + relativePath);
+            return false;
+        }
+
+        ComPtr<IMFSourceReader> soundReader;
+        HRESULT hr = MFCreateSourceReaderFromURL(path.c_str(), nullptr, &soundReader);
+        if (FAILED(hr))
+        {
+            SetError(HrText(L"MFCreateSourceReaderFromURL SE", hr) + L": " + path);
+            return false;
+        }
+
+        soundReader->SetStreamSelection(static_cast<DWORD>(MF_SOURCE_READER_ALL_STREAMS), FALSE);
+        soundReader->SetStreamSelection(FirstAudioStream, TRUE);
+
+        ComPtr<IMFMediaType> pcmType;
+        hr = MFCreateMediaType(&pcmType);
+        if (FAILED(hr))
+        {
+            SetError(HrText(L"MFCreateMediaType SE", hr));
+            return false;
+        }
+        pcmType->SetGUID(MF_MT_MAJOR_TYPE, MFMediaType_Audio);
+        pcmType->SetGUID(MF_MT_SUBTYPE, MFAudioFormat_PCM);
+
+        hr = soundReader->SetCurrentMediaType(FirstAudioStream, nullptr, pcmType.Get());
+        if (FAILED(hr))
+        {
+            SetError(HrText(L"SetCurrentMediaType PCM SE", hr) + L": " + path);
+            return false;
+        }
+
+        ComPtr<IMFMediaType> actualType;
+        hr = soundReader->GetCurrentMediaType(FirstAudioStream, &actualType);
+        if (FAILED(hr))
+        {
+            SetError(HrText(L"GetCurrentMediaType SE", hr));
+            return false;
+        }
+
+        WAVEFORMATEX* wave = nullptr;
+        UINT32 waveSize = 0;
+        hr = MFCreateWaveFormatExFromMFMediaType(actualType.Get(), &wave, &waveSize);
+        if (FAILED(hr))
+        {
+            SetError(HrText(L"MFCreateWaveFormatExFromMFMediaType SE", hr));
+            return false;
+        }
+        out.format.resize(waveSize);
+        std::memcpy(out.format.data(), wave, waveSize);
+        CoTaskMemFree(wave);
+
+        for (int guard = 0; guard < 8192; ++guard)
+        {
+            DWORD flags = 0;
+            ComPtr<IMFSample> sample;
+            hr = soundReader->ReadSample(FirstAudioStream, 0, nullptr, &flags, nullptr, &sample);
+            if (FAILED(hr))
+            {
+                SetError(HrText(L"ReadSample SE", hr));
+                return false;
+            }
+            if (flags & MF_SOURCE_READERF_ENDOFSTREAM)
+            {
+                break;
+            }
+            if (!sample)
+            {
+                continue;
+            }
+
+            ComPtr<IMFMediaBuffer> buffer;
+            hr = sample->ConvertToContiguousBuffer(&buffer);
+            if (FAILED(hr))
+            {
+                SetError(HrText(L"ConvertToContiguousBuffer SE", hr));
+                return false;
+            }
+
+            BYTE* data = nullptr;
+            DWORD maxLen = 0;
+            DWORD currentLen = 0;
+            hr = buffer->Lock(&data, &maxLen, &currentLen);
+            if (FAILED(hr))
+            {
+                SetError(HrText(L"IMFMediaBuffer::Lock SE", hr));
+                return false;
+            }
+            const size_t oldSize = out.pcm.size();
+            out.pcm.resize(oldSize + currentLen);
+            std::memcpy(out.pcm.data() + oldSize, data, currentLen);
+            buffer->Unlock();
+        }
+
+        if (out.pcm.empty())
+        {
+            SetError(L"SE produced no data: " + path);
+            return false;
+        }
         return true;
     }
 
@@ -345,7 +484,7 @@ struct AudioSystem::Impl
             return false;
         }
 
-        Stop();
+        StopMusic();
 
         const std::wstring path = ResolveAssetPath(relativePath);
         if (path.empty())
@@ -410,6 +549,26 @@ struct AudioSystem::Impl
     void Update(float)
     {
         QueuePackets();
+        for (auto it = activeSounds.begin(); it != activeSounds.end();)
+        {
+            XAUDIO2_VOICE_STATE state{};
+            if (it->voice)
+            {
+                it->voice->GetState(&state);
+            }
+            if (!it->voice || state.BuffersQueued == 0)
+            {
+                if (it->voice)
+                {
+                    it->voice->DestroyVoice();
+                }
+                it = activeSounds.erase(it);
+            }
+            else
+            {
+                ++it;
+            }
+        }
     }
 
     void SetVolume(float value)
@@ -421,7 +580,72 @@ struct AudioSystem::Impl
         }
     }
 
-    void Stop()
+    void SetSoundVolume(float value)
+    {
+        soundVolume = std::max(0.0f, std::min(value, 1.0f));
+        for (auto& sound : activeSounds)
+        {
+            if (sound.voice)
+            {
+                sound.voice->SetVolume(soundVolume);
+            }
+        }
+    }
+
+    void LoadSoundEffect(SoundEffect effect, const std::wstring& relativePath)
+    {
+        const size_t index = static_cast<size_t>(effect);
+        if (index >= soundCache.size()) return;
+        DecodeFile(relativePath, soundCache[index]);
+    }
+
+    bool PlaySoundEffect(SoundEffect effect)
+    {
+        const size_t index = static_cast<size_t>(effect);
+        if (index >= soundCache.size()) return false;
+        CachedSound& sound = soundCache[index];
+        if (!sound.attempted || sound.pcm.empty())
+        {
+            return false;
+        }
+        if (!Initialize())
+        {
+            return false;
+        }
+
+        IXAudio2SourceVoice* voice = nullptr;
+        auto* wf = reinterpret_cast<WAVEFORMATEX*>(sound.format.data());
+        HRESULT hr = engine->CreateSourceVoice(&voice, wf);
+        if (FAILED(hr))
+        {
+            SetError(HrText(L"CreateSourceVoice SE", hr));
+            return false;
+        }
+
+        XAUDIO2_BUFFER buffer{};
+        buffer.Flags = XAUDIO2_END_OF_STREAM;
+        buffer.AudioBytes = static_cast<UINT32>(sound.pcm.size());
+        buffer.pAudioData = sound.pcm.data();
+        hr = voice->SubmitSourceBuffer(&buffer);
+        if (FAILED(hr))
+        {
+            voice->DestroyVoice();
+            SetError(HrText(L"SubmitSourceBuffer SE", hr));
+            return false;
+        }
+        voice->SetVolume(soundVolume);
+        hr = voice->Start(0);
+        if (FAILED(hr))
+        {
+            voice->DestroyVoice();
+            SetError(HrText(L"IXAudio2SourceVoice::Start SE", hr));
+            return false;
+        }
+        activeSounds.push_back({ voice });
+        return true;
+    }
+
+    void StopMusic()
     {
         if (sourceVoice)
         {
@@ -439,6 +663,20 @@ struct AudioSystem::Impl
         currentResolvedPath.clear();
         currentLoop = false;
         readerEnded = false;
+    }
+
+    void Stop()
+    {
+        StopMusic();
+        for (auto& sound : activeSounds)
+        {
+            if (sound.voice)
+            {
+                sound.voice->Stop(0);
+                sound.voice->DestroyVoice();
+            }
+        }
+        activeSounds.clear();
     }
 
     std::wstring StreamStatus() const
@@ -469,12 +707,15 @@ struct AudioSystem::Impl
     ComPtr<IMFSourceReader> reader;
     std::deque<StreamPacket> queuedPackets;
     std::vector<BYTE> activeFormat;
+    std::array<CachedSound, 3> soundCache;
+    std::vector<ActiveSound> activeSounds;
     MusicTrack currentTrack = MusicTrack::None;
     std::wstring currentPath;
     std::wstring currentResolvedPath;
     bool currentLoop = false;
     float activeDuration = 0.0f;
     float volume = 1.0f;
+    float soundVolume = 1.0f;
     std::chrono::steady_clock::time_point startedAt{};
     std::wstring lastError;
 };
@@ -501,6 +742,16 @@ bool AudioSystem::PlayOnce(MusicTrack track, const std::wstring& relativePath)
     return impl_->Play(track, relativePath, false);
 }
 
+void AudioSystem::LoadSoundEffect(SoundEffect effect, const std::wstring& relativePath)
+{
+    impl_->LoadSoundEffect(effect, relativePath);
+}
+
+bool AudioSystem::PlaySoundEffect(SoundEffect effect)
+{
+    return impl_->PlaySoundEffect(effect);
+}
+
 void AudioSystem::Update(float dt)
 {
     impl_->Update(dt);
@@ -516,9 +767,19 @@ void AudioSystem::SetVolume(float volume)
     impl_->SetVolume(volume);
 }
 
+void AudioSystem::SetSoundVolume(float volume)
+{
+    impl_->SetSoundVolume(volume);
+}
+
 float AudioSystem::Volume() const
 {
     return impl_->volume;
+}
+
+float AudioSystem::SoundVolume() const
+{
+    return impl_->soundVolume;
 }
 
 MusicTrack AudioSystem::CurrentTrack() const

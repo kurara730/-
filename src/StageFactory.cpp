@@ -1,6 +1,10 @@
 #include "SweetsApp.h"
 #include "StageFactory.h"
 
+// StageFactory.cpp は、Waveごとの地形やステージギミックを作ります。
+// 敵の強さではなく、移動しやすさや障害物配置でプレイ感を変える役割です。
+
+// ステージごとの基調色です。背景ラインや床の雰囲気に使います。
 Color StageColor(StageType stage)
 {
     switch (stage)
@@ -17,16 +21,38 @@ Color StageColor(StageType stage)
     }
 }
 
+// Wave番号からステージを決めます。ボスWaveは専用アリーナに固定します。
 StageType StageForWave(int wave, bool bossWave)
 {
     if (bossWave) return StageType::BossArena;
     return static_cast<StageType>((wave - 1) % 7);
 }
 
+namespace
+{
+FieldShape FieldShapeForStage(StageType stage)
+{
+    switch (stage)
+    {
+    case StageType::TwinIsland: return FieldShape::Rectangle;
+    case StageType::Pinball: return FieldShape::Octagon;
+    case StageType::RingCorridor: return FieldShape::Ring;
+    case StageType::FourPillars: return FieldShape::Rectangle;
+    case StageType::MovingIsland: return FieldShape::Corridor;
+    case StageType::ShrinkRing: return FieldShape::ShrinkCircle;
+    case StageType::Donut:
+    case StageType::BossArena:
+    default: return FieldShape::Circle;
+    }
+}
+}
+
+// 現在のWaveからステージ種類を選び、障害物や境界ルールを初期化します。
 void SweetsApp::BuildStage()
 {
     obstacles_.clear();
     stage_ = StageForWave(wave_, bossWave_);
+    fieldShape_ = FieldShapeForStage(stage_);
     shrinkRadius_ = ArenaRadius;
     stageTimer_ = 0.0f;
 
@@ -130,6 +156,7 @@ void SweetsApp::BuildStage()
     }
     else if (stage_ == StageType::RingCorridor)
     {
+        addObstacle({ 0.0f, 0.0f }, 2.55f, 0, Sky);
         for (int i = 0; i < 10; ++i)
         {
             if ((i % 5) == 0) continue;
@@ -202,6 +229,8 @@ void SweetsApp::BuildStage()
     }
 }
 
+// ステージ固有ギミックの毎フレーム更新です。
+// 動く島、縮むリング、ダメージ床など、敵とは別の環境変化を扱います。
 void SweetsApp::UpdateStage(float dt)
 {
     stageTimer_ += dt;
