@@ -2,8 +2,12 @@
 
 #include <filesystem>
 
+// AssetLoaders.cpp は素材読み込みを段階ごとに分けています。
+// タイトルに必要なもの、ゲーム開始に必要なもの、Effekseerなどを分けることで初回表示を早くします。
+
 namespace
 {
+// 実行環境ごとに assets/ の位置が違うため、複数候補から実在するファイルを探します。
 std::wstring AssetPath(const wchar_t* relative)
 {
     namespace fs = std::filesystem;
@@ -39,6 +43,8 @@ void SweetsApp::LoadAssets()
     LoadEffectAssets();
 }
 
+// タイトル画面に必要な画像やBGMだけを読み込みます。
+// ゲーム本体の素材はここでは読まず、起動待ち時間を増やさないようにします。
 void SweetsApp::LoadTitleAssets()
 {
     if (titleAssetsLoaded_) return;
@@ -62,6 +68,8 @@ void SweetsApp::LoadTitleAssets()
     titleAssetsLoaded_ = true;
 }
 
+// ゲームプレイに必要な2DスプライトやSEを読み込みます。
+// 画像が見つからない場合も、表示側の図形フォールバックで起動できる設計です。
 void SweetsApp::LoadGameplayAssets()
 {
     if (gameplayAssetsLoaded_) return;
@@ -121,6 +129,8 @@ void SweetsApp::LoadGameplayAssets()
     gameplayAssetsLoaded_ = true;
 }
 
+// Effekseerと剣/必殺エフェクト素材の読み込みです。
+// Runtimeや.efkefcが欠けていても、CombatEffects.cppの補助演出で最低限見えるようにします。
 void SweetsApp::LoadEffectAssets()
 {
     if (effectAssetsLoaded_) return;
@@ -152,6 +162,8 @@ void SweetsApp::LoadEffectAssets()
     effectAssetsLoaded_ = true;
 }
 
+// ゲーム開始前に必要素材が揃っているか確認します。
+// すでに読み込み済みなら即戻るので、リトライ時の無駄な読み込みを避けられます。
 void SweetsApp::EnsureGameplayAssetsReady()
 {
     LoadGameplayAssets();

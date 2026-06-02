@@ -8,6 +8,8 @@
 
 #include "GameTypes.h"
 
+// Effekseer RuntimeをDX11上で使うためのラッパーです。
+// 失敗時でもゲーム側の2D補助FXが出るため、エフェクト欠落でゲームは止まりません。
 class EffekseerSystem
 {
 public:
@@ -19,6 +21,7 @@ public:
 
     bool Initialize(ID3D11Device* device, ID3D11DeviceContext* context);
     void Shutdown();
+    // idで登録しておき、攻撃処理側はファイル名を知らずにPlayできます。
     void LoadEffect(const std::wstring& id, const std::wstring& relativePath, float magnification = 1.0f);
     bool Play(const std::wstring& id, V2 position, float y = 0.45f, float rotationY = 0.0f, float scale = 1.0f);
     void Update(float dt);

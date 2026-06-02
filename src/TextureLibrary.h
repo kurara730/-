@@ -9,6 +9,8 @@
 
 using Microsoft::WRL::ComPtr;
 
+// 読み込んだ画像1枚分の情報です。
+// shaderResource が空の場合は、表示側が図形フォールバックを使います。
 struct TextureAsset
 {
     std::wstring id;
@@ -18,6 +20,7 @@ struct TextureAsset
     ComPtr<ID3D11ShaderResourceView> shaderResource;
 };
 
+// 画像IDとファイルパスを対応させ、WICでDX11用テクスチャへ読み込みます。
 class TextureLibrary
 {
 public:

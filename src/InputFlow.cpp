@@ -2,8 +2,12 @@
 
 #include <algorithm>
 
+// 入力処理は「ゲーム中の操作」と「メニュークリック」を分けて考えます。
+// メニュー系はマウス操作主体にし、ゲーム中の移動/攻撃/ポーズ/F1だけキーを残しています。
+
 namespace
 {
+// クリック位置が矩形内に入っているか調べる、メニューUI用の小さな共通関数です。
 bool PointInRect(float sx, float sy, float left, float top, float right, float bottom)
 {
     return sx >= left && sx <= right && sy >= top && sy <= bottom;
@@ -18,8 +22,41 @@ CoopSlotMode CoopModeFromIndex(int index)
     default: return CoopSlotMode::Off;
     }
 }
+
+constexpr int DebugActionCount = 12;
+constexpr int DebugFxSliderCount = 7;
+
+bool DebugActionRect(int index, float width, float& x, float& y, float& w, float& h)
+{
+    if (index < 0 || index >= DebugActionCount) return false;
+    const float left = width - 342.0f;
+    const float buttonW = 148.0f;
+    const float buttonH = 30.0f;
+    const float gap = 10.0f;
+    const float top = 286.0f;
+    const int col = index % 2;
+    const int row = index / 2;
+    x = left + col * (buttonW + gap);
+    y = top + row * (buttonH + 8.0f);
+    w = buttonW;
+    h = buttonH;
+    return true;
 }
 
+bool DebugFxSliderRect(int index, float width, float& x, float& y, float& w, float& h)
+{
+    if (index < 0 || index >= DebugFxSliderCount) return false;
+    const float left = width - 342.0f;
+    x = left + 118.0f;
+    y = 540.0f + index * 28.0f;
+    w = 190.0f;
+    h = 8.0f;
+    return true;
+}
+}
+
+// キーが押された瞬間の処理です。
+// 長押しで毎フレーム処理する移動や攻撃は UpdatePlayer 側で見ます。
 void SweetsApp::OnKeyDown(WPARAM key)
 {
     if (HandleDebugKey(key))
@@ -40,34 +77,17 @@ void SweetsApp::OnKeyDown(WPARAM key)
 
     if (screen_ == Screen::Paused)
     {
-        if (key == 'P' || key == VK_ESCAPE)
+        if (key == VK_ESCAPE)
         {
+            // Esc はポーズを閉じてゲームへ戻す。タイトルへ戻る場合は明示ボタンだけにする。
+            draggingVolume_ = -1;
             screen_ = Screen::Playing;
             return;
         }
-        if (key == VK_UP || key == 'W')
+        if (key == 'P')
         {
-            pauseMenuIndex_ = (pauseMenuIndex_ + 5) % 6;
-            return;
-        }
-        if (key == VK_DOWN || key == 'S')
-        {
-            pauseMenuIndex_ = (pauseMenuIndex_ + 1) % 6;
-            return;
-        }
-        if ((key == VK_LEFT || key == 'A') && pauseMenuIndex_ >= 2)
-        {
-            SetVolumeSlider(pauseMenuIndex_ - 2, VolumeSliderValue(pauseMenuIndex_ - 2) - 0.05f, true);
-            return;
-        }
-        if ((key == VK_RIGHT || key == 'D') && pauseMenuIndex_ >= 2)
-        {
-            SetVolumeSlider(pauseMenuIndex_ - 2, VolumeSliderValue(pauseMenuIndex_ - 2) + 0.05f, true);
-            return;
-        }
-        if (key == VK_RETURN || key == VK_SPACE)
-        {
-            ActivatePauseMenuItem();
+            // P → 続ける(再開)
+            screen_ = Screen::Playing;
             return;
         }
         return;
@@ -75,32 +95,29 @@ void SweetsApp::OnKeyDown(WPARAM key)
 
     if (screen_ == Screen::Title)
     {
-        if (key == 'C')
+        if (key == VK_ESCAPE)
         {
-            screen_ = Screen::Credits;
+            settingsReturnScreen_ = Screen::Title;
+            pauseMenuIndex_ = 2;
+            draggingVolume_ = -1;
+            screen_ = Screen::Settings;
             return;
         }
-        if (key == VK_UP || key == 'W')
+        return;
+    }
+
+    if (screen_ == Screen::Settings)
+    {
+        if (key == VK_ESCAPE || key == VK_BACK)
         {
-            titleMenuIndex_ = (titleMenuIndex_ + 2) % 3;
+            SaveSettings();
+            draggingVolume_ = -1;
+            screen_ = settingsReturnScreen_;
+            if (settingsReturnScreen_ == Screen::Paused)
+            {
+                pauseMenuIndex_ = 2;
+            }
             return;
-        }
-        if (key == VK_DOWN || key == 'S')
-        {
-            titleMenuIndex_ = (titleMenuIndex_ + 1) % 3;
-            return;
-        }
-        if (key == VK_LEFT || key == 'A')
-        {
-            return;
-        }
-        if (key == VK_RIGHT || key == 'D')
-        {
-            return;
-        }
-        if (key == VK_RETURN || key == VK_SPACE)
-        {
-            StartSelectedTitleItem();
         }
         return;
     }
@@ -112,56 +129,14 @@ void SweetsApp::OnKeyDown(WPARAM key)
             screen_ = Screen::Title;
             return;
         }
-        if (key >= '1' && key <= '4')
-        {
-            loadoutIndex_ = static_cast<int>(key - '1');
-            player_.weapon = Loadouts[loadoutIndex_].weapon;
-            player_.character = Loadouts[loadoutIndex_].character;
-            return;
-        }
-        if (key == VK_LEFT || key == 'A')
-        {
-            loadoutIndex_ = (loadoutIndex_ + static_cast<int>(Loadouts.size()) - 1) % static_cast<int>(Loadouts.size());
-            player_.weapon = Loadouts[loadoutIndex_].weapon;
-            player_.character = Loadouts[loadoutIndex_].character;
-            return;
-        }
-        if (key == VK_RIGHT || key == 'D')
-        {
-            loadoutIndex_ = (loadoutIndex_ + 1) % static_cast<int>(Loadouts.size());
-            player_.weapon = Loadouts[loadoutIndex_].weapon;
-            player_.character = Loadouts[loadoutIndex_].character;
-            return;
-        }
-        if (key == VK_RETURN || key == VK_SPACE)
-        {
-            screen_ = Screen::DifficultySelect;
-            return;
-        }
         return;
     }
 
     if (screen_ == Screen::DifficultySelect)
     {
-        const int optionCount = DifficultyOptionCount();
         if (key == VK_ESCAPE || key == VK_BACK)
         {
             screen_ = Screen::CharacterSelect;
-            return;
-        }
-        if (key == VK_LEFT || key == 'A')
-        {
-            difficultyIndex_ = (difficultyIndex_ + optionCount - 1) % optionCount;
-            return;
-        }
-        if (key == VK_RIGHT || key == 'D')
-        {
-            difficultyIndex_ = (difficultyIndex_ + 1) % optionCount;
-            return;
-        }
-        if (key == VK_RETURN || key == VK_SPACE)
-        {
-            StartGameWithDifficulty(hiddenBossUnlocked_ && difficultyIndex_ == 5);
             return;
         }
         return;
@@ -169,7 +144,7 @@ void SweetsApp::OnKeyDown(WPARAM key)
 
     if (screen_ == Screen::Credits)
     {
-        if (key == VK_ESCAPE || key == VK_RETURN || key == VK_BACK || key == 'C')
+        if (key == VK_ESCAPE || key == VK_BACK)
         {
             screen_ = Screen::Title;
         }
@@ -178,22 +153,6 @@ void SweetsApp::OnKeyDown(WPARAM key)
 
     if (screen_ == Screen::GameOver)
     {
-        if (key == VK_LEFT || key == VK_RIGHT || key == VK_UP || key == VK_DOWN || key == 'A' || key == 'D' || key == 'W' || key == 'S')
-        {
-            gameOverChoice_ = gameOverChoice_ == GameOverChoice::Retry ? GameOverChoice::Title : GameOverChoice::Retry;
-            return;
-        }
-        if (key == VK_RETURN || key == 'R')
-        {
-            if (gameOverChoice_ == GameOverChoice::Retry || key == 'R')
-            {
-                RestartCurrentRun();
-            }
-            else
-            {
-                screen_ = Screen::Title;
-            }
-        }
         if (key == VK_ESCAPE || key == VK_BACK)
         {
             screen_ = Screen::Title;
@@ -203,7 +162,7 @@ void SweetsApp::OnKeyDown(WPARAM key)
 
     if (screen_ == Screen::Clear || screen_ == Screen::CompleteClear)
     {
-        if (key == VK_RETURN || key == 'R' || key == VK_ESCAPE || key == VK_BACK)
+        if (key == VK_ESCAPE || key == VK_BACK)
         {
             screen_ = Screen::Title;
         }
@@ -228,9 +187,12 @@ void SweetsApp::OnKeyDown(WPARAM key)
         if (key == 'Q') UseUltimate();
         if (key == 'X' || key == VK_CONTROL) UseBomb();
         if (key == 'R') RestartCurrentRun();
+        if (key == 'T') SetAimMode(static_cast<AimMode>((static_cast<int>(aimMode_) + 1) % 3), true);
     }
 }
 
+// デバッグ用キー入力です。
+// F1はパネル開閉だけにし、F2-F12の直接チートは使わない方針です。
 bool SweetsApp::HandleDebugKey(WPARAM key)
 {
 #if defined(_DEBUG)
@@ -263,27 +225,48 @@ bool SweetsApp::DebugPanelContains(float sx, float sy) const
 #endif
 }
 
+// F1デバッグパネル内のクリック処理です。
+// パネル上のクリックはゲーム側の射撃入力へ渡さないよう、ここで消費します。
 bool SweetsApp::HandleDebugClick(float sx, float sy)
 {
 #if defined(_DEBUG)
     if (!DebugPanelContains(sx, sy)) return false;
 
-    const float left = static_cast<float>(width_) - 342.0f;
-    const float buttonW = 148.0f;
-    const float buttonH = 30.0f;
-    const float gap = 10.0f;
-    const float top = 286.0f;
-    for (int i = 0; i < 12; ++i)
+    for (int i = 0; i < DebugActionCount; ++i)
     {
-        const int col = i % 2;
-        const int row = i / 2;
-        const float x = left + col * (buttonW + gap);
-        const float y = top + row * (buttonH + 8.0f);
-        if (PointInRect(sx, sy, x, y, x + buttonW, y + buttonH))
+        float x = 0.0f;
+        float y = 0.0f;
+        float w = 0.0f;
+        float h = 0.0f;
+        DebugActionRect(i, static_cast<float>(width_), x, y, w, h);
+        if (PointInRect(sx, sy, x, y, x + w, y + h))
         {
             ExecuteDebugAction(i);
             return true;
         }
+    }
+
+    for (int i = 0; i < DebugFxSliderCount; ++i)
+    {
+        float x = 0.0f;
+        float y = 0.0f;
+        float w = 0.0f;
+        float h = 0.0f;
+        DebugFxSliderRect(i, static_cast<float>(width_), x, y, w, h);
+        if (PointInRect(sx, sy, x - 8.0f, y - 12.0f, x + w + 8.0f, y + h + 12.0f))
+        {
+            draggingDebugFx_ = i;
+            SetDebugFxSlider(i, (sx - x) / w);
+            return true;
+        }
+    }
+
+    const float resetX = static_cast<float>(width_) - 224.0f;
+    const float resetY = 742.0f;
+    if (PointInRect(sx, sy, resetX, resetY, resetX + 190.0f, resetY + 30.0f))
+    {
+        ResetDebugFxAdjustments();
+        return true;
     }
     return true;
 #else
@@ -293,6 +276,110 @@ bool SweetsApp::HandleDebugClick(float sx, float sy)
 #endif
 }
 
+// デバッグスライダーのドラッグ処理です。
+// 画面効果の値をその場で変え、派手さや明るさを調整できます。
+bool SweetsApp::HandleDebugDrag(float sx, float sy)
+{
+#if defined(_DEBUG)
+    (void)sy;
+    if (draggingDebugFx_ < 0) return false;
+    float x = 0.0f;
+    float y = 0.0f;
+    float w = 0.0f;
+    float h = 0.0f;
+    if (!DebugFxSliderRect(draggingDebugFx_, static_cast<float>(width_), x, y, w, h))
+    {
+        draggingDebugFx_ = -1;
+        return false;
+    }
+    SetDebugFxSlider(draggingDebugFx_, (sx - x) / w);
+    return true;
+#else
+    (void)sx;
+    (void)sy;
+    return false;
+#endif
+}
+
+void SweetsApp::ResetDebugFxAdjustments()
+{
+#if defined(_DEBUG)
+    debug_.brightness = 1.0f;
+    debug_.additiveFx = 1.0f;
+    debug_.screenFlashFx = 1.0f;
+    debug_.enemyBulletGlow = 1.0f;
+    debug_.swordFx = 1.0f;
+    debug_.ultimateFx = 1.0f;
+    debug_.hiddenBossAuraFx = 1.0f;
+    message_ = L"DEBUG: FXリセット";
+    messageT_ = 1.2f;
+#endif
+}
+
+void SweetsApp::SetDebugFxSlider(int index, float normalizedValue)
+{
+#if defined(_DEBUG)
+    const float t = ClampFloat(normalizedValue, 0.0f, 1.0f);
+    float value = index == 0 ? (0.5f + t) : (t * 2.0f);
+    switch (index)
+    {
+    case 0: debug_.brightness = value; break;
+    case 1: debug_.additiveFx = value; break;
+    case 2: debug_.screenFlashFx = value; break;
+    case 3: debug_.enemyBulletGlow = value; break;
+    case 4: debug_.swordFx = value; break;
+    case 5: debug_.ultimateFx = value; break;
+    case 6: debug_.hiddenBossAuraFx = value; break;
+    default: break;
+    }
+#else
+    (void)index;
+    (void)normalizedValue;
+#endif
+}
+
+float SweetsApp::DebugFxSliderValue(int index) const
+{
+#if defined(_DEBUG)
+    switch (index)
+    {
+    case 0: return ClampFloat(debug_.brightness - 0.5f, 0.0f, 1.0f);
+    case 1: return ClampFloat(debug_.additiveFx * 0.5f, 0.0f, 1.0f);
+    case 2: return ClampFloat(debug_.screenFlashFx * 0.5f, 0.0f, 1.0f);
+    case 3: return ClampFloat(debug_.enemyBulletGlow * 0.5f, 0.0f, 1.0f);
+    case 4: return ClampFloat(debug_.swordFx * 0.5f, 0.0f, 1.0f);
+    case 5: return ClampFloat(debug_.ultimateFx * 0.5f, 0.0f, 1.0f);
+    case 6: return ClampFloat(debug_.hiddenBossAuraFx * 0.5f, 0.0f, 1.0f);
+    default: return 0.0f;
+    }
+#else
+    (void)index;
+    return 0.5f;
+#endif
+}
+
+float SweetsApp::DebugFxDisplayValue(int index) const
+{
+#if defined(_DEBUG)
+    switch (index)
+    {
+    case 0: return ClampFloat(debug_.brightness, 0.5f, 1.5f);
+    case 1: return ClampFloat(debug_.additiveFx, 0.0f, 2.0f);
+    case 2: return ClampFloat(debug_.screenFlashFx, 0.0f, 2.0f);
+    case 3: return ClampFloat(debug_.enemyBulletGlow, 0.0f, 2.0f);
+    case 4: return ClampFloat(debug_.swordFx, 0.0f, 2.0f);
+    case 5: return ClampFloat(debug_.ultimateFx, 0.0f, 2.0f);
+    case 6: return ClampFloat(debug_.hiddenBossAuraFx, 0.0f, 2.0f);
+    default: return 0.0f;
+    }
+#else
+    (void)index;
+    return 1.0f;
+#endif
+}
+
+// デバッグパネルのボタン実行処理です。
+// Releaseビルドでは呼ばれても効果が出ないよう、Debug限定の使い方を想定しています。
 void SweetsApp::ExecuteDebugAction(int action)
 {
 #if defined(_DEBUG)
@@ -338,7 +425,8 @@ void SweetsApp::ExecuteDebugAction(int action)
         }
         else if (screen_ == Screen::HiddenBoss)
         {
-            hiddenBossT_ = HiddenBossDurationSeconds;
+            hiddenBossPhaseIntroT_ = 0.0f;
+            DamageBoss(boss_.hp + 1.0f, true, 0);
         }
         break;
     case 6:
@@ -395,20 +483,51 @@ void SweetsApp::ActivatePauseMenuItem()
 {
     if (pauseMenuIndex_ == 0)
     {
+        // 続ける
         screen_ = Screen::Playing;
     }
     else if (pauseMenuIndex_ == 1)
     {
+        // リスタート(同じ設定でやり直し)
+        RestartCurrentRun();
+    }
+    else if (pauseMenuIndex_ == 2)
+    {
+        // 音量設定(専用画面へ。戻り先はポーズ)
+        settingsReturnScreen_ = Screen::Paused;
+        draggingVolume_ = -1;
+        pauseMenuIndex_ = 2;
+        screen_ = Screen::Settings;
+    }
+    else if (pauseMenuIndex_ == 3)
+    {
+        // タイトルに戻る
         SaveSettings();
         draggingVolume_ = -1;
         screen_ = Screen::Title;
     }
 }
 
+// 攻撃方向モードを変更します。
+// save=true の時は save.dat に保存し、次回起動でも同じ操作感にします。
+void SweetsApp::SetAimMode(AimMode mode, bool save)
+{
+    aimMode_ = mode;
+    if (save)
+    {
+        SaveSettings();
+    }
+    message_ = L"攻撃方向: ";
+    message_ += AimModeName(aimMode_);
+    messageT_ = 1.2f;
+}
+
+// ポーズ画面のクリック処理です。
+// Resume/Restart/Settings/Title と音量・照準モードをマウスで操作します。
 bool SweetsApp::HandlePauseClick(float sx, float sy)
 {
-    const float panelW = 480.0f;
-    const float panelH = 370.0f;
+    const float panelW = 420.0f;
+    const float panelH = 392.0f;
     const float left = (static_cast<float>(width_) - panelW) * 0.5f;
     const float top = (static_cast<float>(height_) - panelH) * 0.5f;
     if (!PointInRect(sx, sy, left, top, left + panelW, top + panelH))
@@ -416,30 +535,16 @@ bool SweetsApp::HandlePauseClick(float sx, float sy)
         return false;
     }
 
-    const float buttonW = 190.0f;
-    const float buttonH = 42.0f;
+    const float buttonW = panelW - 88.0f;
+    const float buttonH = 50.0f;
     const float buttonX = left + 44.0f;
-    for (int i = 0; i < 2; ++i)
+    for (int i = 0; i < 4; ++i)
     {
-        const float y = top + 76.0f + i * 56.0f;
+        const float y = top + 80.0f + i * 62.0f;
         if (PointInRect(sx, sy, buttonX, y, buttonX + buttonW, y + buttonH))
         {
             pauseMenuIndex_ = i;
             ActivatePauseMenuItem();
-            return true;
-        }
-    }
-
-    const float sliderLeft = left + 170.0f;
-    const float sliderRight = left + panelW - 48.0f;
-    for (int i = 0; i < 4; ++i)
-    {
-        const float y = top + 196.0f + i * 38.0f;
-        if (PointInRect(sx, sy, sliderLeft - 8.0f, y - 12.0f, sliderRight + 8.0f, y + 16.0f))
-        {
-            pauseMenuIndex_ = i + 2;
-            draggingVolume_ = i;
-            SetVolumeSlider(i, (sx - sliderLeft) / (sliderRight - sliderLeft), true);
             return true;
         }
     }
@@ -450,11 +555,42 @@ bool SweetsApp::HandlePauseDrag(float sx, float sy)
 {
     (void)sy;
     if (draggingVolume_ < 0) return false;
-    const float panelW = 480.0f;
-    const float left = (static_cast<float>(width_) - panelW) * 0.5f;
-    const float sliderLeft = left + 170.0f;
-    const float sliderRight = left + panelW - 48.0f;
-    SetVolumeSlider(draggingVolume_, (sx - sliderLeft) / (sliderRight - sliderLeft), false);
+    const SettingsLayout layout = BuildSettingsLayout();
+    SetVolumeSlider(draggingVolume_, (sx - layout.sliderLeft) / (layout.sliderRight - layout.sliderLeft), false);
+    return true;
+}
+
+// タイトル/ポーズから開く設定画面です。
+// 描画側と同じ SettingsLayout を使い、見えているボタンとクリック判定を一致させます。
+bool SweetsApp::HandleSettingsClick(float sx, float sy)
+{
+    const SettingsLayout layout = BuildSettingsLayout();
+    if (!PointInRect(sx, sy, layout.panel.left, layout.panel.top, layout.panel.right, layout.panel.bottom))
+    {
+        return false;
+    }
+
+    for (int i = 0; i < 4; ++i)
+    {
+        const UiRect& rect = layout.volumeSliders[i];
+        if (PointInRect(sx, sy, rect.left, rect.top, rect.right, rect.bottom))
+        {
+            pauseMenuIndex_ = i + 2;
+            draggingVolume_ = i;
+            SetVolumeSlider(i, (sx - layout.sliderLeft) / (layout.sliderRight - layout.sliderLeft), true);
+            return true;
+        }
+    }
+
+    for (int i = 0; i < 3; ++i)
+    {
+        const UiRect& rect = layout.aimButtons[i];
+        if (PointInRect(sx, sy, rect.left, rect.top, rect.right, rect.bottom))
+        {
+            SetAimMode(static_cast<AimMode>(i), true);
+            return true;
+        }
+    }
     return true;
 }
 
@@ -520,6 +656,14 @@ void SweetsApp::RestartCurrentRun()
 void SweetsApp::StartSelectedTitleItem()
 {
     const TitleMenuItem item = static_cast<TitleMenuItem>(titleMenuIndex_);
+    if (item == TitleMenuItem::Settings)
+    {
+        settingsReturnScreen_ = Screen::Title;
+        pauseMenuIndex_ = 2;
+        draggingVolume_ = -1;
+        screen_ = Screen::Settings;
+        return;
+    }
     if (item == TitleMenuItem::Credits)
     {
         screen_ = Screen::Credits;
@@ -530,6 +674,8 @@ void SweetsApp::StartSelectedTitleItem()
     screen_ = Screen::CharacterSelect;
 }
 
+// キャラクターカードのクリック判定です。
+// 1Pのキャラを選び、Story/Endlessの次画面へ進む準備をします。
 bool SweetsApp::SelectLoadoutAt(float sx, float sy)
 {
     const float gap = 14.0f;
@@ -553,6 +699,8 @@ bool SweetsApp::SelectLoadoutAt(float sx, float sy)
     return false;
 }
 
+// 2P-4Pの Off/AI/Pad とキャラ選択のクリック処理です。
+// 初期値はOffなので、ユーザーが明示的にAI/Padを選んだ時だけ参加します。
 bool SweetsApp::SelectCoopSlotAt(float sx, float sy)
 {
     const float cardH = 214.0f;
@@ -590,6 +738,8 @@ bool SweetsApp::SelectCoopSlotAt(float sx, float sy)
     return false;
 }
 
+// タイトルのメニュー項目をクリック位置から選びます。
+// Story/Endlessはキャラ選択へ進み、Credits/Settingsは直接画面を開きます。
 bool SweetsApp::SelectTitleMenuAt(float sx, float sy)
 {
     const float itemW = 248.0f;
@@ -597,7 +747,7 @@ bool SweetsApp::SelectTitleMenuAt(float sx, float sy)
     const float gap = 12.0f;
     const float startX = 42.0f;
     const float top = std::max(112.0f, static_cast<float>(height_) * 0.18f);
-    for (int i = 0; i < 3; ++i)
+    for (int i = 0; i < 4; ++i)
     {
         const float y = top + i * (itemH + gap);
         if (sx >= startX && sx <= startX + itemW && sy >= y && sy <= y + itemH)
@@ -610,6 +760,8 @@ bool SweetsApp::SelectTitleMenuAt(float sx, float sy)
     return false;
 }
 
+// 難易度選択のクリック判定です。
+// Hidden Boss Practice が解禁済みなら、通常難易度とは別の項目として選べます。
 bool SweetsApp::SelectDifficultyAt(float sx, float sy)
 {
     const int optionCount = DifficultyOptionCount();
@@ -632,6 +784,59 @@ bool SweetsApp::SelectDifficultyAt(float sx, float sy)
             StartGameWithDifficulty(hiddenBossUnlocked_ && difficultyIndex_ == 5);
             return true;
         }
+    }
+    return false;
+}
+
+bool SweetsApp::SelectCreditsAt(float sx, float sy)
+{
+    const float buttonW = 190.0f;
+    const float buttonH = 46.0f;
+    const float x = (static_cast<float>(width_) - buttonW) * 0.5f;
+    const float y = static_cast<float>(height_) * 0.68f;
+    if (PointInRect(sx, sy, x, y, x + buttonW, y + buttonH))
+    {
+        screen_ = Screen::Title;
+        return true;
+    }
+    return false;
+}
+
+bool SweetsApp::SelectGameOverAt(float sx, float sy)
+{
+    const float choiceW = 180.0f;
+    const float choiceTop = static_cast<float>(height_) * 0.62f;
+    for (int i = 0; i < 2; ++i)
+    {
+        const float x = static_cast<float>(width_) * 0.5f - choiceW - 10.0f + i * (choiceW + 20.0f);
+        if (PointInRect(sx, sy, x, choiceTop, x + choiceW, choiceTop + 46.0f))
+        {
+            if (i == 0)
+            {
+                gameOverChoice_ = GameOverChoice::Retry;
+                RestartCurrentRun();
+            }
+            else
+            {
+                gameOverChoice_ = GameOverChoice::Title;
+                screen_ = Screen::Title;
+            }
+            return true;
+        }
+    }
+    return false;
+}
+
+bool SweetsApp::SelectClearAt(float sx, float sy)
+{
+    const float buttonW = 220.0f;
+    const float buttonH = 46.0f;
+    const float x = (static_cast<float>(width_) - buttonW) * 0.5f;
+    const float y = static_cast<float>(height_) * 0.62f;
+    if (PointInRect(sx, sy, x, y, x + buttonW, y + buttonH))
+    {
+        screen_ = Screen::Title;
+        return true;
     }
     return false;
 }
