@@ -22,6 +22,66 @@ void SweetsApp::UpdateShots(float dt)
         s.ttl -= dt;
         if (s.ttl <= 0.0f) continue;
         const int reflectBefore = s.reflectedCount;
+
+        if (s.chocoBomb)
+        {
+            // 壁・障害物では反射する（敵では反射しない）。サイズはチャージで確定済み
+            s.pos += s.vel * dt;
+            bool bounced = false;
+            V2 n{};
+            if (Len(s.pos) > ArenaRadius - s.radius)
+            {
+                n = Normalize(s.pos);
+                s.pos = n * (ArenaRadius - s.radius);
+                s.vel = s.vel - n * (2.0f * Dot(s.vel, n));
+                bounced = true;
+            }
+            if (!bounced)
+            {
+                for (auto& o : obstacles_)
+                {
+                    if (o.damageField || o.warpId >= 0) continue;
+                    if (RuleDistance(s.pos, s.height, o.pos, o.height) < s.radius + o.radius)
+                    {
+                        n = Normalize(s.pos - o.pos);
+                        if (LenSq(n) < 0.001f) n = FromAngle(0.0f);
+                        s.pos = o.pos + n * (s.radius + o.radius + 0.02f);
+                        s.vel = s.vel - n * (2.0f * Dot(s.vel, n));
+                        bounced = true;
+                        break;
+                    }
+                }
+            }
+            if (bounced)
+            {
+                const float sp = std::max(7.0f, Len(s.vel));
+                if (LenSq(s.vel) > 0.0001f) s.vel = Normalize(s.vel) * sp;
+            }
+            // 最大チャージ弾：近くの敵を巻き込み、一度掴んだら弾に固定して逃がさない（ボスは対象外）
+            if (s.growStage >= 3)
+            {
+                const float catchR = s.radius + 0.6f;
+                for (auto& e : enemies_)
+                {
+                    if (e.dead) continue;
+                    if (!e.caught && RuleDistance(s, e) < catchR + e.radius)
+                    {
+                        e.caught = true;
+                        e.caughtOffset = e.pos - s.pos; // 掴んだ瞬間の相対位置で固定開始
+                    }
+                    if (e.caught)
+                    {
+                        e.caughtOffset = e.caughtOffset * 0.9f; // 徐々に中心へ引き込む
+                        e.pos = s.pos + e.caughtOffset;         // 弾に追従（逃げられない）
+                        ClampInside(e.pos, e.radius);
+                        SyncEnemy3D(e);
+                    }
+                }
+            }
+            SyncShot3D(s);
+            continue;
+        }
+
         if (s.enemy && (std::fabs(s.angularVel) > 0.0001f || std::fabs(s.accel) > 0.0001f))
         {
             float speed = Len(s.vel);
@@ -208,6 +268,20 @@ void SweetsApp::UpdateShots(float dt)
     }
 
     for (const auto& sp : spawned) shots_.push_back(sp);
+}
+
+void SweetsApp::ReleaseCaughtIfNoBomb()
+{
+    // 巻き込み弾が無くなったら（爆発/消滅）捕まっていた敵を解放する
+    bool engulf = false;
+    for (const auto& s : shots_)
+    {
+        if (!s.dead && s.chocoBomb && s.growStage >= 3 && s.ttl > 0.0f) { engulf = true; break; }
+    }
+    if (!engulf)
+    {
+        for (auto& e : enemies_) e.caught = false;
+    }
 }
 
 void SweetsApp::UpdatePickups(float dt)
