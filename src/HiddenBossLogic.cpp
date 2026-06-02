@@ -87,11 +87,6 @@ void SweetsApp::UpdateHiddenBoss(float dt)
     gameTime_ += dt;
     hiddenBossT_ += dt;
     if (messageT_ > 0.0f) messageT_ -= dt;
-    if (comboDisplayT_ > 0.0f) comboDisplayT_ -= dt;
-    for (auto& pl : players_)
-    {
-        if (pl.comboT > 0.0f) { pl.comboT -= dt; if (pl.comboT <= 0.0f) pl.combo = 0; }
-    }
     if (player_.inv > 0.0f) player_.inv -= dt;
     if (player_.shieldT > 0.0f) player_.shieldT -= dt;
     if (player_.bombT > 0.0f) player_.bombT -= dt;

@@ -86,8 +86,6 @@ struct Player
     float dashT = 0.0f;
     float reviveT = 0.0f;
     float warpCd = 0.0f;
-    int combo = 0;              // ヒット連鎖コンボ数
-    float comboT = 0.0f;        // コンボ継続ウィンドウ
     float bombCharge = 0.0f;    // チョコ爆弾のチャージ量（長押し時間）
     float fever = 0.0f;
     float feverT = 0.0f;
@@ -134,9 +132,7 @@ struct Enemy
     float teleportCd = 0.0f;
     float face = 0.0f;
     float flash = 0.0f;
-    float yoyoHitCd = 0.0f;     // ヨーヨー弾の再ヒット間隔（コンボ用）
     int kind = 0;
-    int uid = 0;                // 個体識別ID（同一敵コンボ判定）
     EnemyType type = EnemyType::Normal;
     int score = 100;
     Color color = Rose;
@@ -188,15 +184,8 @@ struct Shot
     int reflectedCount = 0;
     int splitCount = 0;
     int reflectSplit = 0;       // 反射した瞬間に分裂する子弾数（ショート用）
-    bool yoyo = false;          // ヨーヨー弾（出て戻る・チョコ用）
-    bool returning = false;     // ヨーヨーの帰還フェーズ
-    bool chocoBomb = false;     // バウンドで巨大化する爆弾弾（チョコ用）
-    int growStage = 1;          // 爆弾の巨大化段階（1→2→3→1）
-    float yoyoRange = 4.2f;     // 折り返す最大距離
-    float traveled = 0.0f;      // 往路の移動距離
-    float yoyoBossCd = 0.0f;    // ボスへの連続ヒット間隔
-    int comboUid = -1;          // 直近にヒットした敵のuid（同一敵コンボ判定）
-    int comboCount = 0;         // 連続ヒット数
+    bool chocoBomb = false;     // チャージで撃つ爆弾弾（チョコ用）
+    int growStage = 0;          // 爆弾のチャージ段階（0〜3）
     float angularVel = 0.0f;
     float accel = 0.0f;
     float homingStrength = 0.0f;

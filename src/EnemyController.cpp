@@ -109,7 +109,6 @@ void SweetsApp::SpawnEnemy()
     {
         e.height = (e.type == EnemyType::Teleport || e.type == EnemyType::Mirror) ? 0.82f : EnemyBodyY;
     }
-    e.uid = nextEnemyUid_++;
     SyncEnemy3D(e);
     enemies_.push_back(e);
 }
@@ -145,7 +144,6 @@ void SweetsApp::UpdateEnemies(float dt)
         if (e.flash > 0.0f) e.flash -= dt;
         if (e.touchCd > 0.0f) e.touchCd -= dt;
         if (e.barrierT > 0.0f) e.barrierT -= dt;
-        if (e.yoyoHitCd > 0.0f) e.yoyoHitCd -= dt;
         if (e.caught) { SyncEnemy3D(e); continue; } // 巻き込まれ中は行動停止（弾に固定）
 
         Player* targetPlayer = FindNearestPlayer(e.pos);
@@ -340,7 +338,6 @@ void SweetsApp::UpdateBoss(float dt)
             mirror.score = 350;
             mirror.color = Cream;
             mirror.shootCd = 1.1f;
-            mirror.uid = nextEnemyUid_++;
             SyncEnemy3D(mirror);
             enemies_.push_back(mirror);
         }
@@ -531,7 +528,6 @@ void SweetsApp::DamageEnemy(Enemy& e, float dmg, V2 from, float knock, bool refl
                 child.atk = 5.0f;
                 child.score = 70;
                 child.color = Gold;
-                child.uid = nextEnemyUid_++;
                 SyncEnemy3D(child);
                 enemies_.push_back(child);
             }

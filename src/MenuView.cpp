@@ -239,35 +239,6 @@ void SweetsApp::DrawHud()
             D2D1::RectF(18.0f, 188.0f, static_cast<float>(width_) - 18.0f, 226.0f), textBrush_.Get());
     }
 
-    if (player_.combo >= 2 && player_.comboT > 0.0f)
-    {
-        // コンボ表記：段階で色が変わり、ヒットごとに大きくポップする
-        const int cc = player_.combo;
-        const float fillT = ClampFloat(player_.comboT / 1.2f, 0.0f, 1.0f);   // 残り時間の割合
-        const float pop = ClampFloat(comboDisplayT_ / 0.7f, 0.0f, 1.0f);      // 直近ヒットのポップ
-        const float fade = ClampFloat(fillT * 2.0f, 0.0f, 1.0f);             // 残りわずかで薄れる
-        const int stage = cc >= 6 ? 3 : (cc >= 3 ? 2 : 1);
-        const D2D1::ColorF textCol = stage >= 3 ? D2D1::ColorF(1.0f, 0.70f, 0.20f, fade)
-            : (stage >= 2 ? D2D1::ColorF(1.0f, 0.32f, 0.50f, fade) : D2D1::ColorF(1.0f, 0.94f, 0.86f, fade));
-        const float scale = 1.15f + 0.10f * stage + 0.30f * pop;
-        const float cx = static_cast<float>(width_) * 0.5f;
-        const float cy = static_cast<float>(height_) * 0.30f;
-        const std::wstring combo = std::to_wstring(cc) + L" コンボ!";
-        titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-        d2dContext_->SetTransform(D2D1::Matrix3x2F::Scale(scale, scale, D2D1::Point2F(cx, cy)));
-        textBrush_->SetColor(textCol);
-        d2dContext_->DrawTextW(combo.c_str(), static_cast<UINT32>(combo.size()), titleFormat_.Get(),
-            D2D1::RectF(0.0f, cy - 40.0f, static_cast<float>(width_), cy + 40.0f), textBrush_.Get());
-        d2dContext_->SetTransform(D2D1::Matrix3x2F::Identity());
-        titleFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
-
-        // コンボ継続ゲージ：ヒットで満タンに戻り、途切れるまでの残り時間を表す
-        const float gw = 240.0f;
-        const D2D1::ColorF barFg = stage >= 3 ? D2D1::ColorF(1.0f, 0.70f, 0.20f, 0.95f)
-            : (stage >= 2 ? D2D1::ColorF(1.0f, 0.32f, 0.50f, 0.95f) : D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.95f));
-        fillBar(cx - gw * 0.5f, cy + 42.0f, gw, 13.0f, fillT, D2D1::ColorF(0.18f, 0.06f, 0.10f, 0.85f), barFg);
-    }
-
     if (screen_ == Screen::Title)
     {
         textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 1.0f));

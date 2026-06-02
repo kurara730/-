@@ -302,9 +302,6 @@ private:
     int wave_ = 1;
     int score_ = 0;
     int reflectKills_ = 0;
-    int nextEnemyUid_ = 1;
-    int comboDisplay_ = 0;
-    float comboDisplayT_ = 0.0f;
     int remainingToSpawn_ = 0;
     int loadoutIndex_ = 0;
     std::array<int, MaxPlayers> coopLoadoutIndices_{ 0, 1, 2, 3 };
