@@ -56,6 +56,13 @@ void SweetsApp::BuildStage()
     shrinkRadius_ = ArenaRadius;
     stageTimer_ = 0.0f;
 
+    // ステージ移動時はショートのヒートをリセット（持ち越さない）
+    for (auto& p : players_)
+    {
+        p.fireHeat = 0.0f;
+        p.overheatT = 0.0f;
+    }
+
     auto push = [&](const Obstacle& o)
     {
         Obstacle copy = o;

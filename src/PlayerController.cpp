@@ -174,8 +174,7 @@ void SweetsApp::UpdatePlayer(float dt)
     {
         // ショート（ミニガン）：足を止めて撃ち続けるほどヒートが上がり、連射速度・威力・反射・サイズが増す。
         // 上限まで振り切るとオーバーヒートして一定時間撃てない。動くと熱が冷めてリセット。
-        const bool moving = LenSq(dir) > 0.0001f;
-        player_.firing = primaryHeld; // 移動中(ヒート0)でもゲージを出すための発射中フラグ
+        player_.firing = primaryHeld; // 発射中フラグ（ゲージ表示用）
         if (player_.overheatT > 0.0f)
         {
             // オーバーヒート中：発射ロック。ロック時間をかけて完全冷却する。
@@ -189,39 +188,30 @@ void SweetsApp::UpdatePlayer(float dt)
         }
         else if (primaryHeld)
         {
-            if (moving)
+            // 移動中でもヒートは溜まる。レッドゾーンでは過熱の進みを落として最大火力を長く保つ。
+            const float gain = player_.fireHeat >= StrawberryHeatMax * StrawberryRedline
+                ? dt * StrawberryRedlineHeatMul
+                : dt;
+            player_.fireHeat += gain;
+            if (player_.fireHeat >= StrawberryHeatMax)
             {
-                // 移動しながらでも撃てるが、ヒートは溜まらずリセット（tier0固定）
-                player_.fireHeat = 0.0f;
+                // 振り切った→オーバーヒート発動。しばらく撃てなくなる隙。
+                player_.fireHeat = StrawberryHeatMax;
+                player_.overheatT = StrawberryOverheatLock;
+                Burst(player_.pos, Gold, 26);
+                PlayCombatEffect(L"sword_slash", player_.pos, 0.5f, player_.face, 1.0f, Red, 14);
+                message_ = L"オーバーヒート!";
+                messageT_ = std::max(messageT_, 1.0f);
             }
-            else
-            {
-                // レッドゾーンに入ったら過熱の進みを大きく落とし、最大火力を長く保てるようにする
-                const float gain = player_.fireHeat >= StrawberryHeatMax * StrawberryRedline
-                    ? dt * StrawberryRedlineHeatMul
-                    : dt;
-                player_.fireHeat += gain;
-                if (player_.fireHeat >= StrawberryHeatMax)
-                {
-                    // 振り切った→オーバーヒート発動。しばらく撃てなくなる隙。
-                    player_.fireHeat = StrawberryHeatMax;
-                    player_.overheatT = StrawberryOverheatLock;
-                    Burst(player_.pos, Gold, 26);
-                    PlayCombatEffect(L"sword_slash", player_.pos, 0.5f, player_.face, 1.0f, Red, 14);
-                    message_ = L"オーバーヒート!";
-                    messageT_ = std::max(messageT_, 1.0f);
-                }
-            }
-            // 移動中・停止中どちらでも発射（オーバーヒート発動フレームは撃たない）
-            if (player_.overheatT <= 0.0f && player_.fireCd <= 0.0f)
+            else if (player_.fireCd <= 0.0f)
             {
                 FireStrawberryHeat(player_, 0, player_.face);
             }
         }
         else
         {
-            // 撃つのをやめると徐々に冷める＝レッドゾーン手前で小休止すれば過熱を回避できる
-            player_.fireHeat = std::max(0.0f, player_.fireHeat - dt * 1.4f);
+            // 撃つのをやめると素早く冷める＝小休止での熱管理がしやすい
+            player_.fireHeat = std::max(0.0f, player_.fireHeat - dt * 3.5f);
         }
     }
     else if (primaryHeld && player_.fireCd <= 0.0f)
@@ -403,13 +393,13 @@ void SweetsApp::FireStrawberryHeat(Player& p, int ownerIndex, float aim)
     s.radius = (0.12f + 0.20f * t) * (1.0f + p.level * 0.04f);       // ヒートで弾サイズ上昇
     s.damage = def.damage * dmgScale * (1.0f + 1.6f * t);            // 威力 ×1.0〜×2.6
     s.pierce = def.pierce + (p.level >= 5 ? 1 : 0) + static_cast<int>(p.corePierce);
-    s.bounce = tier + static_cast<int>(p.coreBounce);               // 反射回数 0〜3(+コア)
+    s.bounce = 3 + static_cast<int>(p.coreBounce);                  // 壁・ギミック反射は常に3回固定(+コア)
     s.ttl = 2.4f + 0.8f * t;
     s.color = tier >= 3 ? Gold : (tier >= 2 ? Red : (tier >= 1 ? Berry : Rose));
     s.ownerIndex = ownerIndex;
     s.sourceCharacter = CharacterType::Shortcake;
     s.homingStrength = 0.0f;
-    s.reflectSplit = tier >= 3 ? 3 : 0;                             // 最大ヒートのみ反射で分裂
+    s.reflectSplit = 0;                                             // 分裂は廃止
     SyncShot3D(s);
     shots_.push_back(s);
 
