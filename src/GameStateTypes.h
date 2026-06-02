@@ -52,10 +52,10 @@ struct LoadoutPreset
 
 // CSV(assets/data/characters.csv)で実行時に上書き可能。詳細は DataTables.h を参照。
 inline std::array<LoadoutPreset, 4> Loadouts{ {
-    { L"ショート", L"誘導反射", L"反射した苺弾が敵へ誘導する", Weapon::Strawberry, CharacterType::Shortcake, 92.0f, 6.15f, 0.92f, 0.82f, 18.0f, Berry },
-    { L"チョコ", L"ヨーヨー反射", L"敵で跳ねる弾をコンボさせる", Weapon::Chocolate, CharacterType::Chocolate, 145.0f, 4.55f, 1.10f, 1.06f, 8.0f, Choco },
-    { L"チーズ", L"敵弾反射", L"壁で敵弾を味方弾へ変える", Weapon::Cheese, CharacterType::Cheese, 112.0f, 4.95f, 1.28f, 1.14f, 12.0f, Gold },
-    { L"ロール", L"壁反射", L"壁と境界で跳ねる弾を操る", Weapon::Roll, CharacterType::Roll, 108.0f, 5.35f, 1.00f, 0.98f, 24.0f, Cream },
+    { L"ショート", L"誘導", L"跳ねたいちご弾が敵へ誘導する", Weapon::Strawberry, CharacterType::Shortcake, 92.0f, 6.15f, 0.92f, 0.82f, 18.0f, Berry },
+    { L"チョコ", L"ヨーヨー", L"敵で跳ねる弾をコンボさせる", Weapon::Chocolate, CharacterType::Chocolate, 145.0f, 4.55f, 1.10f, 1.06f, 8.0f, Choco },
+    { L"チーズ", L"敵弾キャッチ", L"壁で敵弾を味方弾へ変える", Weapon::Cheese, CharacterType::Cheese, 112.0f, 4.95f, 1.28f, 1.14f, 12.0f, Gold },
+    { L"ロール", L"壁バウンド", L"壁と境界で跳ねる弾を操る", Weapon::Roll, CharacterType::Roll, 108.0f, 5.35f, 1.00f, 0.98f, 24.0f, Cream },
 } };
 
 // プレイヤー1人分の実行時状態です。
