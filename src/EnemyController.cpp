@@ -752,7 +752,7 @@ void SweetsApp::DamageEnemy(Enemy& e, float dmg, V2 from, float knock, bool refl
         {
             AddScore(e.score, &owner);
             ++reflectKills_;
-            message_ = L"反射キル x2";
+            message_ = L"コンボボーナス x2";
             messageT_ = 1.2f;
         }
         owner.kills++;
@@ -945,7 +945,7 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
     {
         bossGimmick_.vulnerableT = std::max(bossGimmick_.vulnerableT, seconds);
         Burst(boss_.pos, color, 42);
-        addNotice(L"反射で弱点露出", color);
+        addNotice(L"弱点露出", color);
     };
     if (isReflected)
     {
@@ -962,7 +962,7 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
             }
             else
             {
-                addNotice(L"封印に反射ヒット", Grape);
+                addNotice(L"封印ヒット", Grape);
             }
             break;
         case BossType::DonutKing:
@@ -1017,7 +1017,7 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
     {
         Player& owner = players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))];
         AddScore(static_cast<int>(appliedDmg * 4.0f), &owner);
-        addNotice(L"反射ボーナス", Gold);
+        addNotice(L"ボーナス", Gold);
     }
     const float hpPct = boss_.hp / boss_.maxHp;
     const int nextPhase = hpPct < 0.25f ? 4 : (hpPct < 0.50f ? 3 : (hpPct < 0.75f ? 2 : 1));

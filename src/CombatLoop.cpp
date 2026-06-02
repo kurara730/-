@@ -58,7 +58,7 @@ void SweetsApp::ReflectEnemyShotsNear(V2 center, float radius, int ownerIndex, C
     {
         audio_.PlaySoundEffect(SoundEffect::Reflect);
         AddScore(reflected * 24, &players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))]);
-        message_ = L"反射";
+        message_ = L"跳ね返し";
         messageT_ = std::max(messageT_, 0.65f);
         effectPulses_.push_back({ center, Grounded3D(center, 0.24f), radius * 0.55f, radius * 1.55f, 0.22f, 0.22f, 0.24f, color });
     }
@@ -190,7 +190,7 @@ void SweetsApp::UpdateShots(float dt)
                     if (s.sourceCharacter == CharacterType::Roll)
                     {
                         s.damage *= 1.08f;
-                        message_ = L"壁反射";
+                        message_ = L"壁ボーナス";
                         messageT_ = std::max(messageT_, 0.55f);
                     }
                 }
@@ -248,7 +248,7 @@ void SweetsApp::UpdateShots(float dt)
                     if (!s.enemy)
                     {
                         AddScore(12, &players_[std::max(0, std::min(s.ownerIndex, MaxPlayers - 1))]);
-                        message_ = L"バンパー反射!";
+                        message_ = L"バンパーボーナス!";
                         messageT_ = std::max(messageT_, 0.6f);
                     }
                     if (s.bounce > 0) --s.bounce;
@@ -357,7 +357,7 @@ void SweetsApp::UpdateShots(float dt)
                         --s.pierce;
                         Player& owner = players_[std::max(0, std::min(s.ownerIndex, MaxPlayers - 1))];
                         AddScore(70 + s.yoyoCombo * 35, &owner);
-                        message_ = L"ヨーヨー反射コンボ x" + std::to_wstring(std::max(1, s.yoyoCombo));
+                        message_ = L"ヨーヨーコンボ x" + std::to_wstring(std::max(1, s.yoyoCombo));
                         messageT_ = 0.85f;
                         const V2 next = FindNearestEnemyOrBoss(s.pos);
                         const V2 dir = Normalize((LenSq(next - s.pos) > 0.02f ? next : owner.pos) - s.pos);
