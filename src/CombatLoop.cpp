@@ -413,7 +413,8 @@ void SweetsApp::UpdateShots(float dt)
                 }
                 DamageBoss(ReflectedDamage(s), kind, s.reflected, s.ownerIndex);
                 s.hitBoss = true;
-                if (s.pierce > 0) --s.pierce;
+                if (s.charged) s.dead = true;
+                else if (s.pierce > 0) --s.pierce;
                 else s.dead = true;
             }
         }

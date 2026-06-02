@@ -103,6 +103,7 @@ void SweetsApp::StartHiddenBoss()
     hiddenBossDashChainDuration_ = 0.0f;
     hiddenBossDashChainSpeed_ = 0.0f;
     hiddenBossDashGlobalCd_ = 0.0f;
+    hiddenBossEdgePressureCd_ = 0.0f;
     hiddenBossReflectT_ = 0.0f;
     hiddenBossCloneCd_ = 0.0f;
     hiddenBossIdleBasePos_ = boss_.pos;
@@ -318,6 +319,7 @@ void SweetsApp::UpdateHiddenBoss(float dt)
     if (hiddenBossDashRecoverT_ > 0.0f) hiddenBossDashRecoverT_ = std::max(0.0f, hiddenBossDashRecoverT_ - dt);
     if (hiddenBossDashChainGapT_ > 0.0f) hiddenBossDashChainGapT_ = std::max(0.0f, hiddenBossDashChainGapT_ - dt);
     if (hiddenBossDashGlobalCd_ > 0.0f) hiddenBossDashGlobalCd_ = std::max(0.0f, hiddenBossDashGlobalCd_ - dt);
+    if (hiddenBossEdgePressureCd_ > 0.0f) hiddenBossEdgePressureCd_ = std::max(0.0f, hiddenBossEdgePressureCd_ - dt);
 
     const bool dashWasActive = hiddenBossDashT_ > 0.0f;
     bool dashActive = hiddenBossDashT_ > 0.0f;
@@ -418,6 +420,59 @@ void SweetsApp::UpdateHiddenBoss(float dt)
     UpdateCoopPlayers(dt);
     UpdateHiddenBossCores(dt);
     UpdateEnemies(dt);
+    if (hiddenBossEdgePressureCd_ <= 0.0f
+        && hiddenBossDashWarnT_ <= 0.0f
+        && hiddenBossDashT_ <= 0.0f
+        && hiddenBossPhaseIntroT_ <= 0.0f)
+    {
+        Player* edgeTarget = nullptr;
+        float edgeDist = 0.0f;
+        for (auto& p : players_)
+        {
+            if (!p.active || p.downed) continue;
+            const float d = Len(p.pos);
+            if (d > edgeDist)
+            {
+                edgeDist = d;
+                edgeTarget = &p;
+            }
+        }
+        const float trigger = ArenaRadius * (hiddenBossForm_ >= 3 ? 0.70f : 0.76f);
+        if (edgeTarget && edgeDist >= trigger)
+        {
+            V2 radial = Normalize(edgeTarget->pos);
+            if (LenSq(radial) <= 0.001f) radial = FromAngle(boss_.spin);
+            const V2 tangent{ -radial.z, radial.x };
+            const float orbitSign = Dot(edgeTarget->vel, tangent) >= 0.0f ? 1.0f : -1.0f;
+            const int lanes = hiddenBossForm_ >= 3 ? 7 : 5;
+            const float speed = hiddenBossForm_ >= 3 ? 3.85f : 3.25f;
+            const Color color = hiddenBossForm_ >= 3 ? Red : (hiddenBossForm_ == 2 ? Gold : Sky);
+            const V2 centerCut = edgeTarget->pos - radial * (hiddenBossForm_ >= 3 ? 3.1f : 2.4f);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                V2 origin = edgeTarget->pos + tangent * (orbitSign * side * 4.2f) + radial * 1.8f;
+                ClampInside(origin, 0.70f);
+                const float base = AngleOf(centerCut - origin);
+                const int half = lanes / 2;
+                for (int i = -half; i <= half; ++i)
+                {
+                    SpawnEnemyShot(origin, base + i * 0.115f, speed + 0.05f * static_cast<float>(std::abs(i)),
+                        boss_.atk * 0.50f, 0.066f, color, 6.2f, 0.0f, -0.018f);
+                }
+            }
+            EffectPulse pulse{};
+            pulse.pos = edgeTarget->pos;
+            pulse.startRadius = 0.45f;
+            pulse.endRadius = hiddenBossForm_ >= 3 ? 2.8f : 2.25f;
+            pulse.ttl = 0.30f;
+            pulse.life = pulse.ttl;
+            pulse.y = 0.22f;
+            pulse.color = color;
+            pulse.pos3 = Grounded3D(pulse.pos, pulse.y);
+            effectPulses_.push_back(pulse);
+            hiddenBossEdgePressureCd_ = hiddenBossForm_ >= 3 ? 0.82f : 1.12f;
+        }
+    }
     if (hiddenBossDashT_ > 0.0f)
     {
         for (auto& p : players_)
@@ -449,6 +504,7 @@ void SweetsApp::UpdateHiddenBoss(float dt)
         hiddenBossDashChainDuration_ = 0.0f;
         hiddenBossDashChainSpeed_ = 0.0f;
         hiddenBossDashGlobalCd_ = 0.0f;
+        hiddenBossEdgePressureCd_ = 0.0f;
         hiddenBossReflectT_ = 0.0f;
         hiddenBossCloneCd_ = 0.0f;
         hiddenBossIdleBasePos_ = boss_.pos;

@@ -445,6 +445,7 @@ private:
     float hiddenBossDashChainDuration_ = 0.0f;
     float hiddenBossDashChainSpeed_ = 0.0f;
     float hiddenBossDashGlobalCd_ = 0.0f;
+    float hiddenBossEdgePressureCd_ = 0.0f;
     float hiddenBossReflectT_ = 0.0f;
     float hiddenBossCloneCd_ = 0.0f;
     V2 hiddenBossIdleBasePos_{};
