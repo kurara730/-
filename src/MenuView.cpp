@@ -820,6 +820,23 @@ void SweetsApp::DrawSettingsMenu()
             D2D1::RectF(rect.left, rect.top + 7.0f, rect.right, rect.bottom), textBrush_.Get());
     }
 
+    const UiRect& fullscreenHit = layout.fullscreenToggle;
+    const D2D1_RECT_F fullscreenRect = D2D1::RectF(fullscreenHit.left, fullscreenHit.top, fullscreenHit.right, fullscreenHit.bottom);
+    const bool fullscreenHover = PointInRect(mouseX_, mouseY_, fullscreenHit.left, fullscreenHit.top, fullscreenHit.right, fullscreenHit.bottom);
+    const bool fullscreenActive = fullscreenHover || fullscreen_;
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.92f));
+    const wchar_t* fullscreenLabel = L"Fullscreen";
+    d2dContext_->DrawTextW(fullscreenLabel, static_cast<UINT32>(wcslen(fullscreenLabel)), smallFormat_.Get(),
+        D2D1::RectF(left + 38.0f, fullscreenHit.top + 6.0f, left + 180.0f, fullscreenHit.bottom), textBrush_.Get());
+    textBrush_->SetColor(OldSelectFill(fullscreenActive));
+    d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(fullscreenRect, 6.0f, 6.0f), textBrush_.Get());
+    textBrush_->SetColor(OldSelectStroke(fullscreenActive));
+    d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(fullscreenRect, 6.0f, 6.0f), textBrush_.Get(), fullscreenActive ? 2.2f : 1.0f);
+    const wchar_t* fullscreenText = fullscreen_ ? L"ON" : L"OFF";
+    textBrush_->SetColor(OldSelectText(fullscreenActive));
+    d2dContext_->DrawTextW(fullscreenText, static_cast<UINT32>(wcslen(fullscreenText)), smallFormat_.Get(),
+        D2D1::RectF(fullscreenRect.left, fullscreenRect.top + 7.0f, fullscreenRect.right, fullscreenRect.bottom), textBrush_.Get());
+
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
     textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f));
     const wchar_t* hint = L"スライダーと攻撃方向をクリックで操作。Esc / Backspaceで戻る";

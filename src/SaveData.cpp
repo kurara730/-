@@ -57,24 +57,29 @@ void SweetsApp::LoadProgress()
     seVolume_ = 1.0f;
     uiVolume_ = 1.0f;
     aimMode_ = AimMode::MoveDirection;
+    bool savedFullscreen = false;
     const std::filesystem::path path = SaveFilePath();
     std::ifstream in(path);
-    if (!in) return;
-
-    std::string line;
-    while (std::getline(in, line))
+    if (in)
     {
-        if (line == "hiddenBossUnlocked=1")
+        std::string line;
+        while (std::getline(in, line))
         {
-            hiddenBossUnlocked_ = true;
+            if (line == "hiddenBossUnlocked=1")
+            {
+                hiddenBossUnlocked_ = true;
+            }
+            masterVolume_ = ParseSaveFloat(line, "masterVolume", masterVolume_);
+            bgmVolume_ = ParseSaveFloat(line, "bgmVolume", bgmVolume_);
+            seVolume_ = ParseSaveFloat(line, "seVolume", seVolume_);
+            uiVolume_ = ParseSaveFloat(line, "uiVolume", uiVolume_);
+            aimMode_ = static_cast<AimMode>(ParseSaveInt(line, "aimMode", static_cast<int>(aimMode_), 0, 2));
+            savedFullscreen = ParseSaveInt(line, "fullscreen", savedFullscreen ? 1 : 0, 0, 1) != 0;
         }
-        masterVolume_ = ParseSaveFloat(line, "masterVolume", masterVolume_);
-        bgmVolume_ = ParseSaveFloat(line, "bgmVolume", bgmVolume_);
-        seVolume_ = ParseSaveFloat(line, "seVolume", seVolume_);
-        uiVolume_ = ParseSaveFloat(line, "uiVolume", uiVolume_);
-        aimMode_ = static_cast<AimMode>(ParseSaveInt(line, "aimMode", static_cast<int>(aimMode_), 0, 2));
     }
     ApplyAudioVolume();
+    SetFullscreen(savedFullscreen, false);
+    settingsLoaded_ = true;
 }
 
 void SweetsApp::SaveSettings()
@@ -90,6 +95,7 @@ void SweetsApp::SaveSettings()
     out << "seVolume=" << ClampFloat(seVolume_, 0.0f, 1.0f) << "\n";
     out << "uiVolume=" << ClampFloat(uiVolume_, 0.0f, 1.0f) << "\n";
     out << "aimMode=" << static_cast<int>(aimMode_) << "\n";
+    out << "fullscreen=" << (fullscreen_ ? 1 : 0) << "\n";
 }
 
 void SweetsApp::SaveProgress()

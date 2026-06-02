@@ -7,6 +7,74 @@
 
 LRESULT CALLBACK WindowProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
+void SweetsApp::SetFullscreen(bool enabled, bool save)
+{
+    if (!hwnd_ || fullscreen_ == enabled)
+    {
+        if (save && settingsLoaded_)
+        {
+            SaveSettings();
+        }
+        return;
+    }
+
+    if (enabled)
+    {
+        windowStyle_ = static_cast<DWORD>(GetWindowLongPtr(hwnd_, GWL_STYLE));
+        windowExStyle_ = static_cast<DWORD>(GetWindowLongPtr(hwnd_, GWL_EXSTYLE));
+        windowPlacement_.length = sizeof(windowPlacement_);
+        GetWindowPlacement(hwnd_, &windowPlacement_);
+
+        MONITORINFO monitorInfo{};
+        monitorInfo.cbSize = sizeof(monitorInfo);
+        const HMONITOR monitor = MonitorFromWindow(hwnd_, MONITOR_DEFAULTTONEAREST);
+        if (!GetMonitorInfoW(monitor, &monitorInfo))
+        {
+            return;
+        }
+
+        const RECT& rc = monitorInfo.rcMonitor;
+        const DWORD borderlessStyle = windowStyle_ & ~(WS_CAPTION | WS_THICKFRAME);
+        const DWORD borderlessExStyle = windowExStyle_ & ~(WS_EX_DLGMODALFRAME | WS_EX_WINDOWEDGE | WS_EX_CLIENTEDGE | WS_EX_STATICEDGE);
+        SetWindowLongPtr(hwnd_, GWL_STYLE, static_cast<LONG_PTR>(borderlessStyle));
+        SetWindowLongPtr(hwnd_, GWL_EXSTYLE, static_cast<LONG_PTR>(borderlessExStyle));
+        SetWindowPos(
+            hwnd_,
+            HWND_TOP,
+            rc.left,
+            rc.top,
+            rc.right - rc.left,
+            rc.bottom - rc.top,
+            SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+    }
+    else
+    {
+        SetWindowLongPtr(hwnd_, GWL_STYLE, static_cast<LONG_PTR>(windowStyle_));
+        SetWindowLongPtr(hwnd_, GWL_EXSTYLE, static_cast<LONG_PTR>(windowExStyle_));
+        windowPlacement_.length = sizeof(windowPlacement_);
+        SetWindowPlacement(hwnd_, &windowPlacement_);
+        SetWindowPos(
+            hwnd_,
+            nullptr,
+            0,
+            0,
+            0,
+            0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+    }
+
+    fullscreen_ = enabled;
+    if (save && settingsLoaded_)
+    {
+        SaveSettings();
+    }
+}
+
+void SweetsApp::ToggleFullscreen()
+{
+    SetFullscreen(!fullscreen_, true);
+}
+
 // 最小限の初期化を行い、重い素材読み込みはロード画面へ回します。
 bool SweetsApp::Initialize(HINSTANCE instance, int showCmd)
 {
@@ -119,6 +187,17 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             Resize(static_cast<UINT>(LOWORD(lp)), static_cast<UINT>(HIWORD(lp)));
         }
         return 0;
+    case WM_SYSKEYDOWN:
+        if (wp == VK_RETURN && (HIWORD(lp) & KF_ALTDOWN))
+        {
+            const bool repeat = (lp & (1 << 30)) != 0;
+            if (!repeat)
+            {
+                ToggleFullscreen();
+            }
+            return 0;
+        }
+        return DefWindowProc(hwnd, msg, wp, lp);
     case WM_KEYDOWN:
         if (wp < MaxKeys)
         {

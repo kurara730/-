@@ -61,6 +61,8 @@ private:
     void EnsureGameplayAssetsReady();
     Mesh CreateMesh(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices);
     void Resize(UINT w, UINT h);
+    void SetFullscreen(bool enabled, bool save);
+    void ToggleFullscreen();
 
     // --- ゲーム進行 ---
     // ラン開始、Wave 進行、ボス/敵/アイテム生成など、ゲームルールの大枠です。
@@ -239,6 +241,7 @@ private:
     bool HandlePauseDrag(float sx, float sy);
     bool HandleSettingsClick(float sx, float sy);
     void SetAimMode(AimMode mode, bool save);
+    void SetFullscreenFromSettings(bool enabled);
     void SetVolumeSlider(int index, float value, bool save);
     float VolumeSliderValue(int index) const;
     float* MutableVolumeSliderValue(int index);
@@ -263,6 +266,11 @@ private:
     UINT width_ = 1280;
     UINT height_ = 800;
     bool comInitialized_ = false;
+    bool settingsLoaded_ = false;
+    bool fullscreen_ = false;
+    DWORD windowStyle_ = WS_OVERLAPPEDWINDOW;
+    DWORD windowExStyle_ = 0;
+    WINDOWPLACEMENT windowPlacement_{};
 
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> context_;

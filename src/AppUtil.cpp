@@ -226,7 +226,7 @@ SettingsLayout SweetsApp::BuildSettingsLayout() const
 {
     SettingsLayout layout{};
     const float panelW = 480.0f;
-    const float panelH = 400.0f;
+    const float panelH = 452.0f;
     const float left = (static_cast<float>(width_) - panelW) * 0.5f;
     const float top = (static_cast<float>(height_) - panelH) * 0.5f;
     layout.panel = { left, top, left + panelW, top + panelH };
@@ -246,6 +246,7 @@ SettingsLayout SweetsApp::BuildSettingsLayout() const
         const float x = aimStartX + i * (aimButtonW + 10.0f);
         layout.aimButtons[i] = { x, aimTop, x + aimButtonW, aimTop + aimButtonH };
     }
+    const float fullscreenTop = aimTop + 54.0f;
+    layout.fullscreenToggle = { left + panelW - 148.0f, fullscreenTop, left + panelW - 48.0f, fullscreenTop + 32.0f };
     return layout;
 }
-
