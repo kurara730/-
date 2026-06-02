@@ -306,14 +306,37 @@ void SweetsApp::DrawScene()
             }
             continue;
         }
+        if (s.visual == ShotVisualKind::Blade)
+        {
+            const float angle = AngleOf(s.vel);
+            DrawSprite2D(L"effect_sword_line", s.pos, { s.radius * 4.2f, s.radius * 15.5f }, angle - Pi * 0.5f, WithAlpha(Grape, 0.88f), 0.247f);
+            DrawSprite2D(L"2d_slash", s.pos + FromAngle(angle) * (s.radius * 1.6f), { s.radius * 8.0f, s.radius * 4.6f }, angle, WithAlpha(Red, 0.58f), 0.246f);
+            spriteCanvas_.DrawRing(s.pos, s.radius * 2.05f, 0.045f, WithAlpha(Red, 0.58f), 0.245f, 28);
+            if (s.reflected)
+            {
+                spriteCanvas_.DrawRing(s.pos, s.radius * (2.3f + 0.35f * s.reflectedCount), 0.055f, WithAlpha(Gold, 0.66f), 0.244f, 32);
+            }
+            continue;
+        }
         const wchar_t* id = s.enemy ? L"2d_shot_enemy" : L"2d_shot_player";
-        const float size = s.radius * (s.enemy ? 3.35f : 3.05f) * (s.charged ? 1.55f : 1.0f);
-        DrawSprite2D(id, s.pos, { size, size }, AngleOf(s.vel), s.color, s.enemy ? 0.25f : 0.24f);
+        const float size = s.radius * (s.enemy ? 3.35f : 3.05f) * (s.charged ? 1.55f : 1.0f) * (s.visual == ShotVisualKind::Homing ? 1.14f : 1.0f);
+        const Color shotColor = s.hiddenBossAuraKey ? WithAlpha(Gold, 1.0f) : (s.enemy && s.visual == ShotVisualKind::Homing ? WithAlpha(Red, 0.98f) : s.color);
+        DrawSprite2D(id, s.pos, { size, size }, AngleOf(s.vel), shotColor, s.enemy ? 0.25f : 0.24f);
         if (s.enemy)
         {
-            spriteCanvas_.DrawRing(s.pos, s.radius * 1.75f, 0.035f, WithAlpha(Cream, 0.35f), 0.27f, 24);
+            const Color outer = s.hiddenBossAuraKey ? Gold : (s.visual == ShotVisualKind::Homing ? Grape : Red);
+            spriteCanvas_.DrawRing(s.pos, s.radius * (s.hiddenBossAuraKey ? 2.35f : (s.visual == ShotVisualKind::Homing ? 2.15f : 1.85f)), 0.045f, WithAlpha(outer, s.hiddenBossAuraKey ? 0.76f : 0.58f), 0.27f, 28);
+            spriteCanvas_.DrawRing(s.pos, s.radius * 1.28f, 0.026f, WithAlpha(Cream, 0.30f), 0.269f, 24);
+            if (s.hiddenBossAuraKey)
+            {
+                spriteCanvas_.DrawRing(s.pos, s.radius * 2.95f, 0.035f, WithAlpha(Cream, 0.58f), 0.268f, 32);
+            }
         }
-        else if (s.reflected)
+        else
+        {
+            spriteCanvas_.DrawRing(s.pos, s.radius * 1.45f, 0.026f, WithAlpha(Sky, 0.26f), 0.269f, 24);
+        }
+        if (s.reflected)
         {
             spriteCanvas_.DrawRing(s.pos, s.radius * (2.0f + 0.35f * s.reflectedCount), 0.045f, WithAlpha(Gold, 0.52f), 0.26f, 28);
         }
@@ -322,8 +345,15 @@ void SweetsApp::DrawScene()
     {
         Color c = e.flash > 0.0f ? Cream : e.color;
         if (e.barrierT > 0.0f) c = Sky;
-        DrawSprite2D(EnemySpriteId(e.type), e.pos, { e.radius * 2.45f, e.radius * 2.45f }, e.face, c, 0.22f);
-        if (e.type == EnemyType::Teleport || e.type == EnemyType::Mirror || e.type == EnemyType::Barrier)
+        const wchar_t* enemySprite = e.hiddenBossClone ? L"2d_boss_hidden" : EnemySpriteId(e.type);
+        const float enemySize = e.radius * (e.hiddenBossClone ? 3.05f : 2.45f);
+        DrawSprite2D(enemySprite, e.pos, { enemySize, enemySize }, e.face, c, 0.22f);
+        if (e.hiddenBossClone)
+        {
+            spriteCanvas_.DrawRing(e.pos, e.radius * 1.62f, 0.060f, WithAlpha(Cream, 0.26f), 0.219f, 56);
+            spriteCanvas_.DrawRing(e.pos, e.radius * 1.98f, 0.035f, WithAlpha(Color{ 0.62f, 0.64f, 0.70f, 1.0f }, 0.42f), 0.218f, 56);
+        }
+        else if (e.type == EnemyType::Teleport || e.type == EnemyType::Mirror || e.type == EnemyType::Barrier)
         {
             const Player* target = FindNearestPlayer(e.pos);
             const float face = target ? AngleOf(target->pos - e.pos) : e.face;
@@ -346,6 +376,17 @@ void SweetsApp::DrawScene()
 #endif
             spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (1.85f + pulse), 0.14f, WithAlpha(Gold, ClampFloat(strength * auraFx, 0.0f, 1.0f)), 0.17f, 96);
             spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (2.28f - pulse), 0.08f, WithAlpha(Cream, ClampFloat(strength * 0.48f * auraFx, 0.0f, 1.0f)), 0.16f, 96);
+        }
+        if (boss_.bossType == BossType::HiddenBoss && hiddenBossReflectT_ > 0.0f)
+        {
+            const float pulse = 0.16f * std::sin(gameTime_ * 16.0f);
+            spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (2.60f + pulse), 0.18f, WithAlpha(Gold, 0.82f), 0.155f, 112);
+            spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (3.02f - pulse), 0.08f, WithAlpha(Cream, 0.58f), 0.154f, 112);
+        }
+        if (boss_.bossType == BossType::HiddenBoss && hiddenBossDashWarnT_ > 0.0f)
+        {
+            const float warn = ClampFloat(hiddenBossDashWarnT_ / std::max(0.01f, hiddenBossDashWarnLife_), 0.0f, 1.0f);
+            spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (1.30f + (1.0f - warn) * 0.75f), 0.10f, WithAlpha(Red, 0.76f), 0.153f, 80);
         }
         if (boss_.bossType == BossType::HiddenBoss && hiddenBossForm_ == 1)
         {
@@ -511,8 +552,14 @@ void SweetsApp::DrawAdditiveScene()
 
     for (const auto& s : shots_)
     {
-        const float glow = s.enemy ? 2.1f : (s.reflected ? 2.8f : 1.7f);
-        spriteCanvas_.DrawCircle(s.pos, s.radius * glow, WithAlpha(s.color, fxAlpha(s.enemy ? 0.42f * enemyGlowFx : 0.55f)), 0.06f, 24);
+        if (s.visual == ShotVisualKind::Blade)
+        {
+            DrawSprite2D(L"effect_sword_line", s.pos, { s.radius * 5.0f, s.radius * 18.0f }, AngleOf(s.vel) - Pi * 0.5f, WithAlpha(Red, fxAlpha(0.52f * enemyGlowFx)), 0.055f);
+            continue;
+        }
+        const float glow = s.hiddenBossAuraKey ? 3.0f : (s.enemy ? (s.visual == ShotVisualKind::Homing ? 2.55f : 2.1f) : (s.reflected ? 2.8f : 1.7f));
+        const Color glowColor = s.hiddenBossAuraKey ? Gold : (s.enemy && s.visual == ShotVisualKind::Homing ? Grape : s.color);
+        spriteCanvas_.DrawCircle(s.pos, s.radius * glow, WithAlpha(glowColor, fxAlpha(s.enemy ? (s.hiddenBossAuraKey ? 0.62f : 0.42f) * enemyGlowFx : 0.55f)), 0.06f, 24);
     }
     for (const auto& s : slashes_)
     {

@@ -160,6 +160,7 @@ struct Enemy
     int score = 100;
     Color color = Rose;
     bool dead = false;
+    bool hiddenBossClone = false;
     bool caught = false;        // チョコ最大弾に巻き込まれて固定中
     V2 caughtOffset{};          // 弾中心からの相対位置
 };
@@ -211,6 +212,13 @@ struct BossGimmickState
 // 弾1発分の状態です。
 // enemy=true は敵弾、false は味方弾です。反射すると enemy が false になり ownerIndex が入ります。
 // hitBoss は貫通弾や斬撃波が同じボスへ毎フレーム多段ヒットしないための印です。
+enum class ShotVisualKind
+{
+    Orb,
+    Homing,
+    Blade
+};
+
 struct Shot
 {
     V2 pos{};
@@ -245,6 +253,8 @@ struct Shot
     bool hitBoss = false;
     bool yoyo = false;
     bool ultimateSource = false;
+    bool hiddenBossAuraKey = false;
+    ShotVisualKind visual = ShotVisualKind::Orb;
     Color color = Cream;
 };
 
