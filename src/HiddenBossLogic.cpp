@@ -1,4 +1,4 @@
-#include "SweetsApp.h"
+﻿#include "SweetsApp.h"
 
 #include <algorithm>
 #include <sstream>
@@ -723,9 +723,28 @@ void SweetsApp::UpdateHiddenBoss(float dt)
             spawnVisualAt(origin, angle, speed, 0.090f, Gold, ttl, ShotVisualKind::Orb, 0.58f, 0.0f, true, curve, accel);
         };
 
+        Player* targetPlayer = FindNearestPlayer(boss_.pos);
+        const V2 targetPos = targetPlayer ? targetPlayer->pos : player_.pos;
+        auto edgeOrigin = [&](float angleOffset)
+        {
+            V2 origin = targetPos + FromAngle(AngleOf(targetPos - boss_.pos) + angleOffset) * 7.8f;
+            ClampInside(origin, 0.75f);
+            return origin;
+        };
+        auto spawnPressureFan = [&](float sideAngle, int lanes, Color color, float speed, float ttl)
+        {
+            const V2 origin = edgeOrigin(sideAngle);
+            const float toTarget = AngleOf(targetPos - origin);
+            const int half = lanes / 2;
+            for (int i = -half; i <= half; ++i)
+            {
+                spawnAt(origin, toTarget + i * 0.105f, speed + 0.06f * std::abs(i), 0.066f, color, ttl, 0.0f, -0.018f);
+            }
+        };
+
         const int phase = hiddenBossPhase_;
-        Player* attackTarget = FindNearestPlayer(boss_.pos);
-        const float aimed = AngleOf((attackTarget ? attackTarget->pos : player_.pos) - boss_.pos);
+        Player* attackTarget = targetPlayer;
+        const float aimed = AngleOf(targetPos - boss_.pos);
         const int pattern = hiddenPatternStep_ % 5;
         // 第1形態: 炎核を壊すギミック。
         // 核破壊前は弾密度を抑え、核を見つけて壊す余裕を残します。
@@ -738,7 +757,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                 for (int i = -fan; i <= fan; ++i) spawn(aimed + i * 0.15f, open ? 3.45f : 2.70f, 0.073f, open ? Gold : Sky, 5.8f);
                 const int ringCount = open ? 14 : 8;
                 for (int i = 0; i < ringCount; ++i) spawn(boss_.spin + TwoPi * i / static_cast<float>(ringCount), open ? 2.20f : 1.65f, 0.070f, open ? Red : Grape, 6.2f, open ? 0.06f : 0.03f);
-                hiddenPatternCd_ = open ? 0.68f : 0.95f;
+                if ((hiddenPatternStep_ % 2) == 0) spawnPressureFan(Pi * 0.56f, open ? 7 : 5, Mint, open ? 3.95f : 3.20f, 7.0f);
+                hiddenPatternCd_ = open ? 0.58f : 0.82f;
             }
             else if (pattern == 1)
             {
@@ -748,7 +768,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                     spawn(a, open ? 3.00f : 2.25f, 0.070f, open ? Gold : Mint, 6.4f, 0.04f);
                     if (open && std::abs(lane) == 2) spawn(a + 0.32f, 2.25f, 0.068f, Sky, 6.2f, -0.04f);
                 }
-                hiddenPatternCd_ = open ? 0.62f : 0.90f;
+                spawnPressureFan(-Pi * 0.62f, open ? 7 : 5, open ? Sky : Grape, open ? 3.85f : 3.15f, 6.8f);
+                hiddenPatternCd_ = open ? 0.54f : 0.78f;
             }
             else if (pattern == 2)
             {
@@ -758,7 +779,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                     const float speed = (i & 1) ? (open ? 3.05f : 2.35f) : (open ? 1.80f : 1.45f);
                     spawn(boss_.spin * 0.9f + TwoPi * i / static_cast<float>(count), speed, 0.072f, (i & 1) ? Gold : Grape, 6.8f, (i & 1) ? 0.08f : -0.04f);
                 }
-                hiddenPatternCd_ = open ? 0.72f : 1.05f;
+                if (open) spawnPressureFan((hiddenPatternStep_ & 1) ? Pi * 0.70f : -Pi * 0.70f, 7, Cream, 3.60f, 7.2f);
+                hiddenPatternCd_ = open ? 0.62f : 0.90f;
             }
             else if (pattern == 3)
             {
@@ -854,7 +876,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                 {
                     spawn(aimed + i * 0.18f, 2.15f, 0.066f, Mint, 6.0f, -i * 0.020f);
                 }
-                hiddenPatternCd_ = 0.95f;
+                spawnPressureFan(Pi * 0.54f, 5, Mint, 3.20f, 7.0f);
+                hiddenPatternCd_ = 0.86f;
             }
             else if (pattern == 0)
             {
@@ -864,7 +887,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                     spawn(a, 2.85f, 0.074f, Gold, 6.4f, (arm & 1) ? -0.14f : 0.14f, 0.02f);
                     spawn(a + 0.22f, 3.25f, 0.070f, Red, 5.4f, (arm & 1) ? -0.08f : 0.08f);
                 }
-                hiddenPatternCd_ = 0.66f;
+                spawnPressureFan(-Pi * 0.58f, 7, Gold, 3.90f, 6.8f);
+                hiddenPatternCd_ = 0.56f;
             }
             else if (!broken && pattern == 1)
             {
@@ -879,7 +903,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                     const float a = aimed + i * 0.18f;
                     spawnAuraKey(boss_.pos + FromAngle(a) * (boss_.radius + 0.32f), a, 2.65f, 6.8f, i * 0.030f);
                 }
-                hiddenPatternCd_ = 0.85f;
+                spawnPressureFan(-Pi * 0.64f, 5, Sky, 3.25f, 7.0f);
+                hiddenPatternCd_ = 0.78f;
             }
             else if (pattern == 1)
             {
@@ -889,7 +914,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                     spawn(aimed + i * 0.095f, 3.85f, 0.068f, i % 3 == 0 ? Gold : Cream, 5.0f, 0.0f, -0.025f);
                 }
                 for (int i = 0; i < 8; ++i) spawn(boss_.spin + TwoPi * i / 8.0f, 2.0f, 0.072f, Gold, 6.6f, 0.10f);
-                hiddenPatternCd_ = 0.62f;
+                spawnPressureFan(Pi * 0.64f, 7, Red, 4.05f, 6.4f);
+                hiddenPatternCd_ = 0.54f;
             }
             else if (pattern == 2)
             {
@@ -908,7 +934,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                         spawn(a, broken ? 3.05f : 2.35f, 0.074f, broken ? ((i % 4 == 0) ? Gold : Mint) : ((i & 1) ? Mint : Sky), 6.2f);
                     }
                 }
-                hiddenPatternCd_ = broken ? 0.68f : 0.95f;
+                spawnPressureFan((hiddenPatternStep_ & 1) ? Pi * 0.72f : -Pi * 0.72f, broken ? 7 : 5, Cream, broken ? 3.85f : 3.10f, 7.0f);
+                hiddenPatternCd_ = broken ? 0.58f : 0.82f;
             }
             else if (pattern == 3)
             {
@@ -970,7 +997,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                     spawn(a, 2.35f + (i % 3) * 0.16f, 0.066f, Cream, 6.8f, 0.025f * std::sin(i * 1.7f));
                 }
                 for (int i = -2; i <= 2; ++i) spawn(aimed + i * 0.10f, 4.20f, 0.066f, Red, 4.0f, 0.0f, -0.025f);
-                hiddenPatternCd_ = 0.72f;
+                spawnPressureFan(Pi * 0.50f, 7, Sky, 4.15f, 6.2f);
+                hiddenPatternCd_ = 0.58f;
             }
             else if (pattern == 1)
             {
@@ -980,7 +1008,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                     spawn(a, 2.85f + 0.08f * (i % 4), 0.066f, (i & 1) ? Gold : Grape, 5.2f, (i & 1) ? 0.14f : -0.14f, 0.03f);
                     if (i % 2 == 0) spawn(a + 0.09f, 2.20f, 0.064f, Cream, 6.0f, (i & 1) ? -0.08f : 0.08f);
                 }
-                hiddenPatternCd_ = 0.68f;
+                spawnPressureFan(-Pi * 0.50f, 7, Gold, 4.00f, 6.4f);
+                hiddenPatternCd_ = 0.56f;
             }
             else if (pattern == 2)
             {
@@ -1038,7 +1067,8 @@ void SweetsApp::UpdateHiddenBoss(float dt)
                         spawn(a, 2.35f, 0.064f, (i & 1) ? Grape : Cream, 5.8f, (i & 1) ? 0.08f : -0.08f);
                     }
                 }
-                hiddenPatternCd_ = 1.18f;
+                spawnPressureFan((hiddenPatternStep_ & 1) ? Pi * 0.62f : -Pi * 0.62f, dashStarted ? 7 : 5, Red, dashStarted ? 3.75f : 3.35f, 6.2f);
+                hiddenPatternCd_ = dashStarted ? 1.18f : 1.05f;
             }
         }
         ++hiddenPatternStep_;

@@ -1,4 +1,4 @@
-#include "SweetsApp.h"
+﻿#include "SweetsApp.h"
 
 #include <filesystem>
 #include <iomanip>
@@ -162,7 +162,6 @@ void SweetsApp::DrawHud()
         << L"   ウェーブ " << wave_
         << L"   ステージ " << StageName(stage_)
         << L"   " << CurrentDifficulty().name
-        << L"   反射 " << reflectKills_
         << L"   フィーバー " << static_cast<int>(player_.fever) << L"%";
     if (screen_ == Screen::HiddenBoss)
     {
@@ -321,31 +320,8 @@ void SweetsApp::DrawHud()
     d2dContext_->DrawTextW(help, static_cast<UINT32>(wcslen(help)), smallFormat_.Get(),
         D2D1::RectF(18.0f, static_cast<float>(height_) - 34.0f, static_cast<float>(width_) - 18.0f, static_cast<float>(height_) - 8.0f), textBrush_.Get());
 
-    if (messageT_ > 0.0f && !message_.empty())
-    {
-        hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, ClampFloat(messageT_, 0.0f, 1.0f)));
-        d2dContext_->DrawTextW(message_.c_str(), static_cast<UINT32>(message_.size()), hudFormat_.Get(),
-            D2D1::RectF(18.0f, static_cast<float>(height_) - 86.0f, static_cast<float>(width_) - 18.0f, static_cast<float>(height_) - 48.0f), textBrush_.Get());
-        hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
-    }
-
-    if (!combatNotices_.empty())
-    {
-        smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-        const float baseY = static_cast<float>(height_) - 132.0f;
-        const size_t start = combatNotices_.size() > 3 ? combatNotices_.size() - 3 : 0;
-        for (size_t i = start; i < combatNotices_.size(); ++i)
-        {
-            const CombatNotice& notice = combatNotices_[i];
-            const float a = notice.life > 0.0f ? ClampFloat(notice.ttl / notice.life, 0.0f, 1.0f) : 1.0f;
-            const float y = baseY - static_cast<float>(combatNotices_.size() - 1 - i) * 22.0f;
-            textBrush_->SetColor(D2D1::ColorF(notice.color.r, notice.color.g, notice.color.b, 0.88f * a));
-            d2dContext_->DrawTextW(notice.text.c_str(), static_cast<UINT32>(notice.text.size()), smallFormat_.Get(),
-                D2D1::RectF(18.0f, y, static_cast<float>(width_) - 18.0f, y + 22.0f), textBrush_.Get());
-        }
-        smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
-    }
+    // 下部に出ていた短文通知は表示しません。
+    // message_ と combatNotices_ 自体は内部状態として残し、ゲーム進行やデバッグ処理には影響させないようにします。
 
     if (screen_ == Screen::HiddenBoss && hiddenBossPhaseIntroT_ > 0.0f)
     {
@@ -1010,7 +986,7 @@ void SweetsApp::DrawDebugHud()
 }
 
 // 難易度選択画面です。
-// 倍率や%ではなく、弾数/弾速/ボムなど実際に使う数値を読める形で表示します。
+// 数値比較ではなく、難易度名・説明・初期ボムだけを見せる画面です。
 void SweetsApp::DrawDifficultySelection()
 {
     textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 1.0f));
@@ -1066,10 +1042,7 @@ void SweetsApp::DrawDifficultySelection()
             D2D1::RectF(x + 12.0f, y + 44.0f, x + cardW - 12.0f, y + 66.0f), textBrush_.Get());
 
         std::wostringstream stats;
-        stats << std::fixed << std::setprecision(2)
-            << L"弾数" << def.bulletCountMul
-            << L"  弾速" << def.bulletSpeedMul
-            << L"  ボム" << def.initialBombs;
+        stats << L"初期ボム " << def.initialBombs;
         const std::wstring statLine = stats.str();
         textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.90f));
         d2dContext_->DrawTextW(statLine.c_str(), static_cast<UINT32>(statLine.size()), smallFormat_.Get(),
@@ -1352,16 +1325,6 @@ void SweetsApp::DrawLoadoutSelection()
         d2dContext_->DrawTextW(text.c_str(), static_cast<UINT32>(text.size()), format, rect, textBrush_.Get());
     };
 
-    auto statBar = [&](float x, float y, float w, const wchar_t* label, float value, const std::wstring& valueText, const D2D1_COLOR_F& color)
-    {
-        drawText(label, smallFormat_.Get(), D2D1::RectF(x, y - 2.0f, x + 46.0f, y + 18.0f), D2D1::ColorF(0.86f, 0.74f, 0.80f, 1.0f));
-        fill(D2D1::RectF(x + 50.0f, y + 5.0f, x + w, y + 13.0f), D2D1::ColorF(0.22f, 0.10f, 0.16f, 0.95f));
-        textBrush_->SetColor(color);
-        const float barRight = x + 50.0f + (w - 112.0f) * ClampFloat(value, 0.0f, 1.0f);
-        d2dContext_->FillRectangle(D2D1::RectF(x + 50.0f, y + 5.0f, barRight, y + 13.0f), textBrush_.Get());
-        drawText(valueText, smallFormat_.Get(), D2D1::RectF(x + w - 58.0f, y - 2.0f, x + w, y + 18.0f), D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.95f));
-    };
-
     for (int i = 0; i < static_cast<int>(Loadouts.size()); ++i)
     {
         const LoadoutPreset& loadout = Loadouts[i];
@@ -1389,19 +1352,6 @@ void SweetsApp::DrawLoadoutSelection()
         drawText(CharacterTexts[i].normal, smallFormat_.Get(), D2D1::RectF(x + 14.0f, top + 86.0f, x + cardW - 14.0f, top + 105.0f), D2D1::ColorF(0.95f, 0.85f, 0.88f, 0.95f));
         drawText(CharacterTexts[i].charge, smallFormat_.Get(), D2D1::RectF(x + 14.0f, top + 104.0f, x + cardW - 14.0f, top + 123.0f), D2D1::ColorF(0.78f, 0.88f, 1.0f, 0.95f));
         drawText(CharacterTexts[i].ultimate, smallFormat_.Get(), D2D1::RectF(x + 14.0f, top + 122.0f, x + cardW - 14.0f, top + 141.0f), D2D1::ColorF(1.0f, 0.82f, 0.28f, 0.95f));
-
-        const float statX = x + 14.0f;
-        const float statW = cardW - 28.0f;
-        auto statValue = [](float value, int precision = 2)
-        {
-            std::wostringstream ss;
-            ss << std::fixed << std::setprecision(precision) << value;
-            return ss.str();
-        };
-        statBar(statX, top + 145.0f, statW, L"体力", loadout.maxHp / 150.0f, statValue(loadout.maxHp, 0), accent);
-        statBar(statX, top + 161.0f, statW, L"速度", loadout.speed / 6.4f, statValue(loadout.speed), accent);
-        statBar(statX, top + 177.0f, statW, L"火力", loadout.damageMul / 1.35f, statValue(loadout.damageMul), accent);
-        statBar(statX, top + 193.0f, statW, L"連射", ClampFloat(1.35f - loadout.cooldownMul, 0.0f, 1.0f), statValue(loadout.cooldownMul), accent);
 
         if (selected)
         {
