@@ -179,6 +179,13 @@ void SweetsApp::CreateDevice()
 
     ComPtr<IDXGIDevice> dxgiDevice;
     ThrowIfFailed(device_.As(&dxgiDevice), "Query IDXGIDevice");
+    ComPtr<IDXGIAdapter> dxgiAdapter;
+    ComPtr<IDXGIFactory> dxgiFactory;
+    if (SUCCEEDED(dxgiDevice->GetAdapter(&dxgiAdapter)) &&
+        SUCCEEDED(dxgiAdapter->GetParent(IID_PPV_ARGS(&dxgiFactory))))
+    {
+        dxgiFactory->MakeWindowAssociation(hwnd_, DXGI_MWA_NO_ALT_ENTER);
+    }
 
     ID2D1Factory1* rawFactory = nullptr;
     ThrowIfFailed(D2D1CreateFactory(

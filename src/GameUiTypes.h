@@ -157,6 +157,7 @@ struct SettingsLayout
     UiRect panel{};
     std::array<UiRect, 4> volumeSliders{};
     std::array<UiRect, 3> aimButtons{};
+    UiRect fullscreenToggle{};
     float sliderLeft = 0.0f;
     float sliderRight = 0.0f;
 };

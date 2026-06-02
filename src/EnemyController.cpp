@@ -23,9 +23,10 @@ float HiddenBossDamageMultiplier(BossDamageKind kind)
     case BossDamageKind::Melee: return 0.75f;
     case BossDamageKind::Bomb: return 0.65f;
     case BossDamageKind::Ultimate: return 0.70f;
+    case BossDamageKind::HiddenBossAuraKey:
     case BossDamageKind::ReflectedShot: return 1.10f;
     case BossDamageKind::NormalShot:
-    default: return 1.0f;
+    default: return 0.92f;
     }
 }
 
@@ -37,15 +38,16 @@ float HiddenBossHitCap(float gaugeHp, BossDamageKind kind)
     {
     case BossDamageKind::Bomb:
     case BossDamageKind::Ultimate:
-        return gaugeHp * 0.10f;
+        return gaugeHp * 0.085f;
     case BossDamageKind::ReflectedShot:
-        return gaugeHp * 0.07f;
+    case BossDamageKind::HiddenBossAuraKey:
+        return gaugeHp * 0.060f;
     case BossDamageKind::NormalShot:
     case BossDamageKind::ChargeShot:
     case BossDamageKind::ChocolateCharge:
     case BossDamageKind::Melee:
     default:
-        return gaugeHp * 0.045f;
+        return gaugeHp * 0.036f;
     }
 }
 
@@ -56,7 +58,7 @@ bool IsChargeBossDamage(BossDamageKind kind)
 
 float NormalBossHitCap(float maxHp, BossDamageKind kind, bool reflected)
 {
-    if (reflected || kind == BossDamageKind::ReflectedShot) return maxHp * 0.14f;
+    if (reflected || kind == BossDamageKind::ReflectedShot || kind == BossDamageKind::HiddenBossAuraKey) return maxHp * 0.14f;
     switch (kind)
     {
     case BossDamageKind::Bomb:
@@ -830,10 +832,15 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
     {
         if (hiddenBossPhaseIntroT_ > 0.0f) return;
         const int oldForm = hiddenBossForm_;
-        const bool isReflected = reflected || kind == BossDamageKind::ReflectedShot;
+        const bool isAuraKey = kind == BossDamageKind::HiddenBossAuraKey;
+        const bool isReflected = reflected || kind == BossDamageKind::ReflectedShot || isAuraKey;
         bool reducedByLock = false;
         bool attackChance = false;
         float appliedDmg = dmg * HiddenBossDamageMultiplier(kind);
+        if (!hiddenBossPractice_ && kind == BossDamageKind::NormalShot && !isReflected)
+        {
+            appliedDmg *= 0.88f;
+        }
         // 1ゲージ目は炎核ギミック。核を壊すまでは本体ダメージを大きく軽減します。
         if (hiddenBossForm_ == 1)
         {
@@ -847,17 +854,17 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
                 appliedDmg *= 0.22f;
             }
         }
-        // 2ゲージ目は金色弾反射ギミック。反射回数が足りると一時的に攻撃チャンスになります。
+        // 2ゲージ目は金色キー弾反射ギミック。キー反射が足りると一時的に攻撃チャンスになります。
         else if (hiddenBossForm_ == 2)
         {
-            if (isReflected && hiddenBossAuraBreakT_ <= 0.0f)
+            if (isAuraKey && hiddenBossAuraBreakT_ <= 0.0f)
             {
                 ++hiddenBossReflectCount_;
                 Burst(boss_.pos, Gold, 18);
                 if (hiddenBossReflectCount_ >= HiddenBossReflectBreakCount)
                 {
                     hiddenBossReflectCount_ = 0;
-                    hiddenBossAuraBreakT_ = 7.0f;
+                    hiddenBossAuraBreakT_ = 5.5f;
                     for (auto& s : shots_) if (s.enemy) s.dead = true;
                     screenFlashT_ = 0.22f;
                     screenFlashLife_ = screenFlashT_;
@@ -876,7 +883,7 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
                 appliedDmg *= isReflected ? 0.45f : 0.15f;
             }
         }
-        appliedDmg = std::min(appliedDmg, HiddenBossHitCap(hiddenBossGaugeHp_, kind == BossDamageKind::ReflectedShot || isReflected ? BossDamageKind::ReflectedShot : kind));
+        appliedDmg = std::min(appliedDmg, HiddenBossHitCap(hiddenBossGaugeHp_, isReflected ? BossDamageKind::ReflectedShot : kind));
         if (IsChargeBossDamage(kind) && messageT_ < 0.35f)
         {
             message_ = reducedByLock ? L"本体ダメージ軽減中" : (attackChance ? L"チャージ有効" : L"チャージ命中");
@@ -915,6 +922,23 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
             hiddenBossAuraBreakT_ = 0.0f;
             hiddenBossReflectCount_ = 0;
             hiddenBossCores_ = {};
+            hiddenBossDashWarnT_ = 0.0f;
+            hiddenBossDashWarnLife_ = 0.0f;
+            hiddenBossDashT_ = 0.0f;
+            hiddenBossDashLife_ = 0.0f;
+            hiddenBossDashRecoverT_ = 0.0f;
+            hiddenBossDashChainLeft_ = 0;
+            hiddenBossDashChainGapT_ = 0.0f;
+            hiddenBossDashChainWarn_ = 0.0f;
+            hiddenBossDashChainDuration_ = 0.0f;
+            hiddenBossDashChainSpeed_ = 0.0f;
+            hiddenBossDashGlobalCd_ = 0.0f;
+            hiddenBossReflectT_ = 0.0f;
+            hiddenBossCloneCd_ = 0.0f;
+            hiddenBossIdleBasePos_ = boss_.pos;
+            hiddenBossFloatAnchorT_ = hiddenBossT_;
+            hiddenBossDashVel_ = {};
+            enemies_.clear();
             hiddenBossPhaseIntroLife_ = nextForm == 2 ? 1.6f : 1.0f;
             hiddenBossPhaseIntroT_ = hiddenBossPhaseIntroLife_;
             for (auto& s : shots_)
@@ -925,13 +949,13 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
             screenFlashT_ = nextForm == 2 ? 0.28f : 0.20f;
             screenFlashLife_ = screenFlashT_;
             screenFlashColor_ = Gold;
-            message_ = nextForm == 2 ? L"金色弾を弾き返せ" : L"最後は正面勝負";
+            message_ = nextForm == 2 ? L"金色キー弾を弾き返せ" : L"最後は正面勝負";
             messageT_ = 1.8f;
         }
         return;
     }
     float appliedDmg = dmg;
-    const bool isReflected = reflected || kind == BossDamageKind::ReflectedShot;
+    const bool isReflected = reflected || kind == BossDamageKind::ReflectedShot || kind == BossDamageKind::HiddenBossAuraKey;
     auto addNotice = [&](const std::wstring& text, Color color)
     {
         CombatNotice notice{};

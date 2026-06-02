@@ -98,7 +98,8 @@ enum class BossDamageKind
     Melee,
     Bomb,
     Ultimate,
-    ReflectedShot
+    ReflectedShot,
+    HiddenBossAuraKey
 };
 
 enum class BossPatternId

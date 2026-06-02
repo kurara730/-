@@ -191,14 +191,51 @@ void SweetsApp::DrawGameplay3D()
             }
             continue;
         }
+        if (s.visual == ShotVisualKind::Blade)
+        {
+            const float angle = AngleOf(s.vel);
+            DrawMesh(wedgeMesh_,
+                XMMatrixScaling(s.radius * 5.6f, 1.0f, s.radius * 2.4f) *
+                XMMatrixRotationY(-angle) *
+                XMMatrixTranslation(s.pos.x, s.height, s.pos.z),
+                WithAlpha(Grape, 0.86f));
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(s.radius * 2.45f, 1.0f, s.radius * 2.45f) *
+                XMMatrixTranslation(s.pos.x, s.height + 0.015f, s.pos.z),
+                WithAlpha(Red, 0.48f));
+            continue;
+        }
         const float scale = s.charged ? 1.55f : 1.0f;
-        DrawSphere(s.pos, s.height, s.radius * 1.75f * scale, s.color);
+        const Color shotColor = s.hiddenBossAuraKey ? Gold : (s.enemy && s.visual == ShotVisualKind::Homing ? Red : s.color);
+        DrawSphere(s.pos, s.height, s.radius * 1.75f * scale * (s.visual == ShotVisualKind::Homing ? 1.12f : 1.0f), shotColor);
         if (s.enemy)
         {
+            const Color ringColor = s.hiddenBossAuraKey ? Gold : (s.visual == ShotVisualKind::Homing ? Grape : Red);
             DrawMesh(ringMesh_,
-                XMMatrixScaling(s.radius * 2.25f, 1.0f, s.radius * 2.25f) *
+                XMMatrixScaling(s.radius * (s.hiddenBossAuraKey ? 3.10f : (s.visual == ShotVisualKind::Homing ? 2.70f : 2.25f)), 1.0f, s.radius * (s.hiddenBossAuraKey ? 3.10f : (s.visual == ShotVisualKind::Homing ? 2.70f : 2.25f))) *
                 XMMatrixTranslation(s.pos.x, s.height, s.pos.z),
-                WithAlpha(Cream, 0.26f));
+                WithAlpha(ringColor, s.hiddenBossAuraKey ? 0.62f : 0.42f));
+            if (s.hiddenBossAuraKey)
+            {
+                DrawMesh(ringMesh_,
+                    XMMatrixScaling(s.radius * 2.30f, 1.0f, s.radius * 2.30f) *
+                    XMMatrixTranslation(s.pos.x, s.height + 0.018f, s.pos.z),
+                    WithAlpha(Cream, 0.42f));
+            }
+        }
+        else
+        {
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(s.radius * 1.80f, 1.0f, s.radius * 1.80f) *
+                XMMatrixTranslation(s.pos.x, s.height, s.pos.z),
+                WithAlpha(Sky, 0.20f));
+        }
+        if (s.reflected)
+        {
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(s.radius * 2.95f, 1.0f, s.radius * 2.95f) *
+                XMMatrixTranslation(s.pos.x, s.height + 0.02f, s.pos.z),
+                WithAlpha(Gold, 0.56f));
         }
     }
 
@@ -207,8 +244,16 @@ void SweetsApp::DrawGameplay3D()
         if (e.dead) continue;
         Color c = e.flash > 0.0f ? Cream : e.color;
         if (e.barrierT > 0.0f) c = Sky;
-        DrawSphere(e.pos, e.height, e.radius, c);
-        DrawCylinder(e.pos, e.radius * 0.62f, e.height, WithAlpha(c, 0.42f));
+        const float cloneScale = e.hiddenBossClone ? 1.12f : 1.0f;
+        DrawSphere(e.pos, e.height, e.radius * cloneScale, c);
+        DrawCylinder(e.pos, e.radius * (e.hiddenBossClone ? 0.74f : 0.62f), e.height, WithAlpha(c, e.hiddenBossClone ? 0.34f : 0.42f));
+        if (e.hiddenBossClone)
+        {
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(e.radius * 1.78f, 1.0f, e.radius * 1.78f) *
+                XMMatrixTranslation(e.pos.x, 0.11f, e.pos.z),
+                WithAlpha(Cream, 0.24f));
+        }
     }
 
     if (boss_.active)
@@ -245,6 +290,26 @@ void SweetsApp::DrawGameplay3D()
                 DrawCylinder(pos, 0.045f + 0.018f * std::fabs(wave), 0.70f + 0.28f * std::fabs(wave), WithAlpha(Gold, ClampFloat(0.58f * auraFx, 0.0f, 1.0f)));
                 DrawSphere(pos, BossBodyY + 0.88f + 0.18f * wave, 0.10f, WithAlpha(Cream, ClampFloat(0.45f * auraFx, 0.0f, 1.0f)));
             }
+        }
+        if (boss_.bossType == BossType::HiddenBoss && hiddenBossReflectT_ > 0.0f)
+        {
+            const float pulse = 0.20f * std::sin(gameTime_ * 16.0f);
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(boss_.radius * (2.92f + pulse), 1.0f, boss_.radius * (2.92f + pulse)) *
+                XMMatrixTranslation(boss_.pos.x, 0.21f, boss_.pos.z),
+                WithAlpha(Gold, 0.86f));
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(boss_.radius * (3.45f - pulse), 1.0f, boss_.radius * (3.45f - pulse)) *
+                XMMatrixTranslation(boss_.pos.x, 0.24f, boss_.pos.z),
+                WithAlpha(Cream, 0.52f));
+        }
+        if (boss_.bossType == BossType::HiddenBoss && hiddenBossDashWarnT_ > 0.0f)
+        {
+            const float warn = ClampFloat(hiddenBossDashWarnT_ / std::max(0.01f, hiddenBossDashWarnLife_), 0.0f, 1.0f);
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(boss_.radius * (1.45f + (1.0f - warn) * 0.80f), 1.0f, boss_.radius * (1.45f + (1.0f - warn) * 0.80f)) *
+                XMMatrixTranslation(boss_.pos.x, 0.28f, boss_.pos.z),
+                WithAlpha(Red, 0.74f));
         }
         if (boss_.bossType == BossType::HiddenBoss && hiddenBossForm_ == 1)
         {

@@ -155,6 +155,21 @@ void SweetsApp::UpdateShots(float dt)
                 s.vel = blended * speed;
             }
         }
+        else if (s.enemy && s.homingStrength > 0.0f)
+        {
+            Player* target = FindNearestPlayer(s.pos);
+            if (target)
+            {
+                const V2 desired = Normalize(target->pos - s.pos);
+                if (LenSq(desired) > 0.001f)
+                {
+                    const float speed = Len(s.vel);
+                    const V2 blended = Normalize(Normalize(s.vel) + desired * s.homingStrength * dt);
+                    s.vel = blended * speed;
+                }
+            }
+            s.homingStrength = std::max(0.0f, s.homingStrength - dt * 0.65f);
+        }
 
         s.pos += s.vel * dt;
         if (Use3DRules() && s.enemy)
@@ -386,7 +401,7 @@ void SweetsApp::UpdateShots(float dt)
                 BossDamageKind kind = BossDamageKind::NormalShot;
                 if (s.reflected)
                 {
-                    kind = BossDamageKind::ReflectedShot;
+                    kind = s.hiddenBossAuraKey ? BossDamageKind::HiddenBossAuraKey : BossDamageKind::ReflectedShot;
                 }
                 else if (s.charged && s.sourceCharacter == CharacterType::Chocolate)
                 {

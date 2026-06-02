@@ -59,6 +59,12 @@ bool DebugFxSliderRect(int index, float width, float& x, float& y, float& w, flo
 // 長押しで毎フレーム処理する移動や攻撃は UpdatePlayer 側で見ます。
 void SweetsApp::OnKeyDown(WPARAM key)
 {
+    if (key == VK_F11)
+    {
+        ToggleFullscreen();
+        return;
+    }
+
     if (HandleDebugKey(key))
     {
         return;
@@ -95,14 +101,6 @@ void SweetsApp::OnKeyDown(WPARAM key)
 
     if (screen_ == Screen::Title)
     {
-        if (key == VK_ESCAPE)
-        {
-            settingsReturnScreen_ = Screen::Title;
-            pauseMenuIndex_ = 2;
-            draggingVolume_ = -1;
-            screen_ = Screen::Settings;
-            return;
-        }
         return;
     }
 
@@ -591,7 +589,19 @@ bool SweetsApp::HandleSettingsClick(float sx, float sy)
             return true;
         }
     }
+
+    const UiRect& fullscreenRect = layout.fullscreenToggle;
+    if (PointInRect(sx, sy, fullscreenRect.left, fullscreenRect.top, fullscreenRect.right, fullscreenRect.bottom))
+    {
+        SetFullscreenFromSettings(!fullscreen_);
+        return true;
+    }
     return true;
+}
+
+void SweetsApp::SetFullscreenFromSettings(bool enabled)
+{
+    SetFullscreen(enabled, true);
 }
 
 float* SweetsApp::MutableVolumeSliderValue(int index)

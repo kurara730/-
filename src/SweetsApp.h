@@ -61,6 +61,8 @@ private:
     void EnsureGameplayAssetsReady();
     Mesh CreateMesh(const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices);
     void Resize(UINT w, UINT h);
+    void SetFullscreen(bool enabled, bool save);
+    void ToggleFullscreen();
 
     // --- ゲーム進行 ---
     // ラン開始、Wave 進行、ボス/敵/アイテム生成など、ゲームルールの大枠です。
@@ -240,6 +242,7 @@ private:
     bool HandlePauseDrag(float sx, float sy);
     bool HandleSettingsClick(float sx, float sy);
     void SetAimMode(AimMode mode, bool save);
+    void SetFullscreenFromSettings(bool enabled);
     void SetVolumeSlider(int index, float value, bool save);
     float VolumeSliderValue(int index) const;
     float* MutableVolumeSliderValue(int index);
@@ -264,6 +267,11 @@ private:
     UINT width_ = 1280;
     UINT height_ = 800;
     bool comInitialized_ = false;
+    bool settingsLoaded_ = false;
+    bool fullscreen_ = false;
+    DWORD windowStyle_ = WS_OVERLAPPEDWINDOW;
+    DWORD windowExStyle_ = 0;
+    WINDOWPLACEMENT windowPlacement_{};
 
     ComPtr<ID3D11Device> device_;
     ComPtr<ID3D11DeviceContext> context_;
@@ -426,6 +434,22 @@ private:
     int hiddenBossReflectCount_ = 0;
     float hiddenBossPhaseIntroT_ = 0.0f;
     float hiddenBossPhaseIntroLife_ = 0.0f;
+    float hiddenBossDashWarnT_ = 0.0f;
+    float hiddenBossDashWarnLife_ = 0.0f;
+    float hiddenBossDashT_ = 0.0f;
+    float hiddenBossDashLife_ = 0.0f;
+    float hiddenBossDashRecoverT_ = 0.0f;
+    int hiddenBossDashChainLeft_ = 0;
+    float hiddenBossDashChainGapT_ = 0.0f;
+    float hiddenBossDashChainWarn_ = 0.0f;
+    float hiddenBossDashChainDuration_ = 0.0f;
+    float hiddenBossDashChainSpeed_ = 0.0f;
+    float hiddenBossDashGlobalCd_ = 0.0f;
+    float hiddenBossReflectT_ = 0.0f;
+    float hiddenBossCloneCd_ = 0.0f;
+    V2 hiddenBossIdleBasePos_{};
+    float hiddenBossFloatAnchorT_ = 0.0f;
+    V2 hiddenBossDashVel_{};
     int enemySerial_ = 0;
     bool suppressEnemyKillUltGain_ = false;
     float messageT_ = 0.0f;
