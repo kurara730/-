@@ -101,14 +101,6 @@ void SweetsApp::OnKeyDown(WPARAM key)
 
     if (screen_ == Screen::Title)
     {
-        if (key == VK_ESCAPE)
-        {
-            settingsReturnScreen_ = Screen::Title;
-            pauseMenuIndex_ = 2;
-            draggingVolume_ = -1;
-            screen_ = Screen::Settings;
-            return;
-        }
         return;
     }
 

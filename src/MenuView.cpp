@@ -739,7 +739,7 @@ void SweetsApp::DrawPauseMenu()
 void SweetsApp::DrawSettingsMenu()
 {
     // 画面全体を暗くする
-    textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 0.78f));
+    textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 1.0f));
     d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
 
     const SettingsLayout layout = BuildSettingsLayout();
