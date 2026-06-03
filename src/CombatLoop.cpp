@@ -14,6 +14,18 @@ bool IsEliteType(EnemyType type)
         || type == EnemyType::Mirror
         || type == EnemyType::Teleport;
 }
+
+BossDamageKind ShotBossDamageKind(const Shot& shot)
+{
+    if (shot.ultimateSource) return BossDamageKind::Ultimate;
+    if (shot.reflected)
+    {
+        return shot.hiddenBossAuraKey ? BossDamageKind::HiddenBossAuraKey : BossDamageKind::ReflectedShot;
+    }
+    if (shot.charged && shot.sourceCharacter == CharacterType::Chocolate) return BossDamageKind::ChocolateCharge;
+    if (shot.charged) return BossDamageKind::ChargeShot;
+    return BossDamageKind::NormalShot;
+}
 }
 
 // 指定範囲内の敵弾を味方弾へ変換する共通処理です。
@@ -337,7 +349,7 @@ void SweetsApp::UpdateShots(float dt)
         }
         else
         {
-            if (DamageHiddenBossCore(ReflectedDamage(s), s.pos, s.ownerIndex))
+            if (DamageHiddenBossCore(ReflectedDamage(s), s.pos, s.ownerIndex, ShotBossDamageKind(s)))
             {
                 if (s.pierce > 0) --s.pierce;
                 else s.dead = true;
@@ -398,19 +410,7 @@ void SweetsApp::UpdateShots(float dt)
             if (!s.dead && !s.hitBoss && boss_.active && RuleDistance(s, boss_) < s.radius + boss_.radius)
             {
                 if (s.charged && s.sourceCharacter == CharacterType::Shortcake && s.splitCount > 0) SpawnSplitShots(s, boss_.pos);
-                BossDamageKind kind = BossDamageKind::NormalShot;
-                if (s.reflected)
-                {
-                    kind = s.hiddenBossAuraKey ? BossDamageKind::HiddenBossAuraKey : BossDamageKind::ReflectedShot;
-                }
-                else if (s.charged && s.sourceCharacter == CharacterType::Chocolate)
-                {
-                    kind = BossDamageKind::ChocolateCharge;
-                }
-                else if (s.charged)
-                {
-                    kind = BossDamageKind::ChargeShot;
-                }
+                BossDamageKind kind = ShotBossDamageKind(s);
                 DamageBoss(ReflectedDamage(s), kind, s.reflected, s.ownerIndex);
                 s.hitBoss = true;
                 if (s.charged) s.dead = true;

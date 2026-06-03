@@ -1063,12 +1063,55 @@ void SweetsApp::DamageEnemy(Enemy& e, float dmg, V2 from, float knock, bool refl
 
 void SweetsApp::DamageBoss(float dmg)
 {
-    DamageBoss(dmg, BossDamageKind::NormalShot, false, 0);
+    DamageBoss(dmg, BossDamageKind::NormalShot, false, -1);
 }
 
 void SweetsApp::DamageBoss(float dmg, bool reflected, int ownerIndex)
 {
     DamageBoss(dmg, reflected ? BossDamageKind::ReflectedShot : BossDamageKind::NormalShot, reflected, ownerIndex);
+}
+
+void SweetsApp::GrantBossHitUltimate(int ownerIndex, BossDamageKind kind, bool reflected)
+{
+    if (ownerIndex < 0) return;
+
+    Player& owner = players_[std::min(ownerIndex, MaxPlayers - 1)];
+    if (!owner.active) return;
+
+    const bool isReflected = reflected || kind == BossDamageKind::ReflectedShot || kind == BossDamageKind::HiddenBossAuraKey;
+    float gain = 0.0f;
+    if (isReflected)
+    {
+        gain = kind == BossDamageKind::HiddenBossAuraKey ? 1.8f : 1.35f;
+    }
+    else
+    {
+        switch (kind)
+        {
+        case BossDamageKind::ChargeShot:
+        case BossDamageKind::ChocolateCharge:
+            gain = 1.20f;
+            break;
+        case BossDamageKind::Melee:
+            gain = 1.00f;
+            break;
+        case BossDamageKind::Bomb:
+            gain = 2.50f;
+            break;
+        case BossDamageKind::Ultimate:
+            gain = 0.0f;
+            break;
+        case BossDamageKind::NormalShot:
+        default:
+            gain = 0.45f;
+            break;
+        }
+    }
+
+    if (gain > 0.0f)
+    {
+        owner.ult = std::min(100.0f, owner.ult + gain);
+    }
 }
 
 // ボスへのダメージ処理です。
@@ -1141,6 +1184,7 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
         boss_.flash = 0.15f;
         Player& owner = players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))];
         AddScore(static_cast<int>(appliedDmg * (isReflected ? 2.0f : 1.0f)), &owner);
+        GrantBossHitUltimate(ownerIndex, kind, isReflected);
         if (boss_.hp <= 0.0f)
         {
             SaveProgress();
@@ -1285,6 +1329,7 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
     appliedDmg = std::min(appliedDmg, NormalBossHitCap(boss_.maxHp, kind, reflected));
     boss_.hp -= appliedDmg;
     boss_.flash = 0.15f;
+    GrantBossHitUltimate(ownerIndex, kind, isReflected);
     if (isReflected)
     {
         Player& owner = players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))];

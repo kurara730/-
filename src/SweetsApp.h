@@ -141,8 +141,8 @@ private:
     void UpdateHiddenBoss(float dt);
     void ResetHiddenBossCores();
     void UpdateHiddenBossCores(float dt);
-    bool DamageHiddenBossCore(float dmg, V2 from, int ownerIndex);
-    void DamageHiddenBossCoresInRadius(V2 center, float radius, float dmg, int ownerIndex);
+    bool DamageHiddenBossCore(float dmg, V2 from, int ownerIndex, BossDamageKind kind = BossDamageKind::NormalShot);
+    void DamageHiddenBossCoresInRadius(V2 center, float radius, float dmg, int ownerIndex, BossDamageKind kind = BossDamageKind::NormalShot);
     void UpdateEventVideo(float dt);
     void UpdatePlaying(float dt);
     void UpdateAudioForScreen();
@@ -160,6 +160,7 @@ private:
     void ResolvePlayerHit(Player& p, float dmg, float angle);
     void DamageEnemy(Enemy& e, float dmg, V2 from, float knock);
     void DamageEnemy(Enemy& e, float dmg, V2 from, float knock, bool reflected, int ownerIndex);
+    void GrantBossHitUltimate(int ownerIndex, BossDamageKind kind, bool reflected);
     void DamageBoss(float dmg);
     void DamageBoss(float dmg, bool reflected, int ownerIndex);
     void DamageBoss(float dmg, BossDamageKind kind, bool reflected, int ownerIndex);
