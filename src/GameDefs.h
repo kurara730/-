@@ -35,6 +35,7 @@ enum class BossType
     GravityPudding,
     TerritoryCake,
     DemonParfait,
+    ThunderCaptain,
     HiddenBoss
 };
 
@@ -112,7 +113,9 @@ enum class BossPatternId
     GuardRing,
     MirrorSplit,
     GravityWell,
-    TerritoryZone
+    TerritoryZone,
+    Beam,
+    SkyLaser
 };
 
 // UI表示用の短い名前を返すヘルパーです。
@@ -174,6 +177,7 @@ inline constexpr const wchar_t* BossName(BossType type)
     case BossType::GravityPudding: return L"グラビティプリン";
     case BossType::TerritoryCake: return L"テリトリーケーキ";
     case BossType::DemonParfait: return L"魔王パフェ";
+    case BossType::ThunderCaptain: return L"キャプテンサンダー";
     case BossType::HiddenBoss: return L"隠しボス";
     default: return L"ボス";
     }

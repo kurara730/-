@@ -368,6 +368,13 @@ private:
     std::vector<SwordEffectVisual> swordEffectVisuals_;
     std::array<HiddenBossCore, HiddenBossCoreCount> hiddenBossCores_{};
     BossGimmickState bossGimmick_{};
+    V2 bossSkyLaserPos_{}; // キャプテンサンダーの「上から降る極太レーザー」の落下地点(予告で固定)
+    std::vector<PendingSkyLaser> pendingSkyLasers_; // 予約済みレーザー雨(即着待ち)
+    float bossSkyRainCd_ = 0.0f;   // 次のレーザー雨までの間隔(10秒で5発=2秒)
+    float bossMeleeT_ = 0.0f;      // 突進(殴り)モードの残り時間。>0で殴りモード
+    float bossMeleeCd_ = 0.0f;     // 次の突進モードまでの間隔
+    float bossPunchWindup_ = 0.0f; // 殴りの予備動作タイマー(0.3秒)
+    float bossPunchCd_ = 0.0f;     // 殴りの間隔
     std::vector<CombatNotice> combatNotices_;
     std::vector<WorldTelegraph> worldTelegraphs_;
     AssetCatalog assetCatalog_;

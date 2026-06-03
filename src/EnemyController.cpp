@@ -1,5 +1,7 @@
 #include "SweetsApp.h"
 
+#include <algorithm>
+
 namespace
 {
 // 特殊敵かどうかの判定です。
@@ -110,6 +112,12 @@ BossPatternId PatternForBoss(BossType type, int step)
         constexpr std::array<BossPatternId, 6> seq{ BossPatternId::Seal, BossPatternId::GuardRing, BossPatternId::MirrorSplit, BossPatternId::GravityWell, BossPatternId::TerritoryZone, BossPatternId::Spiral };
         return seq[step % static_cast<int>(seq.size())];
     }
+    case BossType::ThunderCaptain:
+    {
+        // 雷の隊長: 遠距離はビーム主体(上空レーザー雨と突進殴りは UpdateBoss 側で常時管理)。
+        constexpr std::array<BossPatternId, 4> seq{ BossPatternId::Beam, BossPatternId::Aimed, BossPatternId::Beam, BossPatternId::Radial };
+        return seq[step % static_cast<int>(seq.size())];
+    }
     default:
         return static_cast<BossPatternId>(step % 4);
     }
@@ -130,6 +138,10 @@ int AttackIndexForPattern(BossPatternId pattern)
     case BossPatternId::GravityWell:
     case BossPatternId::TerritoryZone:
         return 3;
+    case BossPatternId::Beam:
+        return 4;
+    case BossPatternId::SkyLaser:
+        return 5;
     case BossPatternId::Radial:
     default:
         return 0;
@@ -148,6 +160,8 @@ Color PatternTelegraphColor(BossPatternId pattern)
     case BossPatternId::Aimed: return Red;
     case BossPatternId::Spiral: return Gold;
     case BossPatternId::Curve: return Mint;
+    case BossPatternId::Beam: return Sky;
+    case BossPatternId::SkyLaser: return Gold;
     case BossPatternId::Radial:
     default: return Grape;
     }
@@ -337,13 +351,34 @@ void SweetsApp::SpawnBoss()
     boss_.atk = (13.0f + wave_ * 1.3f) * diff.enemyAtkMul;
     boss_.attackCd = 1.25f;
     boss_.spin = Rand(0.0f, TwoPi);
-    boss_.type = (wave_ / 3) % 6;
+    boss_.type = (wave_ / 3) % 7;
     boss_.bossType = static_cast<BossType>(boss_.type);
+    // [一時テスト] 新ボスをすぐ確認するため強制。確認後に削除する。
+    boss_.bossType = BossType::ThunderCaptain;
+    boss_.type = static_cast<int>(BossType::ThunderCaptain);
+    // キャプテンサンダーは大ボス級。体力はルナティックで20倍、難易度が1段下がるごとに半分。
+    if (boss_.bossType == BossType::ThunderCaptain)
+    {
+        float thunderHpMul = 20.0f;
+        for (int step = static_cast<int>(difficulty_); step < static_cast<int>(Difficulty::Lunatic); ++step)
+        {
+            thunderHpMul *= 0.5f; // Lunatic:20, Expert:10, Hard:5, Normal:2.5, Easy:1.25
+        }
+        boss_.maxHp *= thunderHpMul;
+        boss_.hp = boss_.maxHp;
+    }
     boss_.phase = 1;
     bossGimmick_ = {};
     bossGimmick_.type = boss_.bossType;
     bossGimmick_.nextPattern = PatternForBoss(boss_.bossType, 0);
     bossGimmick_.guardAngle = boss_.spin;
+    // キャプテンサンダー専用ステートの初期化
+    pendingSkyLasers_.clear();
+    bossSkyRainCd_ = 2.0f;   // 最初のレーザー雨まで
+    bossMeleeT_ = 0.0f;
+    bossMeleeCd_ = 9.0f;     // 最初の突進モードまで
+    bossPunchWindup_ = 0.0f;
+    bossPunchCd_ = 0.0f;
     SyncBoss3D(boss_);
 }
 
@@ -523,7 +558,38 @@ void SweetsApp::UpdateBoss(float dt)
     const V2 toP = targetPlayer->pos - boss_.pos;
     const float d = RuleDistance(boss_.pos, boss_.height, targetPlayer->pos, PlayerBodyY);
     const V2 n = Normalize(toP);
-    boss_.vel = n * boss_.speed * (slowT_ > 0.0f ? 0.55f : 1.0f);
+
+    // --- キャプテンサンダー: 突進(殴り)モードの時間管理 ---
+    const bool thunder = boss_.bossType == BossType::ThunderCaptain;
+    if (thunder)
+    {
+        // 殴りクールタイム(60秒)は常に進行させる。
+        if (bossPunchCd_ > 0.0f) bossPunchCd_ -= dt;
+        if (bossMeleeT_ > 0.0f)
+        {
+            bossMeleeT_ -= dt;
+        }
+        else
+        {
+            if (bossMeleeCd_ > 0.0f) bossMeleeCd_ -= dt;
+            // 突進モードは「インターバル経過」かつ「殴りクールタイムが空いている」時だけ発動。
+            if (bossMeleeCd_ <= 0.0f && bossPunchCd_ <= 0.0f)
+            {
+                bossMeleeT_ = 5.0f;       // 突進モードの長さ
+                bossMeleeCd_ = 12.0f;     // 次の突進モードまでの基本間隔
+                bossPunchWindup_ = 0.0f;
+                boss_.telegraphT = 0.0f;  // 進行中のビーム予告はキャンセル
+                boss_.telegraphAttack = -1;
+                message_ = L"⚡ 突進モード!";
+                messageT_ = 1.3f;
+            }
+        }
+    }
+    const bool melee = thunder && bossMeleeT_ > 0.0f;
+
+    // 殴りモード中はめちゃくちゃ速く突っ込む。
+    const float moveSpeed = melee ? 9.5f : boss_.speed;
+    boss_.vel = n * moveSpeed * (slowT_ > 0.0f ? 0.55f : 1.0f);
     boss_.pos += boss_.vel * dt;
     ClampInside(boss_.pos, boss_.radius);
     SyncBoss3D(boss_);
@@ -540,9 +606,110 @@ void SweetsApp::UpdateBoss(float dt)
         }
     }
 
-    if (d < boss_.radius + targetPlayer->radius && targetPlayer->inv <= 0.0f)
+    // 殴りモード中は接触ダメージを止め、専用の「殴り(予備動作0.3秒)」だけにする。
+    if (!melee && d < boss_.radius + targetPlayer->radius && targetPlayer->inv <= 0.0f)
     {
         ResolvePlayerHit(*targetPlayer, boss_.atk, AngleOf(toP));
+    }
+
+    // --- キャプテンサンダー: 上空レーザー雨(常時) と 突進殴り ---
+    if (thunder)
+    {
+        // 予約済みレーザーは即着(殴りモード中でも落下処理する)
+        for (auto& laser : pendingSkyLasers_)
+        {
+            laser.fuse -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+            if (laser.fuse <= 0.0f)
+            {
+                for (auto& p : players_)
+                {
+                    if (!p.active || p.downed || p.inv > 0.0f) continue;
+                    if (RuleDistance(p.pos, PlayerBodyY, laser.pos, 0.0f) <= laser.radius)
+                    {
+                        ResolvePlayerHit(p, p.maxHp * 0.25f, AngleOf(p.pos - laser.pos)); // 体力の2/8(=1/4)
+                    }
+                }
+                for (int ring = 0; ring < 4; ++ring)
+                {
+                    EffectPulse col{};
+                    col.pos = laser.pos;
+                    col.startRadius = laser.radius * (0.15f + ring * 0.22f);
+                    col.endRadius = laser.radius * (0.6f + ring * 0.32f);
+                    col.ttl = 0.45f;
+                    col.life = 0.45f;
+                    col.y = 0.24f;
+                    col.color = Gold;
+                    col.pos3 = Grounded3D(col.pos, col.y);
+                    effectPulses_.push_back(col);
+                }
+                Burst(laser.pos, Gold, 40);
+            }
+        }
+        pendingSkyLasers_.erase(
+            std::remove_if(pendingSkyLasers_.begin(), pendingSkyLasers_.end(),
+                [](const PendingSkyLaser& l) { return l.fuse <= 0.0f; }),
+            pendingSkyLasers_.end());
+
+        if (!melee)
+        {
+            // 通常時: ランダムな5か所を10秒で(=2秒間隔)ループで降らせる。円予告→約1秒後に即着。
+            bossSkyRainCd_ -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+            if (bossSkyRainCd_ <= 0.0f)
+            {
+                bossSkyRainCd_ = 2.0f;
+                PendingSkyLaser laser{};
+                laser.pos = RandInArena(2.2f);
+                laser.radius = 3.0f;
+                laser.fuse = 1.0f;
+                pendingSkyLasers_.push_back(laser);
+
+                WorldTelegraph circle{};
+                circle.pos = laser.pos;
+                circle.dir = { 1.0f, 0.0f };
+                circle.radius = laser.radius;
+                circle.length = 0.0f; // 円予告
+                circle.ttl = laser.fuse;
+                circle.life = laser.fuse;
+                circle.color = Gold;
+                circle.pattern = BossPatternId::SkyLaser;
+                worldTelegraphs_.push_back(circle);
+            }
+        }
+        else
+        {
+            // 殴りモード: 遠距離不可。突進して殴る(予備動作0.3秒→体力の1/9)。
+            if (bossPunchWindup_ > 0.0f)
+            {
+                bossPunchWindup_ -= dt;
+                if (bossPunchWindup_ <= 0.0f)
+                {
+                    if (d < boss_.radius + targetPlayer->radius + 1.4f && targetPlayer->inv <= 0.0f)
+                    {
+                        ResolvePlayerHit(*targetPlayer, targetPlayer->maxHp / 9.0f, AngleOf(toP));
+                    }
+                    Burst(boss_.pos + n * (boss_.radius + 0.6f), Red, 22);
+                    bossPunchCd_ = 60.0f; // 一度殴ったら60秒は殴れない
+                    bossMeleeT_ = 0.0f;   // 殴ったら即・遠距離モードへ戻す
+                }
+            }
+            else if (bossPunchCd_ <= 0.0f && d < boss_.radius + targetPlayer->radius + 1.8f)
+            {
+                // 予備動作開始(0.3秒)。プレイヤー位置に短い円予告を出す。
+                bossPunchWindup_ = 0.3f;
+                WorldTelegraph warn{};
+                warn.pos = targetPlayer->pos;
+                warn.dir = { 1.0f, 0.0f };
+                warn.radius = 1.3f;
+                warn.length = 0.0f;
+                warn.ttl = 0.3f;
+                warn.life = 0.3f;
+                warn.color = Red;
+                warn.pattern = BossPatternId::Aimed;
+                worldTelegraphs_.push_back(warn);
+            }
+            boss_.attackCd = std::max(boss_.attackCd, 0.5f); // モード終了直後に即遠距離しない
+            return; // 殴りモード中は遠距離パターンをスキップ
+        }
     }
 
     const EncounterTuning& tuning = CurrentEncounterTuning();
@@ -628,6 +795,78 @@ void SweetsApp::UpdateBoss(float dt)
                 SpawnEnemyShot(boss_.pos + FromAngle(a) * (boss_.radius + 0.15f), a, speed, boss_.atk * 0.60f, 0.082f, Gold, 5.6f, curve, 0.05f);
             }
         }
+        else if (attack == 4)
+        {
+            // 雷ビーム(即着): 予告したライン上にいるプレイヤーへ瞬時にダメージ。視覚は閃光のライン。
+            const float a = boss_.telegraphAngle;
+            const V2 dir = FromAngle(a);
+            const V2 perp = FromAngle(a + Pi * 0.5f);
+            const float halfWidth = 3.4f;                   // ビームの太さ(従来の半分)の半分
+            const float dmg = targetPlayer->maxHp * 0.25f;  // キャラ最大HPの約1/4
+            // ボスを通る直線。線方向に前方、垂直距離が幅以内なら命中(端から端まで貫通)。
+            for (auto& p : players_)
+            {
+                if (!p.active || p.downed || p.inv > 0.0f) continue;
+                const V2 rel = p.pos - boss_.pos;
+                const float along = Dot(rel, dir);
+                const float side = std::fabs(Dot(rel, perp));
+                if (along > -ArenaRadius && side <= halfWidth + p.radius)
+                {
+                    ResolvePlayerHit(p, dmg, a);
+                }
+            }
+            // 視覚: ライン状の閃光(短命)＋発射閃光。アリーナを端から端まで貫く帯。
+            WorldTelegraph blast{};
+            blast.pos = boss_.pos - dir * ArenaRadius;
+            blast.dir = dir;
+            blast.radius = halfWidth * 2.0f;
+            blast.length = ArenaRadius * 4.0f;
+            blast.ttl = 0.22f;
+            blast.life = 0.22f;
+            blast.color = Sky;
+            blast.pattern = BossPatternId::Beam;
+            worldTelegraphs_.push_back(blast);
+            EffectPulse flash{};
+            flash.pos = boss_.pos + dir * (boss_.radius + 0.4f);
+            flash.startRadius = 0.6f;
+            flash.endRadius = 2.6f;
+            flash.ttl = 0.25f;
+            flash.life = 0.25f;
+            flash.y = 0.24f;
+            flash.color = Sky;
+            flash.pos3 = Grounded3D(flash.pos, flash.y);
+            effectPulses_.push_back(flash);
+        }
+        else if (attack == 5)
+        {
+            // 上空から極太レーザーが落下。予告した円(bossSkyLaserPos_)に範囲ダメージ。
+            const V2 center = bossSkyLaserPos_;
+            const float r = 3.4f + 0.2f * boss_.phase;
+            const float dmg = targetPlayer->maxHp * 0.25f;
+            for (auto& p : players_)
+            {
+                if (!p.active || p.downed || p.inv > 0.0f) continue;
+                if (RuleDistance(p.pos, PlayerBodyY, center, 0.0f) <= r)
+                {
+                    ResolvePlayerHit(p, dmg, AngleOf(p.pos - center));
+                }
+            }
+            // 落下インパクトの光柱(リング数枚を重ねて極太に)
+            for (int ring = 0; ring < 4; ++ring)
+            {
+                EffectPulse col{};
+                col.pos = center;
+                col.startRadius = r * (0.15f + ring * 0.22f);
+                col.endRadius = r * (0.6f + ring * 0.32f);
+                col.ttl = 0.5f;
+                col.life = 0.5f;
+                col.y = 0.24f;
+                col.color = Gold;
+                col.pos3 = Grounded3D(col.pos, col.y);
+                effectPulses_.push_back(col);
+            }
+            Burst(center, Gold, 48);
+        }
         else
         {
             const int petals = ScaledBulletCount(6 + boss_.phase * 2);
@@ -666,28 +905,37 @@ void SweetsApp::UpdateBoss(float dt)
         boss_.telegraphAdd = pattern == BossPatternId::GuardRing && BossAddCount() < tuning.bossAddCap;
         boss_.telegraphMirror = pattern == BossPatternId::MirrorSplit && BossAddCount() < tuning.bossAddCap;
         boss_.telegraphField = pattern == BossPatternId::GravityWell || pattern == BossPatternId::TerritoryZone;
-        boss_.telegraphLife = tuning.bossTelegraphTime;
-        boss_.telegraphT = tuning.bossTelegraphTime;
-        boss_.flash = std::max(boss_.flash, tuning.bossTelegraphTime);
+        // ビーム/上空レーザーは「攻撃範囲予告→約1秒後に発射」を必ず行うため予告時間を固定。
+        const bool isBeam = pattern == BossPatternId::Beam;
+        const bool isSky = pattern == BossPatternId::SkyLaser;
+        const float teleTime = (isBeam || isSky) ? 1.0f : tuning.bossTelegraphTime;
+        boss_.telegraphLife = teleTime;
+        boss_.telegraphT = teleTime;
+        boss_.telegraphAngle = AngleOf(toP); // 予告したライン方向を固定(ビーム発射時にそのまま使う)
+        bossSkyLaserPos_ = targetPlayer->pos; // 上空レーザーの落下地点を固定(円予告の位置)
+        const float skyRadius = 3.4f + 0.2f * boss_.phase;
+        boss_.flash = std::max(boss_.flash, teleTime);
         const Color telegraphColor = PatternTelegraphColor(pattern);
         EffectPulse pulse{};
         pulse.pos = boss_.pos;
         pulse.startRadius = boss_.radius * 1.1f;
         pulse.endRadius = boss_.radius * (2.6f + 0.2f * boss_.phase);
-        pulse.ttl = tuning.bossTelegraphTime;
-        pulse.life = tuning.bossTelegraphTime;
+        pulse.ttl = teleTime;
+        pulse.life = teleTime;
         pulse.y = 0.22f;
         pulse.color = telegraphColor;
         pulse.pos3 = Grounded3D(pulse.pos, pulse.y);
         effectPulses_.push_back(pulse);
 
         WorldTelegraph telegraph{};
-        telegraph.pos = boss_.pos;
-        telegraph.dir = Normalize(toP);
-        telegraph.radius = boss_.radius * (pattern == BossPatternId::GuardRing ? 3.2f : 2.4f);
-        telegraph.length = pattern == BossPatternId::Aimed ? 7.0f : 0.0f;
-        telegraph.ttl = tuning.bossTelegraphTime;
-        telegraph.life = tuning.bossTelegraphTime;
+        // 上空レーザーは落下地点に「円」予告(length=0で円表示)。それ以外はボス起点。
+        telegraph.pos = isSky ? bossSkyLaserPos_ : boss_.pos;
+        telegraph.dir = FromAngle(boss_.telegraphAngle);
+        // ビームは細長い直線の予告(幅=radius×8倍, 長さ=length)。アリーナを端から端まで貫く長さ。
+        telegraph.radius = isBeam ? 6.8f : (isSky ? skyRadius : boss_.radius * (pattern == BossPatternId::GuardRing ? 3.2f : 2.4f));
+        telegraph.length = isBeam ? 30.0f : (pattern == BossPatternId::Aimed ? 7.0f : 0.0f);
+        telegraph.ttl = teleTime;
+        telegraph.life = teleTime;
         telegraph.color = telegraphColor;
         telegraph.pattern = pattern;
         worldTelegraphs_.push_back(telegraph);
