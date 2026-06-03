@@ -248,7 +248,7 @@ void SweetsApp::UpdateHiddenBossCores(float dt)
 
 // 炎核への命中処理です。
 // すべて壊れたら敵弾を消し、短い攻撃チャンスを発生させます。
-bool SweetsApp::DamageHiddenBossCore(float dmg, V2 from, int ownerIndex)
+bool SweetsApp::DamageHiddenBossCore(float dmg, V2 from, int ownerIndex, BossDamageKind kind)
 {
     if (hiddenBossForm_ != 1 || hiddenBossCoreOpenT_ > 0.0f) return false;
     for (auto& core : hiddenBossCores_)
@@ -257,6 +257,7 @@ bool SweetsApp::DamageHiddenBossCore(float dmg, V2 from, int ownerIndex)
         if (RuleDistance(from, ShotBodyY, core.pos, ShotBodyY) > core.radius + 0.24f) continue;
         core.hp -= dmg;
         core.flash = 0.12f;
+        GrantBossHitUltimate(ownerIndex, kind, kind == BossDamageKind::ReflectedShot || kind == BossDamageKind::HiddenBossAuraKey);
         Burst(core.pos, Gold, 14);
         if (core.hp <= 0.0f)
         {
@@ -280,7 +281,7 @@ bool SweetsApp::DamageHiddenBossCore(float dmg, V2 from, int ownerIndex)
 }
 
 // ボムや必殺など、範囲攻撃で炎核をまとめて削るための処理です。
-void SweetsApp::DamageHiddenBossCoresInRadius(V2 center, float radius, float dmg, int ownerIndex)
+void SweetsApp::DamageHiddenBossCoresInRadius(V2 center, float radius, float dmg, int ownerIndex, BossDamageKind kind)
 {
     if (hiddenBossForm_ != 1 || hiddenBossCoreOpenT_ > 0.0f) return;
     for (auto& core : hiddenBossCores_)
@@ -288,7 +289,7 @@ void SweetsApp::DamageHiddenBossCoresInRadius(V2 center, float radius, float dmg
         if (!core.active) continue;
         if (RuleDistance(center, ShotBodyY, core.pos, ShotBodyY) <= radius + core.radius)
         {
-            DamageHiddenBossCore(dmg, core.pos, ownerIndex);
+            DamageHiddenBossCore(dmg, core.pos, ownerIndex, kind);
         }
     }
 }
