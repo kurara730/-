@@ -140,17 +140,21 @@ void SweetsApp::DrawScene()
     vp.MaxDepth = 1.0f;
     context_->RSSetViewports(1, &vp);
 
-    const float halfH = GameplayViewHalfHeight();
-    const float halfW = GameplayViewHalfWidth();
+    const float zoom = CameraZoom(); // ジャスト回避時に >1 となり寄る
+    const float halfH = GameplayViewHalfHeight() / zoom;
+    const float halfW = GameplayViewHalfWidth() / zoom;
     if (Use3DRules())
     {
         SyncAll3DState();
-        const XMVECTOR eye = XMVectorSet(camera_.center.x, 15.8f, camera_.center.z - 17.8f, 1.0f);
+        // 注視点(at)からの視点オフセットを 1/zoom 倍してカメラを近づける。
+        const float eyeY = 15.8f / zoom;
+        const float eyeZ = (camera_.center.z + 0.8f) - 18.6f / zoom;
+        const XMVECTOR eye = XMVectorSet(camera_.center.x, eyeY, eyeZ, 1.0f);
         const XMVECTOR at = XMVectorSet(camera_.center.x, 0.0f, camera_.center.z + 0.8f, 1.0f);
         const XMVECTOR up = XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
         view_ = XMMatrixLookAtLH(eye, at, up);
         proj_ = XMMatrixPerspectiveFovLH(XMConvertToRadians(48.0f), static_cast<float>(std::max(1u, width_)) / std::max(1.0f, static_cast<float>(height_)), 0.1f, 80.0f);
-        cameraPos_ = { camera_.center.x, 15.8f, camera_.center.z - 17.8f };
+        cameraPos_ = { camera_.center.x, eyeY, eyeZ };
     }
     else
     {
@@ -263,6 +267,16 @@ void SweetsApp::DrawScene()
         }
     }
 
+    // 貫通ビームの照射本体（2D）。予兆線は上の WorldTelegraph で表示済み。
+    if (boss_.active && boss_.beamActiveT > 0.0f)
+    {
+        const V2 bdir = FromAngle(boss_.beamAngle);
+        const V2 mid = boss_.pos + bdir * (BossBeamLength * 0.5f);
+        const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 30.0f);
+        spriteCanvas_.DrawQuad(nullptr, mid, { BossBeamHalfWidth * 2.0f, BossBeamLength }, boss_.beamAngle - Pi * 0.5f, WithAlpha(Red, 0.6f), 0.19f);
+        spriteCanvas_.DrawQuad(nullptr, mid, { BossBeamHalfWidth, BossBeamLength }, boss_.beamAngle - Pi * 0.5f, WithAlpha(Cream, ClampFloat(0.5f + 0.3f * pulse, 0.0f, 1.0f)), 0.185f);
+    }
+
     for (const auto& o : obstacles_)
     {
         if (o.damageField)
@@ -276,6 +290,13 @@ void SweetsApp::DrawScene()
             spriteCanvas_.DrawCircle(o.pos, o.radius * 0.6f, WithAlpha(o.color, o.flash > 0.0f ? 0.6f : 0.30f), 0.33f, 32);
             spriteCanvas_.DrawRing(o.pos, o.radius * 1.1f, 0.10f, WithAlpha(o.color, 0.85f), 0.31f, 48);
             spriteCanvas_.DrawRing(o.pos, o.radius * (0.7f + 0.15f * std::sin(o.spin * 4.0f)), 0.07f, WithAlpha(Cream, 0.6f), 0.30f, 40);
+        }
+        else if (o.chocoWall)
+        {
+            // 長方形（見た目のみ）。x=厚み(正面方向)・y=横幅(直交)。spin が正面角度。
+            const Color c = o.flash > 0.0f ? Cream : o.color;
+            DrawSprite2D(L"2d_obstacle_wall", o.pos, { o.radius * 0.85f, o.radius * 1.9f }, o.spin, WithAlpha(c, 0.92f), 0.38f);
+            spriteCanvas_.DrawRing(o.pos, o.radius, 0.08f, WithAlpha(Cream, 0.24f), 0.36f);
         }
         else
         {
@@ -363,8 +384,30 @@ void SweetsApp::DrawScene()
     if (boss_.active)
     {
         Color c = boss_.flash > 0.0f ? Cream : (boss_.bossType == BossType::HiddenBoss ? Grape : (boss_.bossType == BossType::DonutKing ? Sky : (boss_.bossType == BossType::MirrorMacaron ? Gold : Rose)));
-        DrawSprite2D(boss_.bossType == BossType::HiddenBoss ? L"2d_boss_hidden" : L"2d_boss_normal", boss_.pos, { boss_.radius * 2.85f, boss_.radius * 2.85f }, boss_.spin * 0.35f, c, 0.18f);
-        spriteCanvas_.DrawRing(boss_.pos, boss_.radius * 1.42f, 0.10f, WithAlpha(Red, 0.45f), 0.19f, 72);
+        if (boss_.burrowSubT <= 0.0f) // 地中突き上げの潜行中は本体を隠す
+        {
+            DrawSprite2D(boss_.bossType == BossType::HiddenBoss ? L"2d_boss_hidden" : L"2d_boss_normal", boss_.pos, { boss_.radius * 2.85f, boss_.radius * 2.85f }, boss_.spin * 0.35f, c, 0.18f);
+            spriteCanvas_.DrawRing(boss_.pos, boss_.radius * 1.42f, 0.10f, WithAlpha(Red, 0.45f), 0.19f, 72);
+        }
+        // 地中突き上げ：潜行中は予測円、噴出中は発光円（2D）。
+        if (boss_.burrowSubT > 0.0f)
+        {
+            const bool locked = boss_.burrowSubT <= BossBurrowLockTime;
+            const float blink = locked ? 0.8f : (0.3f + 0.4f * std::sin(gameTime_ * 16.0f));
+            for (int i = 0; i < boss_.burrowCount; ++i)
+            {
+                const V2 at = boss_.burrowTargets[i];
+                spriteCanvas_.DrawRing(at, BossBurrowRadius, 0.10f + (locked ? 0.06f : 0.0f), WithAlpha(locked ? Red : Grape, ClampFloat(blink, 0.0f, 0.85f)), 0.17f, 48);
+            }
+        }
+        if (boss_.burrowEruptT > 0.0f)
+        {
+            const float g = ClampFloat(boss_.burrowEruptT / BossBurrowEruptTime, 0.0f, 1.0f);
+            for (int i = 0; i < boss_.burrowCount; ++i)
+            {
+                spriteCanvas_.DrawCircle(boss_.burrowTargets[i], BossBurrowRadius * (0.5f + 0.5f * g), WithAlpha(Grape, 0.3f + 0.5f * g), 0.17f, 40);
+            }
+        }
         if (boss_.bossType == BossType::HiddenBoss && hiddenBossForm_ >= 2)
         {
             const float pulse = 0.12f * std::sin(gameTime_ * (hiddenBossForm_ >= 3 ? 7.0f : 4.8f));
@@ -422,6 +465,12 @@ void SweetsApp::DrawScene()
                 spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (3.10f + t * 0.55f), 0.045f, WithAlpha(Sky, 0.42f), 0.15f, 96);
             }
         }
+        // 薙ぎ払いの予兆扇（2D）。
+        if (boss_.sweepWarnT > 0.0f)
+        {
+            const float blink = 0.28f + 0.34f * std::sin(gameTime_ * 22.0f);
+            spriteCanvas_.DrawArc(boss_.pos, BossSweepRange * 0.6f, BossSweepRange * 0.34f, boss_.sweepAngle, BossSweepArc, WithAlpha(Red, ClampFloat(blink, 0.0f, 0.72f)), 0.16f, 40);
+        }
     }
 
     for (const auto& s : slashes_)
@@ -477,7 +526,6 @@ void SweetsApp::DrawScene()
         if ((p.focus || screen_ == Screen::HiddenBoss) && !p.downed)
         {
             spriteCanvas_.DrawCircle(p.pos, p.hitboxRadius, Red, 0.11f, 20);
-            spriteCanvas_.DrawRing(p.pos, p.grazeRadius, 0.045f, WithAlpha(Sky, p.grazeFlash > 0.0f ? 0.70f : 0.30f), 0.12f, 48);
         }
         if (p.shieldT > 0.0f)
         {
@@ -502,7 +550,6 @@ void SweetsApp::DrawScene()
         {
             if (!p.active) continue;
             spriteCanvas_.DrawRing(p.pos, p.hitboxRadius, 0.03f, WithAlpha(Red, 0.85f), 0.06f, 28);
-            spriteCanvas_.DrawRing(p.pos, p.grazeRadius, 0.04f, WithAlpha(Sky, 0.55f), 0.07f, 48);
         }
         for (const auto& e : enemies_)
         {
@@ -606,19 +653,6 @@ void SweetsApp::DrawAdditiveScene()
             const V2 sparkPos = root + forward * (length * t) + side * (wave * width * 0.42f);
             const float sparkSize = (visual.charged ? 0.34f : 0.24f) * baseScale * (1.0f - 0.35f * t);
             DrawSprite2D(L"effect_sword_particle", sparkPos, { sparkSize, sparkSize }, visual.angle + t * TwoPi, WithAlpha((i & 1) ? Gold : Cream, fxAlpha(0.82f * fade * swordFx)), 0.030f);
-        }
-    }
-    for (const auto& p : players_)
-    {
-        if (!p.active) continue;
-        if (p.bombT > 0.0f)
-        {
-            const float t = p.bombT / 1.8f;
-            spriteCanvas_.DrawRing(p.pos, 1.5f + (1.0f - t) * 5.8f, 0.24f, WithAlpha(Sky, 0.9f * t), 0.04f, 120);
-        }
-        if (p.grazeFlash > 0.0f)
-        {
-            spriteCanvas_.DrawRing(p.pos, p.grazeRadius, 0.08f, WithAlpha(Sky, 0.75f), 0.04f, 64);
         }
     }
     for (const auto& p : particles_)

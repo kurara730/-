@@ -82,6 +82,11 @@ void SweetsApp::ResetGame()
     shrinkRadius_ = ArenaRadius;
     pickupTimer_ = 4.0f;
     slowT_ = 0.0f;
+    hitstopT_ = 0.0f;
+    justZoomT_ = 0.0f;
+    justZoomLife_ = 0.0f;
+    player_.blinkCharges = BlinkMaxCharges;
+    player_.blinkRechargeT = 0.0f;
     clearTimer_ = 0.0f;
     hiddenIntroT_ = 0.0f;
     hiddenBossT_ = 0.0f;
@@ -176,7 +181,8 @@ void SweetsApp::ApplyLoadout()
 void SweetsApp::StartWave()
 {
     waveStarted_ = true;
-    bossWave_ = (wave_ % 3 == 0);
+    // デバッグステージは常にボスウェーブ（雑魚なし・ボス即出現）。
+    bossWave_ = (wave_ % 3 == 0) || gameMode_ == GameMode::BossOnlyDebug;
     enemies_.clear();
     shots_.clear();
     slashes_.clear();
@@ -550,6 +556,13 @@ void SweetsApp::UpdateClear(float dt)
 // 入力、AI、ステージ、敵、弾、アイテム、演出の順で進めることで判定順を安定させています。
 void SweetsApp::UpdatePlaying(float dt)
 {
+    // ジャスト回避の演出タイマーは実時間で進める。
+    const float realDt = dt;
+    if (hitstopT_ > 0.0f) hitstopT_ = std::max(0.0f, hitstopT_ - realDt);
+    if (justZoomT_ > 0.0f) justZoomT_ = std::max(0.0f, justZoomT_ - realDt);
+    // ヒットストップ中はゲーム内時間を強く減速（演出タイマーやカメラ追従はこの後の dt を使う）。
+    if (hitstopT_ > 0.0f) dt = realDt * HitstopScale;
+
     gameTime_ += dt;
     if (messageT_ > 0.0f) messageT_ -= dt;
     if (slowT_ > 0.0f) slowT_ -= dt;
@@ -681,6 +694,7 @@ int SweetsApp::ScaledBulletCount(int base) const
 
 int SweetsApp::DifficultyOptionCount() const
 {
-    return hiddenBossUnlocked_ ? 6 : 5;
+    // 末尾に「ボスのみ（デバッグ）」カードを1つ足す。
+    return (hiddenBossUnlocked_ ? 6 : 5) + 1;
 }
 

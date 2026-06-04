@@ -105,6 +105,10 @@ private:
     bool FindAimTarget(V2 pos, float range, V2& out) const;
     float ResolvePlayerAim(const Player& p, int ownerIndex, V2 moveDir, V2 cursorPoint) const;
     V2 ResolvePlayerAimPoint(const Player& p, int ownerIndex, V2 cursorPoint, float range) const;
+    // チョコウォールを最大 maxWalls 枚に保つ。超える場合は一番古い壁の ttl を 0 にして既存の除去パスへ任せる（FIFO）。
+    void EnforceChocoWallLimit(size_t maxWalls);
+    // 指定位置が「危険」かを判定（ジャスト回避用）。迫る敵弾・ボスの照射ビーム・ダメージ床・地中噴出など。
+    bool IsBlinkJustDodge(V2 pos) const;
     bool Use3DRules() const;
     void SetGameplayDimension(GameplayDimension dimension);
     void SyncAll3DState();
@@ -222,6 +226,7 @@ private:
     V2 WorldToScreen(V2 world) const;
     SettingsLayout BuildSettingsLayout() const;
     void UpdateCamera(float dt);
+    float CameraZoom() const;   // ジャスト回避ズームの現在倍率（通常1.0）
     float GameplayViewHalfWidth() const;
     float GameplayViewHalfHeight() const;
 
@@ -348,6 +353,10 @@ private:
     bool keys_[MaxKeys]{};
     bool mouseLeft_ = false;
     bool prevMouseLeft_ = false;
+    bool prevSpace_ = false;     // スペースキーの押下エッジ検出（ブリンク用）
+    float hitstopT_ = 0.0f;      // ジャスト回避のヒットストップ残り（実時間）
+    float justZoomT_ = 0.0f;     // ジャスト回避ズームの残り（実時間）
+    float justZoomLife_ = 0.0f;  // ズーム全体の長さ（補間用）
     bool mouseRight_ = false;
     bool mouseRightReleased_ = false;
     float mouseX_ = 640.0f;

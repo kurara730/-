@@ -4,6 +4,52 @@
 
 constexpr int MaxPlayers = 4;
 
+// スペースキーのブリンク（短距離テレポート回避）の調整値です。
+constexpr float BlinkDistance = 3.8f;    // 瞬間移動の距離
+constexpr float BlinkInvuln = 0.35f;     // ブリンク直後の無敵時間（弾を抜けられる）
+constexpr int BlinkMaxCharges = 2;       // 連続で使える最大回数（チャージ）
+constexpr float BlinkChargeCooldown = 10.0f; // チャージ1回あたりの回復時間（秒）
+constexpr float BlinkAttackLock = 0.3f;  // ブリンク直後に攻撃を出せない時間（攻撃とブリンクの同時発動を禁止）
+
+// ジャスト回避（危険な状況でブリンク成功）時の演出。ヒットストップ＋自キャラへズーム。
+constexpr float HitstopTime = 0.13f;     // ヒットストップ（強スロー）の実時間長
+constexpr float HitstopScale = 0.06f;    // ヒットストップ中のゲーム内時間倍率
+constexpr float JustZoomLife = 0.34f;    // ズーム演出の長さ（実時間）
+constexpr float JustZoomPeak = 0.30f;    // ズーム量のピーク（1.0 + これ倍）
+constexpr float JustDodgeBulletRange = 1.35f; // この距離以内に迫る敵弾があればジャスト判定
+
+// ボスの貫通ビーム（パリィ不可・低頻度の強攻撃）の調整値です。
+// 予兆(Warn)で地面に線を出して避けさせ、照射(Active)中に線分上のプレイヤーへダメージします。
+constexpr float BossBeamWarnTime = 1.5f;      // 予兆時間（回避猶予）
+constexpr float BossBeamActiveTime = 1.5f;    // 照射時間
+constexpr float BossBeamHalfWidth = 1.24f;    // ビーム半幅（当たり判定）
+constexpr float BossBeamLength = 26.0f;       // ビーム長（アリーナを貫く）
+constexpr float BossBeamDamageMul = 2.2f;     // boss_.atk への倍率（強攻撃）
+constexpr float BossBeamCooldownMin = 12.0f;  // 次のビームまでの最短秒数（発動頻度・低め）
+constexpr float BossBeamCooldownVar = 5.0f;   // 上記に加算される乱数幅
+
+// ボスの薙ぎ払い（近接・回避専用＝パリィ不可）の調整値です。
+// プレイヤーが近いときに前方の扇を予告→振り抜く。接近を咎める対近接攻撃。
+constexpr float BossSweepWarnTime = 0.85f;     // 予兆（短め＝近接の圧）
+constexpr float BossSweepActiveTime = 0.4f;    // 振り抜きの見た目・判定が残る時間
+constexpr float BossSweepRange = 5.6f;         // 扇の半径（リーチ）
+constexpr float BossSweepArc = 2.7f;           // 扇の全角（ラジアン, 約155度）
+constexpr float BossSweepDamageMul = 1.8f;     // boss_.atk への倍率
+constexpr float BossSweepCooldownMin = 6.0f;   // 最短クールダウン
+constexpr float BossSweepCooldownVar = 2.5f;   // 加算乱数幅
+constexpr float BossSweepTriggerRange = 6.6f;  // この距離以内にプレイヤーがいると発動
+
+// ボスの地中突き上げ（Burrow→Eruption・回避専用＝パリィ不可）の調整値です。
+// 潜行予兆→地中に潜って無敵→各プレイヤー足元の予測円が追尾→ロック→地面から噴出。
+constexpr float BossBurrowWarnTime = 0.8f;     // 潜る前の予兆（地上で発光）
+constexpr float BossBurrowSubmergeTime = 2.2f; // 潜行（無敵・非表示）の時間
+constexpr float BossBurrowLockTime = 0.7f;     // 潜行残りこの秒数で予測円をロック（以降は追尾しない）
+constexpr float BossBurrowEruptTime = 0.5f;    // 噴出の判定/演出が残る時間
+constexpr float BossBurrowRadius = 2.3f;       // 噴出1発の半径
+constexpr float BossBurrowDamageMul = 2.0f;    // boss_.atk への倍率（強攻撃）
+constexpr float BossBurrowCooldownMin = 14.0f; // 最短クールダウン（低頻度）
+constexpr float BossBurrowCooldownVar = 4.0f;  // 加算乱数幅
+
 // キャラクター、敵、ボス、ステージ、アイテムなどの分類を enum で固定します。
 // int のまま扱うと「0 が何を意味するか」が分かりにくいため、コード上では
 // CharacterType::Chocolate のように名前で読める形へ寄せています。
@@ -144,8 +190,8 @@ struct CharacterText
 // キャラ選択画面ではここを参照し、性能値は GameStateTypes.h の Loadouts を参照します。
 inline constexpr std::array<CharacterText, 4> CharacterTexts{ {
     { L"ショート", L"ST", L"誘導いちご弾", L"苺リコシェ場", L"巨大メテオ" },
-    { L"チョコ", L"CH", L"ヨーヨー弾", L"斬撃ヨーヨー", L"時計斬り" },
-    { L"チーズ", L"CZ", L"敵弾キャッチ", L"前方チーズ壁", L"無敵要塞" },
+    { L"チョコ", L"CH", L"チャージボム", L"チョコウォール", L"時計斬り" },
+    { L"チーズ", L"CZ", L"チーズショット", L"ストレッチダッシュ", L"無敵要塞" },
     { L"ロール", L"RL", L"バウンドロール弾", L"最大溜め突進", L"全画面叩きつけ" },
 } };
 

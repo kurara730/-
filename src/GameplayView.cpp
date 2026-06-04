@@ -166,6 +166,21 @@ void SweetsApp::DrawGameplay3D()
             ringAt(o.pos, o.radius * 1.2f, 0.20f, WithAlpha(o.color, 0.85f));
             ringAt(o.pos, o.radius * (0.7f + 0.15f * std::sin(o.spin * 4.0f)), 0.24f, WithAlpha(Cream, 0.60f));
         }
+        else if (o.chocoWall)
+        {
+            // チョコウォールは長方形（見た目のみ）。判定は radius の円のままなので、
+            // 横幅は判定円から極端にはみ出さないサイズに抑える（広い面の半幅 ≈ radius）。
+            const Color c = o.flash > 0.0f ? Cream : o.color;
+            const float top = 0.82f;
+            const float depth = o.radius * 0.85f; // 正面方向（厚み・薄い）
+            const float width = o.radius * 1.9f;  // 正面に直交する向き（広い面）
+            DrawMesh(cubeMesh_,
+                XMMatrixScaling(depth, top, width) *
+                XMMatrixRotationY(-o.spin) *
+                XMMatrixTranslation(o.pos.x, top * 0.5f, o.pos.z),
+                WithAlpha(c, 0.9f));
+            ringAt(o.pos, o.radius * 1.05f, 0.6f, WithAlpha(Cream, 0.24f));
+        }
         else
         {
             const Color c = o.flash > 0.0f ? Cream : o.color;
@@ -259,11 +274,14 @@ void SweetsApp::DrawGameplay3D()
     if (boss_.active)
     {
         Color c = boss_.flash > 0.0f ? Cream : (boss_.bossType == BossType::HiddenBoss ? Grape : Rose);
-        DrawSphere(boss_.pos, boss_.height, boss_.radius, c);
-        DrawMesh(ringMesh_,
-            XMMatrixScaling(boss_.radius * 1.42f, 1.0f, boss_.radius * 1.42f) *
-            XMMatrixTranslation(boss_.pos.x, 0.10f, boss_.pos.z),
-            WithAlpha(Red, 0.45f));
+        if (boss_.burrowSubT <= 0.0f) // 地中突き上げの潜行中は本体を隠す
+        {
+            DrawSphere(boss_.pos, boss_.height, boss_.radius, c);
+            DrawMesh(ringMesh_,
+                XMMatrixScaling(boss_.radius * 1.42f, 1.0f, boss_.radius * 1.42f) *
+                XMMatrixTranslation(boss_.pos.x, 0.10f, boss_.pos.z),
+                WithAlpha(Red, 0.45f));
+        }
         if (boss_.bossType == BossType::HiddenBoss && hiddenBossForm_ >= 2)
         {
             const float pulse = 0.14f * std::sin(gameTime_ * (hiddenBossForm_ >= 3 ? 8.0f : 5.2f));
@@ -332,6 +350,84 @@ void SweetsApp::DrawGameplay3D()
                 XMMatrixTranslation(boss_.pos.x, 0.14f, boss_.pos.z),
                 WithAlpha(telegraph, 0.72f));
         }
+        // 貫通ビーム：予兆線（点滅）と照射（発光する角柱）を3Dで描画。
+        if (boss_.beamWarnT > 0.0f || boss_.beamActiveT > 0.0f)
+        {
+            const float ang = boss_.beamAngle;
+            const V2 bdir = FromAngle(ang);
+            const V2 center = boss_.pos + bdir * (BossBeamLength * 0.5f);
+            if (boss_.beamActiveT > 0.0f)
+            {
+                const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 30.0f);
+                const float h = 0.72f;
+                DrawMesh(cubeMesh_,
+                    XMMatrixScaling(BossBeamLength, h, BossBeamHalfWidth * 2.0f) *
+                    XMMatrixRotationY(-ang) *
+                    XMMatrixTranslation(center.x, h * 0.5f + 0.05f, center.z),
+                    WithAlpha(Red, 0.62f));
+                DrawMesh(cubeMesh_,
+                    XMMatrixScaling(BossBeamLength, h * 0.42f, BossBeamHalfWidth) *
+                    XMMatrixRotationY(-ang) *
+                    XMMatrixTranslation(center.x, h * 0.5f + 0.06f, center.z),
+                    WithAlpha(Cream, ClampFloat(0.55f + 0.25f * pulse, 0.0f, 1.0f)));
+            }
+            else
+            {
+                const float blink = 0.30f + 0.35f * std::sin(gameTime_ * 18.0f);
+                DrawMesh(cubeMesh_,
+                    XMMatrixScaling(BossBeamLength, 0.04f, BossBeamHalfWidth * 2.0f) *
+                    XMMatrixRotationY(-ang) *
+                    XMMatrixTranslation(center.x, 0.06f, center.z),
+                    WithAlpha(Red, ClampFloat(blink, 0.0f, 0.7f)));
+            }
+        }
+        // 薙ぎ払いの予兆扇（ウェッジメッシュは半角0.65固定なので、広い扇は2枚で覆う）。
+        if (boss_.sweepWarnT > 0.0f)
+        {
+            const float blink = 0.28f + 0.34f * std::sin(gameTime_ * 22.0f);
+            const Color col = WithAlpha(Red, ClampFloat(blink, 0.0f, 0.7f));
+            const float off = std::max(0.0f, BossSweepArc * 0.5f - 0.65f);
+            for (float k = -1.0f; k <= 1.0f; k += 2.0f)
+            {
+                const float a = boss_.sweepAngle + k * off;
+                DrawMesh(wedgeMesh_,
+                    XMMatrixScaling(BossSweepRange, 1.0f, BossSweepRange) *
+                    XMMatrixRotationY(-a) *
+                    XMMatrixTranslation(boss_.pos.x, 0.07f, boss_.pos.z),
+                    col);
+            }
+        }
+        // 地中突き上げ：潜行中は予測円（ロック前は点滅・ロック後は実線寄り）、噴出中は発光円。
+        if (boss_.burrowSubT > 0.0f)
+        {
+            const bool locked = boss_.burrowSubT <= BossBurrowLockTime;
+            const float blink = locked ? 0.78f : (0.30f + 0.40f * std::sin(gameTime_ * 16.0f));
+            for (int i = 0; i < boss_.burrowCount; ++i)
+            {
+                const V2 at = boss_.burrowTargets[i];
+                DrawMesh(ringMesh_,
+                    XMMatrixScaling(BossBurrowRadius, 1.0f, BossBurrowRadius) *
+                    XMMatrixTranslation(at.x, 0.08f, at.z),
+                    WithAlpha(Grape, ClampFloat(blink, 0.0f, 0.85f)));
+                if (locked)
+                {
+                    DrawMesh(ringMesh_,
+                        XMMatrixScaling(BossBurrowRadius * 0.62f, 1.0f, BossBurrowRadius * 0.62f) *
+                        XMMatrixTranslation(at.x, 0.09f, at.z),
+                        WithAlpha(Red, 0.55f));
+                }
+            }
+        }
+        if (boss_.burrowEruptT > 0.0f)
+        {
+            const float g = ClampFloat(boss_.burrowEruptT / BossBurrowEruptTime, 0.0f, 1.0f);
+            for (int i = 0; i < boss_.burrowCount; ++i)
+            {
+                const V2 at = boss_.burrowTargets[i];
+                // 開始(g=1)で太く高く噴き上がり、減衰(g→0)で細く低くなる。
+                DrawCylinder(at, BossBurrowRadius * (0.45f + 0.55f * g), 0.4f + 1.8f * g, WithAlpha(Grape, 0.3f + 0.5f * g));
+            }
+        }
     }
 
     for (const auto& s : slashes_) DrawSector3D(s);
@@ -384,10 +480,6 @@ void SweetsApp::DrawGameplay3D()
                 XMMatrixScaling(p.hitboxRadius, 1.0f, p.hitboxRadius) *
                 XMMatrixTranslation(p.pos.x, 0.06f, p.pos.z),
                 Red);
-            DrawMesh(ringMesh_,
-                XMMatrixScaling(p.grazeRadius, 1.0f, p.grazeRadius) *
-                XMMatrixTranslation(p.pos.x, 0.055f, p.pos.z),
-                WithAlpha(Sky, p.grazeFlash > 0.0f ? 0.70f : 0.30f));
         }
         if (p.shieldT > 0.0f)
         {

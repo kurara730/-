@@ -62,8 +62,8 @@ struct LoadoutPreset
 // CSV(assets/data/characters.csv)で実行時に上書き可能。詳細は DataTables.h を参照。
 inline std::array<LoadoutPreset, 4> Loadouts{ {
     { L"ショート", L"ヒート連射", L"撃ち続けて反射弾を強化するミニガン", Weapon::Strawberry, CharacterType::Shortcake, 92.0f, 6.15f, 0.92f, 0.82f, 18.0f, Berry },
-    { L"チョコ", L"ヨーヨー", L"敵で跳ねる弾をコンボさせる", Weapon::Chocolate, CharacterType::Chocolate, 145.0f, 4.55f, 1.10f, 1.06f, 8.0f, Choco },
-    { L"チーズ", L"敵弾キャッチ", L"壁で敵弾を味方弾へ変える", Weapon::Cheese, CharacterType::Cheese, 112.0f, 4.95f, 1.28f, 1.14f, 12.0f, Gold },
+    { L"チョコ", L"ボム＆壁", L"長押しボムとチョコウォールで戦う", Weapon::Chocolate, CharacterType::Chocolate, 145.0f, 4.55f, 1.10f, 1.06f, 8.0f, Choco },
+    { L"チーズ", L"遠隔＆高速", L"チーズショットとストレッチダッシュで戦う", Weapon::Cheese, CharacterType::Cheese, 112.0f, 4.95f, 1.28f, 1.14f, 12.0f, Gold },
     { L"ロール", L"壁バウンド", L"壁と境界で跳ねる弾を操る", Weapon::Roll, CharacterType::Roll, 108.0f, 5.35f, 1.00f, 0.98f, 24.0f, Cream },
 } };
 
@@ -102,6 +102,9 @@ struct Player
     float dashT = 0.0f;
     float reviveT = 0.0f;
     float warpCd = 0.0f;
+    int blinkCharges = BlinkMaxCharges; // 残りブリンク回数（最大BlinkMaxCharges、連続使用可）
+    float blinkRechargeT = 0.0f;        // 1チャージ回復までの残り時間
+    float blinkLockT = 0.0f;            // ブリンク直後の攻撃ロック残り時間（攻撃と同時発動を禁止）
     float bombCharge = 0.0f;    // チョコ爆弾のチャージ量（長押し時間）
     float fireHeat = 0.0f;      // ショートのヒート（撃ち続けた時間。移動でリセット）
     float overheatT = 0.0f;     // オーバーヒート中の発射ロック残時間（>0なら撃てない）
@@ -190,6 +193,23 @@ struct Boss
     bool telegraphAdd = false;
     bool telegraphMirror = false;
     bool telegraphField = false;
+    // 貫通ビーム（パリィ不可・低頻度）。予兆→照射の小さなステートを本体に持たせます。
+    float beamCd = 8.0f;        // 次のビームまでの残り時間
+    float beamWarnT = 0.0f;     // 予兆中の残り（>0でビーム準備中）
+    float beamActiveT = 0.0f;   // 照射中の残り（>0で照射中）
+    float beamAngle = 0.0f;     // 照射方向（予兆開始時にロック）
+    // 薙ぎ払い（近接・回避専用）。予兆→振り抜きの小さなステート。
+    float sweepCd = 4.0f;       // 次の薙ぎ払いまでの残り時間
+    float sweepWarnT = 0.0f;    // 予兆中の残り（>0で振りかぶり中）
+    float sweepActiveT = 0.0f;  // 振り抜き判定/演出が残る時間
+    float sweepAngle = 0.0f;    // 振る方向（予兆開始時にロック）
+    // 地中突き上げ（Burrow→Eruption・回避専用）。予兆→潜行(無敵)→噴出の多段ステート。
+    float burrowCd = 10.0f;     // 次の地中突き上げまでの残り時間
+    float burrowWarnT = 0.0f;   // 潜る前の予兆中（>0）
+    float burrowSubT = 0.0f;    // 潜行中（>0なら無敵・非表示）
+    float burrowEruptT = 0.0f;  // 噴出の判定/演出が残る時間
+    int burrowCount = 0;        // 噴出地点の数
+    std::array<V2, MaxPlayers> burrowTargets{}; // 噴出予定地点（潜行中に各プレイヤーを追尾→ロック）
     BossType bossType = BossType::Demon;
     bool active = false;
 };
@@ -316,6 +336,7 @@ struct Obstacle
     Color color = Choco;
     bool moving = false;
     bool cheeseWall = false;
+    bool chocoWall = false;     // チョコケーキの「チョコウォール」識別用。最大3枚FIFO管理と長方形描画に使う（反射は cheeseWall 側で従来通り円判定）
     bool damageField = false;
     bool bumper = false;        // 反射ブースト台
     bool breakable = false;     // 破壊可能（壊すとドロップ）

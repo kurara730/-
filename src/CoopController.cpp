@@ -142,7 +142,6 @@ void SweetsApp::UpdateGamepadPlayer(Player& p, int playerIndex, float dt)
         p.chargeT = 0.0f;
     }
 
-    if ((state.Gamepad.wButtons & XINPUT_GAMEPAD_B) != 0) UseBombFor(p, playerIndex);
     if ((state.Gamepad.wButtons & XINPUT_GAMEPAD_Y) != 0) UseUltimateFor(p, playerIndex);
 }
 

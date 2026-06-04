@@ -36,35 +36,10 @@ void SweetsApp::FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint)
     }
     else if (p.character == CharacterType::Chocolate)
     {
-        // チョコは剣エフェクトを出しつつ、判定としては前方へ斬撃波を飛ばします。
-        // 見た目はEffekseerと補助スプライト、ダメージはShotとして管理します。
-        PlayCombatEffect(L"sword_slash", p.pos, 0.56f, aim, 1.45f, Choco, 28);
-        for (int i = -1; i <= 1; ++i)
-        {
-            const float a = aim + i * 0.10f;
-            Shot s{};
-            s.pos = p.pos + FromAngle(a) * 0.7f;
-            s.vel = FromAngle(a) * 14.5f;
-            s.radius = 0.19f;
-            s.damage = 46.0f * dmgScale;
-            s.ttl = 1.15f;
-            s.pierce = 5 + static_cast<int>(p.corePierce);
-            s.bounce = static_cast<int>(p.coreBounce);
-            s.charged = true;
-            s.yoyo = true;
-            s.bounce = std::max(s.bounce, 4);
-            s.ownerIndex = ownerIndex;
-            s.sourceCharacter = CharacterType::Chocolate;
-            s.color = Choco;
-            SyncShot3D(s);
-            shots_.push_back(s);
-        }
-        message_ = L"斬撃波";
-    }
-    else if (p.character == CharacterType::Cheese)
-    {
-        // チーズは移動する壁を置きます。
+        // チョコは移動するチョコウォール（壁）を置きます。
         // cheeseWall=true なので、敵弾が当たると味方弾へ反射できます。
+        // 短押し壁と合わせて最大3枚（FIFO）。出す前に古い壁を整理します。
+        EnforceChocoWallLimit(3);
         Obstacle wall{};
         wall.pos = p.pos + FromAngle(aim) * 1.1f;
         wall.vel = FromAngle(aim) * 2.2f;
@@ -75,11 +50,18 @@ void SweetsApp::FireCharged(Player& p, int ownerIndex, float aim, V2 aimPoint)
         wall.ownerIndex = ownerIndex;
         wall.reflectPower = 1.55f + p.corePower;
         wall.cheeseWall = true;
+        wall.chocoWall = true;        // FIFO管理＆長方形描画の対象
+        wall.spin = aim;              // 長方形の向き（進行方向＝正面）
         wall.moving = true;
-        wall.color = Gold;
+        wall.color = Choco;
         SyncObstacle3D(wall);
         obstacles_.push_back(wall);
-        message_ = L"トゲ付き壁";
+        message_ = L"チョコウォール";
+    }
+    else if (p.character == CharacterType::Cheese)
+    {
+        // チーズケーキはストレッチダッシュのGO待ち（ダミー化）
+        message_ = L"ストレッチダッシュ (準備中)";
     }
     else
     {

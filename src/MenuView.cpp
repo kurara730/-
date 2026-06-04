@@ -233,11 +233,26 @@ void SweetsApp::DrawHud()
             : D2D1::ColorF(1.0f, 0.82f, 0.55f, 0.95f);
         hudText(ultStr.str(), 478.0f, top + 3.0f, 600.0f, ultTextColor);
 
-        // ボム / グレイズ
-        std::wostringstream extra;
-        extra << L"ボム " << p.bombs << L"   グレイズ " << p.graze;
-        hudText(extra.str(), 612.0f, top + 3.0f, static_cast<float>(width_) - 18.0f,
-            D2D1::ColorF(0.86f, 0.90f, 1.0f, 0.92f));
+        // ブリンク残量（1Pのみ）。チャージごとにバーで表示し、回復中はゲージが満ちていく。
+        if (i == 0)
+        {
+            hudText(L"ブリンク", 612.0f, top + 3.0f, 690.0f, D2D1::ColorF(0.70f, 0.92f, 1.0f, 0.95f));
+            for (int k = 0; k < BlinkMaxCharges; ++k)
+            {
+                const float bx = 690.0f + k * 26.0f;
+                float pct = 0.0f;
+                bool ready = false;
+                if (k < p.blinkCharges) { pct = 1.0f; ready = true; }
+                else if (k == p.blinkCharges && p.blinkCharges < BlinkMaxCharges)
+                {
+                    pct = ClampFloat(1.0f - p.blinkRechargeT / BlinkChargeCooldown, 0.0f, 1.0f);
+                }
+                const D2D1::ColorF fg = ready
+                    ? D2D1::ColorF(0.40f, 0.90f, 1.0f, 0.97f)   // 使用可：明るいシアン
+                    : D2D1::ColorF(0.30f, 0.55f, 0.72f, 0.95f); // 回復中：暗いシアン
+                fillBar(bx, top + 5.0f, 22.0f, 14.0f, pct, barBg, fg);
+            }
+        }
 
         // ショートのヒートゲージ（自機の頭上。撃ち続けると伸び、レッドゾーンで最大火力、振り切るとオーバーヒート）
         if (p.weapon == Weapon::Strawberry && !p.downed && (p.fireHeat > 0.02f || p.overheatT > 0.0f || p.firing))
@@ -369,7 +384,7 @@ void SweetsApp::DrawHud()
     }
 
     textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.88f));
-    const wchar_t* help = L"WASD/矢印: 移動  |  左クリック/Space: 通常弾  |  右クリック長押し: チャージ  |  Q: 必殺  |  X/Ctrl: ボム  |  P: 一時停止";
+    const wchar_t* help = L"WASD/矢印: 移動  |  左クリック: 通常弾  |  Space: ブリンク回避  |  右クリック長押し: チャージ  |  Q: 必殺  |  P: 一時停止";
     d2dContext_->DrawTextW(help, static_cast<UINT32>(wcslen(help)), smallFormat_.Get(),
         D2D1::RectF(18.0f, static_cast<float>(height_) - 34.0f, static_cast<float>(width_) - 18.0f, static_cast<float>(height_) - 8.0f), textBrush_.Get());
 
@@ -546,13 +561,11 @@ void SweetsApp::DrawHud()
             D2D1::RectF(0, static_cast<float>(height_) * 0.36f, static_cast<float>(width_), static_cast<float>(height_) * 0.46f), textBrush_.Get());
         std::wostringstream ss;
         int totalKills = 0;
-        int totalGraze = 0;
         for (const auto& p : players_)
         {
             totalKills += p.kills;
-            totalGraze += p.graze;
         }
-        ss << L"スコア " << score_ << L"  ウェーブ " << wave_ << L"  撃破 " << totalKills << L"  グレイズ " << totalGraze;
+        ss << L"スコア " << score_ << L"  ウェーブ " << wave_ << L"  撃破 " << totalKills;
         const std::wstring line = ss.str();
         textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 1.0f));
         d2dContext_->DrawTextW(line.c_str(), static_cast<UINT32>(line.size()), hudFormat_.Get(),
@@ -1067,10 +1080,12 @@ void SweetsApp::DrawDifficultySelection()
     const float startX = (static_cast<float>(width_) - totalW) * 0.5f;
     const float top = static_cast<float>(height_) * 0.36f;
 
+    const int debugIndex = optionCount - 1; // 末尾はデバッグカード
     for (int i = 0; i < optionCount; ++i)
     {
-        const bool practice = i == 5;
-        const DifficultyDef& def = practice ? DifficultyDefs[static_cast<int>(Difficulty::Lunatic)] : DifficultyDefs[i];
+        const bool isDebug = i == debugIndex;
+        const bool practice = !isDebug && hiddenBossUnlocked_ && i == 5;
+        const DifficultyDef& def = (practice || isDebug) ? DifficultyDefs[static_cast<int>(Difficulty::Lunatic)] : DifficultyDefs[i];
         const int col = i % 3;
         const int row = i / 3;
         const float x = startX + col * (cardW + gap);
@@ -1084,12 +1099,12 @@ void SweetsApp::DrawDifficultySelection()
         textBrush_->SetColor(active ? OldSelectStroke(true) : D2D1::ColorF(def.color.r, def.color.g, def.color.b, 0.75f));
         d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), OldSelectStrokeWidth(active));
 
-        std::wstring name = practice ? L"Hidden Boss Practice" : def.name;
+        std::wstring name = isDebug ? L"Boss Only (Debug)" : (practice ? L"Hidden Boss Practice" : def.name);
         textBrush_->SetColor(active ? OldSelectText(true) : D2D1::ColorF(def.color.r, def.color.g, def.color.b, 1.0f));
         d2dContext_->DrawTextW(name.c_str(), static_cast<UINT32>(name.size()), hudFormat_.Get(),
             D2D1::RectF(x + 10.0f, y + 12.0f, x + cardW - 10.0f, y + 40.0f), textBrush_.Get());
 
-        const std::wstring summary = practice ? L"解禁済み: 隠しボス戦から開始" : def.summary;
+        const std::wstring summary = isDebug ? L"新技のみ / ボス即出現" : (practice ? L"解禁済み: 隠しボス戦から開始" : def.summary);
         textBrush_->SetColor(D2D1::ColorF(0.92f, 0.84f, 0.88f, 0.96f));
         d2dContext_->DrawTextW(summary.c_str(), static_cast<UINT32>(summary.size()), smallFormat_.Get(),
             D2D1::RectF(x + 12.0f, y + 44.0f, x + cardW - 12.0f, y + 66.0f), textBrush_.Get());
@@ -1124,13 +1139,11 @@ void SweetsApp::DrawClearScreen()
 
     std::wostringstream ss;
     int totalKills = 0;
-    int totalGraze = 0;
     for (const auto& p : players_)
     {
         totalKills += p.kills;
-        totalGraze += p.graze;
     }
-    ss << L"スコア " << score_ << L"  撃破 " << totalKills << L"  グレイズ " << totalGraze;
+    ss << L"スコア " << score_ << L"  撃破 " << totalKills;
     if (pendingHiddenBoss_ && screen_ == Screen::Clear) ss << L"  - 何かが近づいてくる";
     else ss << L"  - Titleボタンでタイトルへ";
     const std::wstring line = ss.str();

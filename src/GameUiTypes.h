@@ -64,7 +64,8 @@ enum class GameMode
 {
     Story,
     Endless,
-    HiddenBossPractice
+    HiddenBossPractice,
+    BossOnlyDebug      // デバッグ用：ボスのみ即出現し、新技（ビーム/薙ぎ払い/地中突き上げ）だけを使う
 };
 
 enum class TitleMenuItem

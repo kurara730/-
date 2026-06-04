@@ -187,6 +187,14 @@ float SweetsApp::GameplayViewHalfWidth() const
     return GameplayViewHalfHeight() * aspect;
 }
 
+// ジャスト回避ズームの倍率。0→ピーク→0 と滑らかに変化させます。
+float SweetsApp::CameraZoom() const
+{
+    if (justZoomLife_ <= 0.0f || justZoomT_ <= 0.0f) return 1.0f;
+    const float p = ClampFloat(1.0f - justZoomT_ / justZoomLife_, 0.0f, 1.0f); // 0→1
+    return 1.0f + JustZoomPeak * std::sin(p * Pi);
+}
+
 void SweetsApp::UpdateCamera(float dt)
 {
     V2 target{};

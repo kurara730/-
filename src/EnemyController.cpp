@@ -340,6 +340,16 @@ void SweetsApp::SpawnBoss()
     boss_.type = (wave_ / 3) % 6;
     boss_.bossType = static_cast<BossType>(boss_.type);
     boss_.phase = 1;
+    boss_.beamCd = BossBeamCooldownMin + Rand(0.0f, BossBeamCooldownVar); // 戦闘開始直後に撃たないよう余裕を持たせる
+    boss_.sweepCd = BossSweepCooldownMin + Rand(0.0f, BossSweepCooldownVar);
+    boss_.burrowCd = BossBurrowCooldownMin + Rand(0.0f, BossBurrowCooldownVar);
+    if (gameMode_ == GameMode::BossOnlyDebug)
+    {
+        // デバッグステージは各技をすぐ・短い間隔で確認できるよう初期CDを短縮。
+        boss_.beamCd = 3.0f;
+        boss_.sweepCd = 2.0f;
+        boss_.burrowCd = 5.0f;
+    }
     bossGimmick_ = {};
     bossGimmick_.type = boss_.bossType;
     bossGimmick_.nextPattern = PatternForBoss(boss_.bossType, 0);
@@ -523,10 +533,241 @@ void SweetsApp::UpdateBoss(float dt)
     const V2 toP = targetPlayer->pos - boss_.pos;
     const float d = RuleDistance(boss_.pos, boss_.height, targetPlayer->pos, PlayerBodyY);
     const V2 n = Normalize(toP);
-    boss_.vel = n * boss_.speed * (slowT_ > 0.0f ? 0.55f : 1.0f);
+    // 特殊攻撃（ビーム/薙ぎ払い）の予兆・実行中は本体を止める（方向を固定し、避け先を読みやすくする）
+    const bool busy = boss_.beamWarnT > 0.0f || boss_.beamActiveT > 0.0f
+        || boss_.sweepWarnT > 0.0f || boss_.sweepActiveT > 0.0f
+        || boss_.burrowWarnT > 0.0f || boss_.burrowSubT > 0.0f || boss_.burrowEruptT > 0.0f;
+    // デバッグステージでは新技を短い間隔で繰り返し確認できるようCDを縮める。
+    const float specialCdMul = (gameMode_ == GameMode::BossOnlyDebug) ? 0.3f : 1.0f;
+    boss_.vel = busy ? V2{} : n * boss_.speed * (slowT_ > 0.0f ? 0.55f : 1.0f);
     boss_.pos += boss_.vel * dt;
     ClampInside(boss_.pos, boss_.radius);
     SyncBoss3D(boss_);
+
+    // === 貫通ビーム（パリィ不可・低頻度の強攻撃）===
+    // 通常弾幕の予兆中(telegraphT)・特殊攻撃中はクールダウンを進めない＝攻撃が重ならない。
+    if (!busy && boss_.telegraphT <= 0.0f)
+    {
+        boss_.beamCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+    }
+    if (boss_.beamCd <= 0.0f && !busy && boss_.telegraphT <= 0.0f)
+    {
+        // 予兆開始：方向をプレイヤーへロックし、地面に予測線を出す。
+        boss_.beamWarnT = BossBeamWarnTime;
+        boss_.beamAngle = AngleOf(toP);
+        WorldTelegraph warn{};
+        warn.pos = boss_.pos;
+        warn.dir = FromAngle(boss_.beamAngle);
+        warn.radius = BossBeamHalfWidth * 2.0f;
+        warn.length = BossBeamLength;
+        warn.ttl = BossBeamWarnTime;
+        warn.life = BossBeamWarnTime;
+        warn.color = Red;
+        warn.pattern = BossPatternId::Beam;
+        worldTelegraphs_.push_back(warn);
+        boss_.flash = std::max(boss_.flash, BossBeamWarnTime);
+        message_ = L"貫通ビーム!";
+        messageT_ = std::max(messageT_, 1.0f);
+    }
+    if (boss_.beamWarnT > 0.0f)
+    {
+        boss_.beamWarnT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        if (boss_.beamWarnT <= 0.0f)
+        {
+            boss_.beamWarnT = 0.0f;
+            boss_.beamActiveT = BossBeamActiveTime;
+            Burst(boss_.pos, Red, 30);
+            audio_.PlaySoundEffect(SoundEffect::UltimateSlash);
+        }
+        return; // 予兆中は通常攻撃しない
+    }
+    if (boss_.beamActiveT > 0.0f)
+    {
+        boss_.beamActiveT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        // 照射：本体から beamAngle 方向の線分に乗ったプレイヤーへダメージ（貫通・パリィ不可）。
+        const V2 bdir = FromAngle(boss_.beamAngle);
+        for (auto& p : players_)
+        {
+            if (!p.active || p.downed || p.inv > 0.0f) continue;
+            const V2 rel = p.pos - boss_.pos;
+            const float along = Dot(rel, bdir);
+            if (along < 0.0f || along > BossBeamLength) continue;
+            const V2 perp = rel - bdir * along;
+            if (Len(perp) <= BossBeamHalfWidth + p.radius)
+            {
+                ResolvePlayerHit(p, boss_.atk * BossBeamDamageMul, boss_.beamAngle);
+            }
+        }
+        if (boss_.beamActiveT <= 0.0f)
+        {
+            boss_.beamActiveT = 0.0f;
+            boss_.beamCd = (BossBeamCooldownMin + Rand(0.0f, BossBeamCooldownVar)) * specialCdMul;
+        }
+        return; // 照射中は通常攻撃しない
+    }
+
+    // === 薙ぎ払い（近接・回避専用＝パリィ不可）===
+    // ここに来ている時点でビームは非アクティブ。通常弾幕の予兆中はCDを進めない。
+    if (boss_.telegraphT <= 0.0f)
+    {
+        boss_.sweepCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+    }
+    // CDが切れ、プレイヤーが近いときだけ発動（接近を咎める置き攻撃）。
+    if (boss_.sweepCd <= 0.0f && boss_.sweepWarnT <= 0.0f && boss_.sweepActiveT <= 0.0f
+        && boss_.telegraphT <= 0.0f && d <= BossSweepTriggerRange)
+    {
+        boss_.sweepWarnT = BossSweepWarnTime;
+        boss_.sweepAngle = AngleOf(toP); // 振る方向をロック（裏や外へ回避できる）
+        boss_.flash = std::max(boss_.flash, BossSweepWarnTime);
+        message_ = L"薙ぎ払い!";
+        messageT_ = std::max(messageT_, 0.8f);
+    }
+    if (boss_.sweepWarnT > 0.0f)
+    {
+        boss_.sweepWarnT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        if (boss_.sweepWarnT <= 0.0f)
+        {
+            boss_.sweepWarnT = 0.0f;
+            boss_.sweepActiveT = BossSweepActiveTime;
+            // 振り抜き：扇内のプレイヤーへ即時ダメージ＋ノックバック。
+            for (auto& p : players_)
+            {
+                if (!p.active || p.downed || p.inv > 0.0f) continue;
+                const float dist = RuleDistance(boss_.pos, boss_.height, p.pos, PlayerBodyY);
+                if (dist > BossSweepRange + p.radius) continue;
+                float da = AngleOf(p.pos - boss_.pos) - boss_.sweepAngle;
+                while (da > Pi) da -= TwoPi;
+                while (da < -Pi) da += TwoPi;
+                if (std::fabs(da) <= BossSweepArc * 0.5f)
+                {
+                    ResolvePlayerHit(p, boss_.atk * BossSweepDamageMul, boss_.sweepAngle);
+                }
+            }
+            // 斬撃の見た目（Slashを流用。判定は上で実施済みなので damage は持たせない）。
+            Slash s{};
+            s.pos = boss_.pos;
+            s.angle = boss_.sweepAngle;
+            s.range = BossSweepRange;
+            s.arc = BossSweepArc;
+            s.ttl = BossSweepActiveTime;
+            s.life = BossSweepActiveTime;
+            s.damage = 0.0f;
+            s.color = Red;
+            s.height = boss_.height * 0.6f;
+            s.visualMode = SlashVisualMode::Sector;
+            s.sweep = true;
+            SyncSlash3D(s);
+            slashes_.push_back(s);
+            Burst(boss_.pos + FromAngle(boss_.sweepAngle) * (BossSweepRange * 0.5f), Red, 22);
+            audio_.PlaySoundEffect(SoundEffect::ChocoSlash);
+            boss_.sweepCd = (BossSweepCooldownMin + Rand(0.0f, BossSweepCooldownVar)) * specialCdMul;
+        }
+        return; // 振りかぶり中は通常攻撃しない
+    }
+    if (boss_.sweepActiveT > 0.0f)
+    {
+        boss_.sweepActiveT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        if (boss_.sweepActiveT <= 0.0f) boss_.sweepActiveT = 0.0f;
+        return; // 振り抜き演出中は通常攻撃しない
+    }
+
+    // === 地中突き上げ（Burrow→Eruption・回避専用＝パリィ不可）===
+    // 予兆→潜行(無敵/非表示)→各プレイヤー足元の予測円が追尾・ロック→地面から噴出。
+    if (boss_.telegraphT <= 0.0f)
+    {
+        boss_.burrowCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+    }
+    if (boss_.burrowCd <= 0.0f && boss_.burrowWarnT <= 0.0f && boss_.burrowSubT <= 0.0f
+        && boss_.burrowEruptT <= 0.0f && boss_.telegraphT <= 0.0f)
+    {
+        boss_.burrowWarnT = BossBurrowWarnTime;
+        boss_.flash = std::max(boss_.flash, BossBurrowWarnTime);
+        message_ = L"地中突き上げ!";
+        messageT_ = std::max(messageT_, 1.0f);
+    }
+    if (boss_.burrowWarnT > 0.0f)
+    {
+        boss_.burrowWarnT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        if (boss_.burrowWarnT <= 0.0f)
+        {
+            boss_.burrowWarnT = 0.0f;
+            boss_.burrowSubT = BossBurrowSubmergeTime; // 潜行開始（この間は無敵・非表示）
+            // 予測地点を全アクティブプレイヤー位置で初期化（潜行中に追尾し、最後にロック）。
+            boss_.burrowCount = 0;
+            for (auto& p : players_)
+            {
+                if (!p.active || p.downed) continue;
+                if (boss_.burrowCount < MaxPlayers)
+                {
+                    boss_.burrowTargets[boss_.burrowCount] = p.pos;
+                    ++boss_.burrowCount;
+                }
+            }
+            if (boss_.burrowCount == 0) { boss_.burrowTargets[0] = targetPlayer->pos; boss_.burrowCount = 1; }
+            Burst(boss_.pos, Grape, 30);
+        }
+        return; // 潜る前は通常攻撃しない
+    }
+    if (boss_.burrowSubT > 0.0f)
+    {
+        boss_.burrowSubT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        // ロック時間に入るまでは予測円が各プレイヤーを追尾。以降は固定（避け先を作れる）。
+        if (boss_.burrowSubT > BossBurrowLockTime)
+        {
+            int idx = 0;
+            for (auto& p : players_)
+            {
+                if (!p.active || p.downed) continue;
+                if (idx < boss_.burrowCount) boss_.burrowTargets[idx] = p.pos;
+                ++idx;
+            }
+        }
+        if (boss_.burrowSubT <= 0.0f)
+        {
+            boss_.burrowSubT = 0.0f;
+            boss_.burrowEruptT = BossBurrowEruptTime;
+            // 噴出：ロック地点の円内にいるプレイヤーへダメージ＋演出。
+            for (int i = 0; i < boss_.burrowCount; ++i)
+            {
+                const V2 at = boss_.burrowTargets[i];
+                for (auto& p : players_)
+                {
+                    if (!p.active || p.downed || p.inv > 0.0f) continue;
+                    if (RuleDistance(p.pos, PlayerBodyY, at, 0.0f) <= BossBurrowRadius + p.radius)
+                    {
+                        ResolvePlayerHit(p, boss_.atk * BossBurrowDamageMul, AngleOf(p.pos - at));
+                    }
+                }
+                Burst(at, Grape, 40);
+                EffectPulse pulse{};
+                pulse.pos = at;
+                pulse.startRadius = BossBurrowRadius * 0.3f;
+                pulse.endRadius = BossBurrowRadius * 1.15f;
+                pulse.ttl = BossBurrowEruptTime;
+                pulse.life = BossBurrowEruptTime;
+                pulse.y = 0.25f;
+                pulse.color = Grape;
+                pulse.pos3 = Grounded3D(pulse.pos, pulse.y);
+                effectPulses_.push_back(pulse);
+            }
+            // ボスは最初のロック地点へ再出現（潜って距離を詰める挙動）。
+            boss_.pos = boss_.burrowTargets[0];
+            ClampInside(boss_.pos, boss_.radius);
+            SyncBoss3D(boss_);
+            audio_.PlaySoundEffect(SoundEffect::UltimateSlash);
+        }
+        return; // 潜行中は通常攻撃しない
+    }
+    if (boss_.burrowEruptT > 0.0f)
+    {
+        boss_.burrowEruptT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        if (boss_.burrowEruptT <= 0.0f)
+        {
+            boss_.burrowEruptT = 0.0f;
+            boss_.burrowCd = (BossBurrowCooldownMin + Rand(0.0f, BossBurrowCooldownVar)) * specialCdMul;
+        }
+        return; // 噴出演出中は通常攻撃しない
+    }
 
     if (boss_.bossType == BossType::GravityPudding || boss_.bossType == BossType::DemonParfait)
     {
@@ -544,6 +785,9 @@ void SweetsApp::UpdateBoss(float dt)
     {
         ResolvePlayerHit(*targetPlayer, boss_.atk, AngleOf(toP));
     }
+
+    // ボスのみデバッグステージでは弾幕（通常パターン）を撃たず、新技だけを使う。
+    if (gameMode_ == GameMode::BossOnlyDebug) return;
 
     const EncounterTuning& tuning = CurrentEncounterTuning();
     // 予兆が終わった瞬間に実際の攻撃を出すラムダです。
@@ -828,6 +1072,7 @@ void SweetsApp::DamageBoss(float dmg, bool reflected, int ownerIndex)
 void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int ownerIndex)
 {
     if (!boss_.active) return;
+    if (boss_.burrowSubT > 0.0f) return; // 地中突き上げの潜行中は無敵
     if (boss_.bossType == BossType::HiddenBoss)
     {
         if (hiddenBossPhaseIntroT_ > 0.0f) return;

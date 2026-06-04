@@ -183,7 +183,6 @@ void SweetsApp::OnKeyDown(WPARAM key)
     if (screen_ == Screen::Playing || screen_ == Screen::HiddenBoss)
     {
         if (key == 'Q') UseUltimate();
-        if (key == 'X' || key == VK_CONTROL) UseBomb();
         if (key == 'R') RestartCurrentRun();
         if (key == 'T') SetAimMode(static_cast<AimMode>((static_cast<int>(aimMode_) + 1) % 3), true);
     }
@@ -791,6 +790,14 @@ bool SweetsApp::SelectDifficultyAt(float sx, float sy)
         if (sx >= x && sx <= x + cardW && sy >= y && sy <= y + cardH)
         {
             difficultyIndex_ = i;
+            if (i == optionCount - 1)
+            {
+                // ボスのみ（デバッグ）：難易度Normal相当でボス即出現、新技のみ。
+                pendingGameMode_ = GameMode::BossOnlyDebug;
+                difficultyIndex_ = static_cast<int>(Difficulty::Normal);
+                StartGameWithDifficulty(false);
+                return true;
+            }
             StartGameWithDifficulty(hiddenBossUnlocked_ && difficultyIndex_ == 5);
             return true;
         }

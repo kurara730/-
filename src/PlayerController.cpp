@@ -72,6 +72,72 @@ V2 SweetsApp::ResolvePlayerAimPoint(const Player& p, int ownerIndex, V2 cursorPo
     return p.pos + FromAngle(p.face) * std::min(range, 5.0f);
 }
 
+// チョコウォール（短押し壁・チャージ壁の両方）を最大 maxWalls 枚に保ちます。
+// 既に上限に達している場合は、配列の前方ほど古い（=先に push_back された）性質を使って
+// 一番古い chocoWall の ttl を 0 にし、StageFactory の既存クリーンアップで回収させます（FIFO）。
+// cheeseWall フラグや reflectPower には触れないため、コアの反射判定には影響しません。
+void SweetsApp::EnforceChocoWallLimit(size_t maxWalls)
+{
+    auto countActive = [this]() {
+        size_t n = 0;
+        for (const auto& o : obstacles_) if (o.chocoWall && o.ttl > 0.0f) ++n;
+        return n;
+    };
+    while (countActive() >= maxWalls)
+    {
+        Obstacle* oldest = nullptr;
+        for (auto& o : obstacles_)
+        {
+            if (o.chocoWall && o.ttl > 0.0f) { oldest = &o; break; }
+        }
+        if (!oldest) break;
+        oldest->ttl = 0.0f; // 次の除去パスで回収される（その場で erase せず反射ループを乱さない）
+    }
+}
+
+// ブリンクした位置が「危険だったか」を判定します（ジャスト回避演出のトリガー）。
+// 迫る敵弾、ボスの照射ビーム帯、ダメージ床、地中噴出の円のいずれかに掛かっていれば true。
+bool SweetsApp::IsBlinkJustDodge(V2 pos) const
+{
+    // (1) 近くに迫る敵弾
+    for (const auto& s : shots_)
+    {
+        if (!s.enemy || s.dead) continue;
+        if (RuleDistance(s.pos, s.height, pos, PlayerBodyY) > JustDodgeBulletRange + s.radius) continue;
+        if (Dot(s.vel, pos - s.pos) > 0.0f) return true; // こちらへ向かっている
+    }
+    if (boss_.active)
+    {
+        // (2) ボスの照射ビーム帯の中
+        if (boss_.beamActiveT > 0.0f)
+        {
+            const V2 bdir = FromAngle(boss_.beamAngle);
+            const V2 rel = pos - boss_.pos;
+            const float along = Dot(rel, bdir);
+            if (along >= 0.0f && along <= BossBeamLength)
+            {
+                const V2 perp = rel - bdir * along;
+                if (Len(perp) <= BossBeamHalfWidth + player_.radius + 0.4f) return true;
+            }
+        }
+        // (3) 地中突き上げの噴出円（噴出直後）
+        if (boss_.burrowEruptT > 0.0f)
+        {
+            for (int i = 0; i < boss_.burrowCount; ++i)
+            {
+                if (RuleDistance(pos, PlayerBodyY, boss_.burrowTargets[i], 0.0f) <= BossBurrowRadius + player_.radius + 0.4f) return true;
+            }
+        }
+    }
+    // (4) ダメージ床の中
+    for (const auto& o : obstacles_)
+    {
+        if (!o.damageField) continue;
+        if (RuleDistance(pos, PlayerBodyY, o.pos, o.height) <= o.radius + player_.radius) return true;
+    }
+    return false;
+}
+
 // 1Pの移動、通常攻撃、チャージ攻撃を更新します。
 // 2P-4Pは CoopController.cpp 側でAI/ゲームパッド操作として更新します。
 void SweetsApp::UpdatePlayer(float dt)
@@ -137,9 +203,63 @@ void SweetsApp::UpdatePlayer(float dt)
     player_.face = ResolvePlayerAim(player_, 0, dir, aimPoint);
     const V2 actionPoint = ResolvePlayerAimPoint(player_, 0, aimPoint, 8.0f);
 
+    // スペースキーでブリンク（短距離テレポート＋短い無敵）。最大BlinkMaxChargesまで連続使用可。
+    // チャージは1回ごとに BlinkChargeCooldown 秒かけて順番に回復する。
+    if (player_.blinkCharges < BlinkMaxCharges)
+    {
+        player_.blinkRechargeT -= dt;
+        if (player_.blinkRechargeT <= 0.0f)
+        {
+            ++player_.blinkCharges;
+            player_.blinkRechargeT = (player_.blinkCharges < BlinkMaxCharges) ? BlinkChargeCooldown : 0.0f;
+        }
+    }
+    const bool spaceHeld = KeyDown(VK_SPACE);
+    const bool spacePressed = spaceHeld && !prevSpace_;
+    if (spacePressed && player_.blinkCharges > 0)
+    {
+        const V2 fromPos = player_.pos;
+        // ジャスト回避判定：危険な状況（迫る敵弾／ボスの照射ビーム帯／ダメージ床／地中噴出）でのブリンク。
+        const bool justDodge = IsBlinkJustDodge(fromPos);
+        // フル状態から使い始めるときだけ回復タイマーを起動（連続使用中は継続）。
+        if (player_.blinkCharges == BlinkMaxCharges) player_.blinkRechargeT = BlinkChargeCooldown;
+        --player_.blinkCharges;
+        // 移動入力があればその方向、なければ向いている方向へ飛ぶ。
+        const V2 blinkDir = LenSq(dir) > 0.001f ? dir : FromAngle(player_.face);
+        Burst(fromPos, Sky, 14);                       // 出発点に残光
+        player_.pos += blinkDir * BlinkDistance;
+        ClampInside(player_.pos, player_.radius);
+        player_.inv = std::max(player_.inv, BlinkInvuln);
+        player_.dashT = 0.0f;                           // 既存ダッシュ移動はキャンセル
+        // 攻撃とブリンクの同時発動を禁止：直後の攻撃をロックし、溜め中の攻撃もキャンセル。
+        player_.blinkLockT = BlinkAttackLock;
+        player_.bombCharge = 0.0f;
+        player_.charging = false;
+        player_.chargeReady = false;
+        player_.chargeFull = false;
+        player_.chargeT = 0.0f;
+        SyncPlayer3D(player_);
+        Burst(player_.pos, Cream, 18);                 // 到着点に出現エフェクト
+        audio_.PlaySoundEffect(SoundEffect::Reflect);
+        if (justDodge)
+        {
+            // ヒットストップ＋自キャラへズーム。
+            hitstopT_ = HitstopTime;
+            justZoomT_ = JustZoomLife;
+            justZoomLife_ = JustZoomLife;
+            Burst(fromPos, Gold, 26);
+            message_ = L"ジャスト回避!";
+            messageT_ = std::max(messageT_, 0.9f);
+        }
+    }
+    prevSpace_ = spaceHeld;
+
     if (player_.fireCd > 0.0f) player_.fireCd -= dt;
-    // 左クリック/Spaceは通常弾専用です。長押ししてもチャージ弾は出しません。
-    const bool primaryHeld = mouseLeft_ || KeyDown(VK_SPACE);
+    if (player_.blinkLockT > 0.0f) player_.blinkLockT -= dt;
+    // ブリンク直後は攻撃ロック中。クリック攻撃（左/右）をこの間は受け付けない＝同時発動を防ぐ。
+    const bool attackLocked = player_.blinkLockT > 0.0f;
+    // 左クリックは通常弾専用です。長押ししてもチャージ弾は出しません。
+    const bool primaryHeld = mouseLeft_ && !attackLocked;
     const bool primaryPressed = primaryHeld && !prevMouseLeft_;
     const bool primaryReleased = !primaryHeld && prevMouseLeft_;
     if (player_.weapon == Weapon::Chocolate)
@@ -219,8 +339,13 @@ void SweetsApp::UpdatePlayer(float dt)
         FirePrimaryFor(player_, 0, player_.face);
     }
 
-    // 右クリックはチャージ専用です。チーズだけ短押し時に壁設置へ分岐します。
-    if (mouseRight_)
+    // 右クリックはチャージ専用です。チョコだけ短押し時に壁設置へ分岐します。
+    // ブリンク直後のロック中は受け付けない（攻撃とブリンクの同時発動を防ぐ）。
+    if (attackLocked)
+    {
+        // ロック中は右クリックの状態を進めず、リリースも握りつぶす。
+    }
+    else if (mouseRight_)
     {
         player_.chargeT += dt;
         player_.chargeReady = player_.chargeT >= 0.55f;
@@ -233,19 +358,24 @@ void SweetsApp::UpdatePlayer(float dt)
         {
             FireCharged(player_, 0, player_.face, actionPoint);
         }
-        else if (mouseRightReleased_ && player_.character == CharacterType::Cheese && obstacles_.size() < 20)
+        else if (mouseRightReleased_ && player_.character == CharacterType::Chocolate && obstacles_.size() < 20)
         {
+            // 出す前に最大3枚へ調整（古い壁から消える=FIFO）。
+            EnforceChocoWallLimit(3);
             Obstacle wall{};
-            wall.pos = actionPoint;
+            // チャージボムの発射方向（player_.face）と同じ向きへ出す。
+            wall.pos = player_.pos + FromAngle(player_.face) * 1.1f;
             ClampInside(wall.pos, 0.8f);
-            wall.radius = 0.52f;
+            wall.radius = 0.52f;          // 判定（反射）は従来通りこの円のまま
             wall.hp = 110.0f + player_.level * 18.0f;
             wall.ttl = 7.5f;
             wall.kind = 2;
             wall.ownerIndex = 0;
             wall.reflectPower = 1.35f + player_.corePower;
-            wall.cheeseWall = true;
-            wall.color = Gold;
+            wall.cheeseWall = true;       // 反射挙動は従来通り
+            wall.chocoWall = true;        // FIFO管理＆長方形描画の対象
+            wall.spin = player_.face;     // 長方形の向き。chocoWall は spin を加算更新しないので固定される
+            wall.color = Choco;
             SyncObstacle3D(wall);
             obstacles_.push_back(wall);
         }

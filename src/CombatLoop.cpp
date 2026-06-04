@@ -314,19 +314,7 @@ void SweetsApp::UpdateShots(float dt)
             {
                 if (!p.active || p.downed) continue;
                 const float hitDist = s.radius + p.hitboxRadius;
-                const float grazeDist = s.radius + p.grazeRadius;
                 const float d = RuleDistance(s, p);
-                // グレイズは「当たり判定には触れていないが近くをかすめた」時の報酬です。
-                // 先にグレイズを見てから被弾を見ることで、弾幕回避の手応えを出しています。
-                if (!s.grazed && d < grazeDist && d >= hitDist)
-                {
-                    s.grazed = true;
-                    ++p.graze;
-                    ++p.grazeChain;
-                    p.grazeFlash = 0.18f;
-                    p.ult = std::min(100.0f, p.ult + 0.45f);
-                    AddScore(12 + std::min(p.grazeChain, 80), &p);
-                }
                 if (d < hitDist)
                 {
                     ResolvePlayerHit(p, s.damage, AngleOf(p.pos - s.pos));

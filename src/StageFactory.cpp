@@ -268,7 +268,8 @@ void SweetsApp::UpdateStage(float dt)
         {
             o.flash = std::max(0.0f, o.flash - dt * 4.0f);
         }
-        o.spin += dt * (o.bumper ? 2.4f : 1.0f);
+        // chocoWall は spin を「正面の固定角度」として使うため加算しない（長方形が回り続けないように）。
+        if (!o.chocoWall) o.spin += dt * (o.bumper ? 2.4f : 1.0f);
 
         // 破壊可能オブジェ：HPが尽きたら衝撃波＋ドロップして消滅
         if (o.breakable && o.hp <= 0.0f && o.ttl < -0.5f)
