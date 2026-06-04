@@ -141,8 +141,8 @@ private:
     void UpdateHiddenBoss(float dt);
     void ResetHiddenBossCores();
     void UpdateHiddenBossCores(float dt);
-    bool DamageHiddenBossCore(float dmg, V2 from, int ownerIndex, BossDamageKind kind = BossDamageKind::NormalShot);
-    void DamageHiddenBossCoresInRadius(V2 center, float radius, float dmg, int ownerIndex, BossDamageKind kind = BossDamageKind::NormalShot);
+    bool DamageHiddenBossCore(float dmg, V2 from, int ownerIndex);
+    void DamageHiddenBossCoresInRadius(V2 center, float radius, float dmg, int ownerIndex);
     void UpdateEventVideo(float dt);
     void UpdatePlaying(float dt);
     void UpdateAudioForScreen();
@@ -160,7 +160,6 @@ private:
     void ResolvePlayerHit(Player& p, float dmg, float angle);
     void DamageEnemy(Enemy& e, float dmg, V2 from, float knock);
     void DamageEnemy(Enemy& e, float dmg, V2 from, float knock, bool reflected, int ownerIndex);
-    void GrantBossHitUltimate(int ownerIndex, BossDamageKind kind, bool reflected);
     void DamageBoss(float dmg);
     void DamageBoss(float dmg, bool reflected, int ownerIndex);
     void DamageBoss(float dmg, BossDamageKind kind, bool reflected, int ownerIndex);
@@ -369,13 +368,6 @@ private:
     std::vector<SwordEffectVisual> swordEffectVisuals_;
     std::array<HiddenBossCore, HiddenBossCoreCount> hiddenBossCores_{};
     BossGimmickState bossGimmick_{};
-    V2 bossSkyLaserPos_{}; // キャプテンサンダーの「上から降る極太レーザー」の落下地点(予告で固定)
-    std::vector<PendingSkyLaser> pendingSkyLasers_; // 予約済みレーザー雨(即着待ち)
-    float bossSkyRainCd_ = 0.0f;   // 次のレーザー雨までの間隔(10秒で5発=2秒)
-    float bossMeleeT_ = 0.0f;      // 突進(殴り)モードの残り時間。>0で殴りモード
-    float bossMeleeCd_ = 0.0f;     // 次の突進モードまでの間隔
-    float bossPunchWindup_ = 0.0f; // 殴りの予備動作タイマー(0.3秒)
-    float bossPunchCd_ = 0.0f;     // 殴りの間隔
     std::vector<CombatNotice> combatNotices_;
     std::vector<WorldTelegraph> worldTelegraphs_;
     AssetCatalog assetCatalog_;

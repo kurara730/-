@@ -120,7 +120,6 @@ void SweetsApp::ResetGame()
     screenFlashT_ = 0.0f;
     combatNotices_.clear();
     worldTelegraphs_.clear();
-    pendingSkyLasers_.clear();
     camera_.center = player_.pos;
     camera_.target = player_.pos;
     SyncAll3DState();

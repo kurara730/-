@@ -182,7 +182,6 @@ struct Boss
     float attackCd = 1.2f;
     float telegraphT = 0.0f;
     float telegraphLife = 0.0f;
-    float telegraphAngle = 0.0f; // 予告したビーム等の方向を固定するための角度
     float spin = 0.0f;
     float flash = 0.0f;
     int phase = 1;
@@ -218,15 +217,6 @@ enum class ShotVisualKind
     Orb,
     Homing,
     Blade
-};
-
-// キャプテンサンダーの「上空から降る極太レーザー」一発分の予約。
-// fuse(予告残り時間)が0になった瞬間に、その場(pos)へ即着で範囲ダメージを与える。
-struct PendingSkyLaser
-{
-    V2 pos{};
-    float fuse = 0.0f;
-    float radius = 3.0f;
 };
 
 struct Shot

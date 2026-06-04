@@ -573,12 +573,13 @@ void SweetsApp::DoMeleeFor(Player& p, int ownerIndex, float aim)
     {
         if (core.active && inCone(core.pos, core.radius, ShotBodyY))
         {
-            DamageHiddenBossCore(s.damage, core.pos, ownerIndex, BossDamageKind::Melee);
+            DamageHiddenBossCore(s.damage, core.pos, ownerIndex);
         }
     }
     if (boss_.active && inCone(boss_.pos, boss_.radius, boss_.height))
     {
         DamageBoss(s.damage * 0.8f, BossDamageKind::Melee, false, ownerIndex);
+        p.ult = std::min(100.0f, p.ult + 1.0f);
     }
 
     // 薙ぎ払いで弾幕を弾き返す：範囲内の敵弾をプレイヤー弾に変えて撃ち返す
@@ -667,7 +668,7 @@ void SweetsApp::UseBombFor(Player& p, int ownerIndex)
             DamageEnemy(e, 120.0f + wave_ * 12.0f, p.pos, 2.0f, false, ownerIndex);
         }
     }
-    DamageHiddenBossCoresInRadius(p.pos, 5.6f, 180.0f + wave_ * 12.0f, ownerIndex, BossDamageKind::Bomb);
+    DamageHiddenBossCoresInRadius(p.pos, 5.6f, 180.0f + wave_ * 12.0f, ownerIndex);
     if (boss_.active && RuleDistance(p.pos, PlayerBodyY, boss_.pos, boss_.height) < 6.4f)
     {
         DamageBoss(300.0f + wave_ * 18.0f, BossDamageKind::Bomb, false, ownerIndex);
@@ -728,7 +729,7 @@ void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
             if (!e.dead && RuleDistance(e.pos, e.height, target, ShotBodyY) < 3.2f) DamageEnemy(e, 210.0f + wave_ * 18.0f, target, 2.0f, false, ownerIndex);
         }
         suppressEnemyKillUltGain_ = false;
-        DamageHiddenBossCoresInRadius(target, 3.2f, 260.0f + wave_ * 18.0f, ownerIndex, BossDamageKind::Ultimate);
+        DamageHiddenBossCoresInRadius(target, 3.2f, 260.0f + wave_ * 18.0f, ownerIndex);
         if (boss_.active && RuleDistance(boss_.pos, boss_.height, target, ShotBodyY) < 3.6f) DamageBoss(460.0f + wave_ * 22.0f, BossDamageKind::Ultimate, false, ownerIndex);
         Burst(target, Berry, 90);
         PlayCombatEffect(L"ult_shortcake", target, 0.50f, 0.0f, 1.75f, Berry, 70);
@@ -739,7 +740,7 @@ void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
         suppressEnemyKillUltGain_ = true;
         for (auto& e : enemies_) if (!e.dead) DamageEnemy(e, 160.0f + wave_ * 12.0f, p.pos, 2.0f, false, ownerIndex);
         suppressEnemyKillUltGain_ = false;
-        DamageHiddenBossCoresInRadius(p.pos, 7.5f, 220.0f + wave_ * 12.0f, ownerIndex, BossDamageKind::Ultimate);
+        DamageHiddenBossCoresInRadius(p.pos, 7.5f, 220.0f + wave_ * 12.0f, ownerIndex);
         if (boss_.active) DamageBoss(380.0f + wave_ * 18.0f, BossDamageKind::Ultimate, false, ownerIndex);
         Burst(p.pos, Choco, 80);
         PlayCombatEffect(L"ult_chocolate", p.pos, 0.55f, p.face, 1.85f, Choco, 70);

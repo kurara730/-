@@ -339,7 +339,7 @@ void SweetsApp::UpdateStage(float dt)
             }
             if (boss_.active && RuleCircleHit(boss_.pos, boss_.height, boss_.radius, o.pos, o.height, o.radius))
             {
-                DamageBoss(30.0f * dt, false, -1);
+                DamageBoss(30.0f * dt, false, 0);
             }
         }
 
