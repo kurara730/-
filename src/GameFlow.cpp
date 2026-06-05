@@ -85,6 +85,8 @@ void SweetsApp::ResetGame()
     hitstopT_ = 0.0f;
     justZoomT_ = 0.0f;
     justZoomLife_ = 0.0f;
+    shakeT_ = 0.0f;
+    shakeMag_ = 0.0f;
     player_.blinkCharges = BlinkMaxCharges;
     player_.blinkRechargeT = 0.0f;
     for (auto& pl : players_) pl.grabbedT = 0.0f;
@@ -561,6 +563,7 @@ void SweetsApp::UpdatePlaying(float dt)
     const float realDt = dt;
     if (hitstopT_ > 0.0f) hitstopT_ = std::max(0.0f, hitstopT_ - realDt);
     if (justZoomT_ > 0.0f) justZoomT_ = std::max(0.0f, justZoomT_ - realDt);
+    if (shakeT_ > 0.0f) shakeT_ = std::max(0.0f, shakeT_ - realDt); // 画面シェイクは実時間で減衰
     // ヒットストップ中はゲーム内時間を強く減速（演出タイマーやカメラ追従はこの後の dt を使う）。
     if (hitstopT_ > 0.0f) dt = realDt * HitstopScale;
 

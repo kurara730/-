@@ -342,16 +342,38 @@ void SweetsApp::DrawHud()
         }
         else
         {
-            textBrush_->SetColor(D2D1::ColorF(0.28f, 0.08f, 0.14f, 0.85f));
-            d2dContext_->FillRectangle(D2D1::RectF(left, top, left + bw, top + 14.0f), textBrush_.Get());
-            textBrush_->SetColor(D2D1::ColorF(1.0f, 0.24f, 0.35f, 0.95f));
-            d2dContext_->FillRectangle(D2D1::RectF(left, top, left + bw * pct, top + 14.0f), textBrush_.Get());
+            // SAO風の分割HPバー：HPを BossGaugeCount 本のゲージに分割表示。
+            // 区切り線で「分割」を示し、現在のフェーズに応じて色が緑→黄→橙→赤と変化する。
+            const float barH = 14.0f;
+            textBrush_->SetColor(D2D1::ColorF(0.10f, 0.05f, 0.07f, 0.88f));
+            d2dContext_->FillRectangle(D2D1::RectF(left, top, left + bw, top + barH), textBrush_.Get());
+            const D2D1::ColorF phaseColors[4] =
+            {
+                D2D1::ColorF(0.32f, 0.86f, 0.42f, 0.96f), // PHASE1 緑
+                D2D1::ColorF(0.96f, 0.86f, 0.26f, 0.96f), // PHASE2 黄
+                D2D1::ColorF(1.0f,  0.56f, 0.20f, 0.96f), // PHASE3 橙
+                D2D1::ColorF(1.0f,  0.26f, 0.32f, 0.96f)  // PHASE4 赤
+            };
+            const int ci = std::max(0, std::min(3, boss_.phase - 1));
+            textBrush_->SetColor(phaseColors[ci]);
+            d2dContext_->FillRectangle(D2D1::RectF(left, top, left + bw * pct, top + barH), textBrush_.Get());
+            // 各ゲージの区切り線。
+            textBrush_->SetColor(D2D1::ColorF(0.05f, 0.03f, 0.04f, 0.95f));
+            for (int g = 1; g < BossGaugeCount; ++g)
+            {
+                const float x = left + bw * (static_cast<float>(g) / static_cast<float>(BossGaugeCount));
+                d2dContext_->FillRectangle(D2D1::RectF(x - 1.0f, top, x + 1.0f, top + barH), textBrush_.Get());
+            }
+            // 残りゲージ本数を右端（名前行）に表示。
+            const std::wstring gaugeText = std::to_wstring(BossGaugeCount - boss_.phase + 1) + L"/" + std::to_wstring(BossGaugeCount);
+            textBrush_->SetColor(D2D1::ColorF(1.0f, 0.95f, 0.85f, 0.95f));
+            d2dContext_->DrawTextW(gaugeText.c_str(), static_cast<UINT32>(gaugeText.size()), smallFormat_.Get(), D2D1::RectF(left + bw - 70.0f, top + 22.0f, left + bw, top + 46.0f), textBrush_.Get());
         }
-        // ブレイクゲージ（反射ダメージの蓄積）。HPバーの直下に水色で表示。満タン/ブレイク中は強調。
+        // ブレイクゲージ（反射ダメージの蓄積）。HPバーの直下に水色で薄く表示。満タン/ブレイク中は強調。
         if (boss_.bossType != BossType::HiddenBoss && boss_.breakGaugeMax > 0.0f)
         {
-            const float by = top + 14.0f + 3.0f;
-            const float bhh = 6.0f;
+            const float by = top + 15.0f;
+            const float bhh = 5.0f;
             const float bpct = boss_.breakT > 0.0f ? 1.0f
                 : ClampFloat(boss_.breakGauge / boss_.breakGaugeMax, 0.0f, 1.0f);
             textBrush_->SetColor(D2D1::ColorF(0.06f, 0.12f, 0.18f, 0.80f));
@@ -364,7 +386,7 @@ void SweetsApp::DrawHud()
                 d2dContext_->FillRectangle(D2D1::RectF(left, by, left + bw, by + bhh), textBrush_.Get());
                 const wchar_t* bt = L"BREAK!";
                 textBrush_->SetColor(D2D1::ColorF(1.0f, 0.95f, 0.55f, 1.0f));
-                d2dContext_->DrawTextW(bt, static_cast<UINT32>(wcslen(bt)), smallFormat_.Get(), D2D1::RectF(left + bw - 80.0f, by - 1.0f, left + bw, by + 18.0f), textBrush_.Get());
+                d2dContext_->DrawTextW(bt, static_cast<UINT32>(wcslen(bt)), smallFormat_.Get(), D2D1::RectF(left + bw * 0.5f - 40.0f, top + 22.0f, left + bw * 0.5f + 40.0f, top + 46.0f), textBrush_.Get());
             }
             else
             {
@@ -374,7 +396,7 @@ void SweetsApp::DrawHud()
         }
         textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f));
         const wchar_t* bossName = BossName(boss_.bossType);
-        d2dContext_->DrawTextW(bossName, static_cast<UINT32>(wcslen(bossName)), smallFormat_.Get(), D2D1::RectF(left, top + 16, left + 220, top + 40), textBrush_.Get());
+        d2dContext_->DrawTextW(bossName, static_cast<UINT32>(wcslen(bossName)), smallFormat_.Get(), D2D1::RectF(left, top + 22, left + 220, top + 46), textBrush_.Get());
         if (boss_.bossType == BossType::HiddenBoss)
         {
             std::wostringstream gauge;

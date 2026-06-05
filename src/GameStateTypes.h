@@ -189,6 +189,7 @@ struct Boss
     float spin = 0.0f;
     float flash = 0.0f;
     int phase = 1;
+    float phaseIntroT = 0.0f;   // >0ならフェーズ移行直後の小休止（無防備の溜め＝ピーク演出）
     int type = 0;
     int telegraphAttack = -1;
     bool telegraphAdd = false;
