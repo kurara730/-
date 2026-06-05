@@ -200,6 +200,11 @@ struct Boss
     float beamWarnT = 0.0f;     // 予兆中の残り（>0でビーム準備中）
     float beamActiveT = 0.0f;   // 照射中の残り（>0で照射中）
     float beamAngle = 0.0f;     // 照射方向（予兆開始時にロック）
+    float beamReflectDist = 0.0f; // >0なら今フレーム壁で反射中：ボス中心から反射壁までの距離（描画の切り詰め用）
+    // ブレイク（崩し）。反射ダメージの蓄積で満タン→一定時間動けなくなる。
+    float breakGauge = 0.0f;    // 反射ダメージの蓄積量
+    float breakGaugeMax = 0.0f; // 満タン閾値（SpawnBossで設定）
+    float breakT = 0.0f;        // >0ならブレイク中（動けない）
     // 薙ぎ払い（近接・回避専用）。予兆→振り抜きの小さなステート。
     float sweepCd = 4.0f;       // 次の薙ぎ払いまでの残り時間
     float sweepWarnT = 0.0f;    // 予兆中の残り（>0で振りかぶり中）

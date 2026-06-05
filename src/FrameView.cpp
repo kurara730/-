@@ -271,10 +271,21 @@ void SweetsApp::DrawScene()
     if (boss_.active && boss_.beamActiveT > 0.0f)
     {
         const V2 bdir = FromAngle(boss_.beamAngle);
-        const V2 mid = boss_.pos + bdir * (BossBeamLength * 0.5f);
         const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 30.0f);
-        spriteCanvas_.DrawQuad(nullptr, mid, { BossBeamHalfWidth * 2.0f, BossBeamLength }, boss_.beamAngle - Pi * 0.5f, WithAlpha(Red, 0.6f), 0.19f);
-        spriteCanvas_.DrawQuad(nullptr, mid, { BossBeamHalfWidth, BossBeamLength }, boss_.beamAngle - Pi * 0.5f, WithAlpha(Cream, ClampFloat(0.5f + 0.3f * pulse, 0.0f, 1.0f)), 0.185f);
+        // 反射中は壁までで切り詰める（壁より奥にはビームを描かない）。
+        const bool reflected = boss_.beamReflectDist > 0.0f;
+        const float len = reflected ? boss_.beamReflectDist : BossBeamLength;
+        const V2 mid = boss_.pos + bdir * (len * 0.5f);
+        spriteCanvas_.DrawQuad(nullptr, mid, { BossBeamHalfWidth * 2.0f, len }, boss_.beamAngle - Pi * 0.5f, WithAlpha(Red, 0.6f), 0.19f);
+        spriteCanvas_.DrawQuad(nullptr, mid, { BossBeamHalfWidth, len }, boss_.beamAngle - Pi * 0.5f, WithAlpha(Cream, ClampFloat(0.5f + 0.3f * pulse, 0.0f, 1.0f)), 0.185f);
+        if (reflected)
+        {
+            // 反射点の光と、壁→ボスへ跳ね返る反射光（水色）を描く。
+            const V2 wallPos = boss_.pos + bdir * boss_.beamReflectDist;
+            const V2 back = (boss_.pos + wallPos) * 0.5f;
+            spriteCanvas_.DrawQuad(nullptr, back, { BossBeamHalfWidth * 0.9f, boss_.beamReflectDist }, boss_.beamAngle - Pi * 0.5f, WithAlpha(Sky, ClampFloat(0.45f + 0.35f * pulse, 0.0f, 0.9f)), 0.20f);
+            spriteCanvas_.DrawRing(wallPos, BossBeamHalfWidth * (1.1f + 0.25f * pulse), 0.06f, WithAlpha(Sky, 0.85f), 0.205f, 28);
+        }
     }
     // 極太回転ビーム（2D）。予兆は細い点滅線、照射は極太＋回転。
     if (boss_.active && (boss_.megaBeamWarnT > 0.0f || boss_.megaBeamActiveT > 0.0f))
@@ -292,6 +303,13 @@ void SweetsApp::DrawScene()
             const float blink = 0.3f + 0.35f * std::sin(gameTime_ * 18.0f);
             spriteCanvas_.DrawQuad(nullptr, mid, { BossMegaBeamHalfWidth * 2.0f, BossMegaBeamLength }, rot, WithAlpha(Red, ClampFloat(blink, 0.0f, 0.6f)), 0.19f);
         }
+    }
+    // ブレイク（崩し）中：ボスの足元に明滅リング＝動けない攻撃チャンスを盤面でも明示。
+    if (boss_.active && boss_.breakT > 0.0f)
+    {
+        const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 8.0f);
+        spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (1.6f + 0.25f * pulse), 0.08f, WithAlpha(Gold, ClampFloat(0.55f + 0.35f * pulse, 0.0f, 1.0f)), 0.05f, 48);
+        spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (2.1f + 0.3f * pulse), 0.05f, WithAlpha(Sky, 0.45f), 0.05f, 48);
     }
 
     for (const auto& o : obstacles_)
