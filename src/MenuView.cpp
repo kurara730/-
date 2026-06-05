@@ -347,6 +347,31 @@ void SweetsApp::DrawHud()
             textBrush_->SetColor(D2D1::ColorF(1.0f, 0.24f, 0.35f, 0.95f));
             d2dContext_->FillRectangle(D2D1::RectF(left, top, left + bw * pct, top + 14.0f), textBrush_.Get());
         }
+        // ブレイクゲージ（反射ダメージの蓄積）。HPバーの直下に水色で表示。満タン/ブレイク中は強調。
+        if (boss_.bossType != BossType::HiddenBoss && boss_.breakGaugeMax > 0.0f)
+        {
+            const float by = top + 14.0f + 3.0f;
+            const float bhh = 6.0f;
+            const float bpct = boss_.breakT > 0.0f ? 1.0f
+                : ClampFloat(boss_.breakGauge / boss_.breakGaugeMax, 0.0f, 1.0f);
+            textBrush_->SetColor(D2D1::ColorF(0.06f, 0.12f, 0.18f, 0.80f));
+            d2dContext_->FillRectangle(D2D1::RectF(left, by, left + bw, by + bhh), textBrush_.Get());
+            if (boss_.breakT > 0.0f)
+            {
+                // ブレイク中は明滅で「動けない＝攻撃チャンス」を強調。
+                const float blink = 0.6f + 0.4f * std::sin(gameTime_ * 12.0f);
+                textBrush_->SetColor(D2D1::ColorF(1.0f, 0.85f, 0.30f, ClampFloat(blink, 0.0f, 1.0f)));
+                d2dContext_->FillRectangle(D2D1::RectF(left, by, left + bw, by + bhh), textBrush_.Get());
+                const wchar_t* bt = L"BREAK!";
+                textBrush_->SetColor(D2D1::ColorF(1.0f, 0.95f, 0.55f, 1.0f));
+                d2dContext_->DrawTextW(bt, static_cast<UINT32>(wcslen(bt)), smallFormat_.Get(), D2D1::RectF(left + bw - 80.0f, by - 1.0f, left + bw, by + 18.0f), textBrush_.Get());
+            }
+            else
+            {
+                textBrush_->SetColor(D2D1::ColorF(0.35f, 0.80f, 1.0f, 0.95f));
+                d2dContext_->FillRectangle(D2D1::RectF(left, by, left + bw * bpct, by + bhh), textBrush_.Get());
+            }
+        }
         textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f));
         const wchar_t* bossName = BossName(boss_.bossType);
         d2dContext_->DrawTextW(bossName, static_cast<UINT32>(wcslen(bossName)), smallFormat_.Get(), D2D1::RectF(left, top + 16, left + 220, top + 40), textBrush_.Get());

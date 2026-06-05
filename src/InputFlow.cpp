@@ -793,8 +793,10 @@ bool SweetsApp::SelectDifficultyAt(float sx, float sy)
             if (i == optionCount - 1)
             {
                 // ボスのみ（デバッグ）：難易度Normal相当でボス即出現、新技のみ。
+                // 反射＝チョコウォール（右クリック壁）が要るので操作キャラをチョコケーキに固定。
                 pendingGameMode_ = GameMode::BossOnlyDebug;
                 difficultyIndex_ = static_cast<int>(Difficulty::Normal);
+                loadoutIndex_ = 1; // Loadouts[1] = チョコ（CharacterType::Chocolate）
                 StartGameWithDifficulty(false);
                 return true;
             }

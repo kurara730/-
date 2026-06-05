@@ -209,6 +209,17 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_KEYUP:
         if (wp < MaxKeys) keys_[wp] = false;
         return 0;
+    case WM_KILLFOCUS:
+        // フォーカスが外れるとキー/マウスのKEYUP・BUTTONUPを取りこぼし、
+        // 押しっぱなし状態が固着する（例：Dが固着するとAを押しても打ち消され移動不能）。
+        // フォーカス喪失時に全入力状態をリセットして固着を防ぐ。
+        for (auto& k : keys_) k = false;
+        mouseLeft_ = false;
+        prevMouseLeft_ = false;
+        prevSpace_ = false;
+        mouseRight_ = false;
+        mouseRightReleased_ = false;
+        return 0;
     case WM_MOUSEMOVE:
         mouseX_ = static_cast<float>(GET_X_LPARAM(lp));
         mouseY_ = static_cast<float>(GET_Y_LPARAM(lp));

@@ -345,6 +345,9 @@ void SweetsApp::SpawnBoss()
     boss_.burrowCd = BossBurrowCooldownMin + Rand(0.0f, BossBurrowCooldownVar);
     boss_.megaBeamCd = BossMegaBeamCooldownMin + Rand(0.0f, BossMegaBeamCooldownVar);
     boss_.grabCd = BossGrabCooldownMin + Rand(0.0f, BossGrabCooldownVar);
+    boss_.breakGauge = 0.0f;
+    boss_.breakGaugeMax = BossBreakGaugeMax;
+    boss_.breakT = 0.0f;
     boss_.armAngle = Rand(0.0f, TwoPi);
     boss_.armWanderTarget = Rand(0.0f, TwoPi);
     boss_.armWanderCd = Rand(1.5f, 3.0f);
@@ -546,6 +549,22 @@ void SweetsApp::UpdateBoss(float dt)
     if (bossGimmick_.gravityT > 0.0f) bossGimmick_.gravityT = std::max(0.0f, bossGimmick_.gravityT - dt);
     if (bossGimmick_.territoryT > 0.0f) bossGimmick_.territoryT = std::max(0.0f, bossGimmick_.territoryT - dt);
 
+    // ブレイク（崩し）中：動けない・攻撃しない。残り時間を減らすだけで他の処理は全てスキップ。
+    if (boss_.breakT > 0.0f)
+    {
+        boss_.breakT -= dt;
+        if (boss_.breakT <= 0.0f)
+        {
+            boss_.breakT = 0.0f;
+            Burst(boss_.pos, Cream, 40);
+            message_ = L"ブレイク終了";
+            messageT_ = std::max(messageT_, 0.8f);
+        }
+        boss_.flash = std::max(boss_.flash, 0.08f); // 点滅で無防備をアピール
+        SyncBoss3D(boss_);
+        return;
+    }
+
     Player* targetPlayer = FindNearestPlayer(boss_.pos);
     if (!targetPlayer) return;
     const V2 toP = targetPlayer->pos - boss_.pos;
@@ -666,23 +685,67 @@ void SweetsApp::UpdateBoss(float dt)
     if (boss_.beamActiveT > 0.0f)
     {
         boss_.beamActiveT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
-        // 照射：本体から beamAngle 方向の線分に乗ったプレイヤーへダメージ（貫通・パリィ不可）。
         const V2 bdir = FromAngle(boss_.beamAngle);
+        // 反射：チョコウォール（右クリックの壁）が軌道上にあると、そこでビームを反射する。
+        // 最も手前の壁までの距離を求め、その先（壁より奥）にはビームが届かないようにする。
+        boss_.beamReflectDist = 0.0f;
+        float reflectDist = -1.0f;
+        for (const auto& o : obstacles_)
+        {
+            if (!o.chocoWall || o.ttl <= 0.0f) continue;
+            const V2 rel = o.pos - boss_.pos;
+            const float along = Dot(rel, bdir);
+            if (along <= 0.0f || along > BossBeamLength) continue;
+            const V2 perp = rel - bdir * along;
+            if (Len(perp) > BossBeamHalfWidth + o.radius) continue;
+            if (reflectDist < 0.0f || along < reflectDist) reflectDist = along;
+        }
+        const float effLen = reflectDist >= 0.0f ? reflectDist : BossBeamLength;
+        // 照射：本体から beamAngle 方向の線分（壁まで）に乗ったプレイヤーへダメージ（貫通・パリィ不可）。
         for (auto& p : players_)
         {
             if (!p.active || p.downed || p.inv > 0.0f) continue;
             const V2 rel = p.pos - boss_.pos;
             const float along = Dot(rel, bdir);
-            if (along < 0.0f || along > BossBeamLength) continue;
+            if (along < 0.0f || along > effLen) continue; // 壁より奥は当たらない
             const V2 perp = rel - bdir * along;
             if (Len(perp) <= BossBeamHalfWidth + p.radius)
             {
                 ResolvePlayerHit(p, boss_.atk * BossBeamDamageMul, boss_.beamAngle);
             }
         }
+        // 壁で反射したら、ボスへダメージ＋ブレイクゲージ蓄積。
+        if (reflectDist >= 0.0f)
+        {
+            boss_.beamReflectDist = reflectDist;
+            const V2 wallPos = boss_.pos + bdir * reflectDist;
+            const float refl = boss_.atk * BossBeamReflectDps * dt;
+            DamageBoss(refl, true, 0);          // 反射＝HPダメージ（反射ボーナス込み）
+            if (!boss_.active) return;          // 撃破した場合はここで終了
+            boss_.breakGauge += refl;           // 反射ダメージをゲージへ蓄積
+            Burst(wallPos, Sky, 2);
+            // ゲージ満タンでブレイク（崩し）：一定時間動けなくなる。
+            if (boss_.breakT <= 0.0f && boss_.breakGauge >= boss_.breakGaugeMax)
+            {
+                boss_.breakGauge = 0.0f;
+                boss_.breakT = BossBreakDuration;
+                boss_.beamActiveT = 0.0f;       // 進行中のビームをキャンセル
+                boss_.beamReflectDist = 0.0f;
+                boss_.beamCd = (BossBeamCooldownMin + Rand(0.0f, BossBeamCooldownVar)) * specialCdMul;
+                Burst(boss_.pos, Gold, 80);
+                screenFlashT_ = 0.25f;
+                screenFlashLife_ = screenFlashT_;
+                screenFlashColor_ = Sky;
+                message_ = L"ブレイク!";
+                messageT_ = 2.0f;
+                audio_.PlaySoundEffect(SoundEffect::Reflect);
+                return;
+            }
+        }
         if (boss_.beamActiveT <= 0.0f)
         {
             boss_.beamActiveT = 0.0f;
+            boss_.beamReflectDist = 0.0f;
             boss_.beamCd = (BossBeamCooldownMin + Rand(0.0f, BossBeamCooldownVar)) * specialCdMul;
         }
         return; // 照射中は通常攻撃しない
