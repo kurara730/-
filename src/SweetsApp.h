@@ -358,6 +358,9 @@ private:
     float hitstopT_ = 0.0f;      // ジャスト回避のヒットストップ残り（実時間）
     float justZoomT_ = 0.0f;     // ジャスト回避ズームの残り（実時間）
     float justZoomLife_ = 0.0f;  // ズーム全体の長さ（補間用）
+    float shakeT_ = 0.0f;        // 画面シェイク残り（実時間）
+    float shakeLife_ = 0.01f;    // シェイク全体の長さ（補間用）
+    float shakeMag_ = 0.0f;      // シェイクの強さ（ワールド単位）
     bool mouseRight_ = false;
     bool mouseRightReleased_ = false;
     float mouseX_ = 640.0f;

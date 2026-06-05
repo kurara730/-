@@ -158,7 +158,16 @@ void SweetsApp::DrawScene()
     }
     else
     {
-        view_ = XMMatrixTranslation(-camera_.center.x, -camera_.center.z, 0.0f);
+        // 画面シェイク：残り時間に応じて揺れ幅を減衰させ、カメラ中心をずらす。
+        float shx = 0.0f, shz = 0.0f;
+        if (shakeT_ > 0.0f)
+        {
+            const float k = ClampFloat(shakeT_ / std::max(0.01f, shakeLife_), 0.0f, 1.0f);
+            const float amp = shakeMag_ * k * k;
+            shx = std::sin(gameTime_ * 91.0f) * amp;
+            shz = std::cos(gameTime_ * 77.0f) * amp;
+        }
+        view_ = XMMatrixTranslation(-(camera_.center.x + shx), -(camera_.center.z + shz), 0.0f);
         proj_ = XMMatrixOrthographicOffCenterLH(-halfW, halfW, -halfH, halfH, 0.0f, 10.0f);
         cameraPos_ = { camera_.center.x, 15.5f, camera_.center.z - 18.5f };
     }
@@ -310,6 +319,25 @@ void SweetsApp::DrawScene()
         const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 8.0f);
         spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (1.6f + 0.25f * pulse), 0.08f, WithAlpha(Gold, ClampFloat(0.55f + 0.35f * pulse, 0.0f, 1.0f)), 0.05f, 48);
         spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (2.1f + 0.3f * pulse), 0.05f, WithAlpha(Sky, 0.45f), 0.05f, 48);
+    }
+    // フェーズ移行中：フェーズ色のオーラ＋外へ広がる衝撃波リングで派手に演出。
+    if (boss_.active && boss_.phaseIntroT > 0.0f)
+    {
+        const Color phaseCols[4] = { {0.35f,0.95f,0.45f,1.0f}, {1.0f,0.9f,0.3f,1.0f}, {1.0f,0.6f,0.2f,1.0f}, {1.0f,0.3f,0.35f,1.0f} };
+        const Color pc = phaseCols[std::max(0, std::min(3, boss_.phase - 1))];
+        const float prog = ClampFloat(1.0f - boss_.phaseIntroT / BossPhaseIntroTime, 0.0f, 1.0f);
+        // 3重の衝撃波が時間差で外へ広がる。
+        for (int r = 0; r < 3; ++r)
+        {
+            const float local = ClampFloat(prog * 1.2f - r * 0.18f, 0.0f, 1.0f);
+            if (local <= 0.0f) continue;
+            const float radius = boss_.radius * (1.0f + local * 9.0f);
+            const float alpha = (1.0f - local) * 0.7f;
+            spriteCanvas_.DrawRing(boss_.pos, radius, 0.10f + 0.10f * (1.0f - local), WithAlpha(pc, alpha), 0.045f, 64);
+        }
+        // 足元の発光オーラ（点滅）。
+        const float glow = 0.5f + 0.5f * std::sin(gameTime_ * 30.0f);
+        spriteCanvas_.DrawCircle(boss_.pos, boss_.radius * (1.5f + 0.3f * glow), WithAlpha(pc, 0.30f + 0.25f * glow), 0.04f, 48);
     }
 
     for (const auto& o : obstacles_)

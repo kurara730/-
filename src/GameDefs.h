@@ -39,6 +39,13 @@ constexpr float BossBeamReflectDps = 1.6f;     // 反射中、ボスへ与える
 constexpr float BossBreakGaugeMax = 90.0f;     // ブレイクゲージ最大値（反射ダメージの蓄積で満タン＝約3回の全反射）
 constexpr float BossBreakDuration = 10.0f;     // ブレイク状態（動けない）の継続時間（秒）
 
+// ボスのフェーズ（SAO風の分割HPバー）。HPを BossGaugeCount 本のゲージに分割し、
+// 1本削り切るたびにフェーズが上がり、行動が激化する（移動・攻撃頻度の上昇＋弾消し＋演出）。
+constexpr int BossGaugeCount = 4;              // HPバーの分割数＝フェーズ数
+constexpr float BossPhaseAggroPerPhase = 0.30f;// フェーズ毎の攻撃頻度上昇（特殊技CD短縮）
+constexpr float BossPhaseSpeedPerPhase = 0.15f;// フェーズ毎の移動速度上昇
+constexpr float BossPhaseIntroTime = 0.9f;     // フェーズ移行時の小休止（無防備の溜め＝ピーク演出）
+
 // ボスの極太回転ビーム薙ぎ払い（パリィ不可）。極太ビームを出しながらゆっくり回す。
 constexpr float BossMegaBeamWarnTime = 1.6f;
 constexpr float BossMegaBeamActiveTime = 3.2f;   // 回しながら照射する時間

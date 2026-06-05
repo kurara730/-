@@ -538,6 +538,7 @@ void SweetsApp::UpdateBoss(float dt)
 
     boss_.spin += dt * (1.0f + wave_ * 0.03f);
     if (boss_.flash > 0.0f) boss_.flash -= dt;
+    if (boss_.phaseIntroT > 0.0f) boss_.phaseIntroT -= dt; // フェーズ移行の溜め
     bossGimmick_.timer += dt;
     bossGimmick_.guardAngle += dt * (0.95f + boss_.phase * 0.18f);
     const bool wasVulnerable = bossGimmick_.vulnerableT > 0.0f;
@@ -570,19 +571,24 @@ void SweetsApp::UpdateBoss(float dt)
     const V2 toP = targetPlayer->pos - boss_.pos;
     const float d = RuleDistance(boss_.pos, boss_.height, targetPlayer->pos, PlayerBodyY);
     const V2 n = Normalize(toP);
+    // フェーズ移行直後の溜め中は攻撃も移動も止める（無防備のピーク演出）。
+    const bool intro = boss_.phaseIntroT > 0.0f;
     // 特殊攻撃（ビーム等）の予兆・実行中は本体を止める（方向を固定し、避け先を読みやすくする）
     const bool busy = boss_.beamWarnT > 0.0f || boss_.beamActiveT > 0.0f
         || boss_.burrowWarnT > 0.0f || boss_.burrowSubT > 0.0f || boss_.burrowEruptT > 0.0f
         || boss_.megaBeamWarnT > 0.0f || boss_.megaBeamActiveT > 0.0f
         || boss_.grabReachWarnT > 0.0f || boss_.grabReachT > 0.0f || boss_.grabHoldT > 0.0f;
-    // デバッグステージでは新技を短い間隔で繰り返し確認できるようCDを縮める。
-    const float specialCdMul = (gameMode_ == GameMode::BossOnlyDebug) ? 0.3f : 1.0f;
+    // フェーズが上がるほど攻撃頻度（特殊技CD短縮）と移動速度が上がる＝行動が激化する。
+    const float phaseAggro = 1.0f + static_cast<float>(boss_.phase - 1) * BossPhaseAggroPerPhase;
+    const float phaseSpeed = 1.0f + static_cast<float>(boss_.phase - 1) * BossPhaseSpeedPerPhase;
+    // デバッグステージでは新技を短い間隔で繰り返し確認できるようCDを縮める。フェーズでさらに短縮。
+    const float specialCdMul = ((gameMode_ == GameMode::BossOnlyDebug) ? 0.3f : 1.0f) / phaseAggro;
     // 攻撃の重なり防止：何か攻撃中（特殊技＝busy／通常弾幕の予兆中）は小休止をリセットし続け、
     // 攻撃が終わってから BossAttackRest 秒だけ次の攻撃開始を待たせる。
-    if (busy || boss_.telegraphT > 0.0f) boss_.attackRestT = BossAttackRest;
+    if (busy || intro || boss_.telegraphT > 0.0f) boss_.attackRestT = BossAttackRest;
     else if (boss_.attackRestT > 0.0f) boss_.attackRestT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
-    const bool canStart = !busy && boss_.telegraphT <= 0.0f && boss_.attackRestT <= 0.0f;
-    boss_.vel = busy ? V2{} : n * boss_.speed * (slowT_ > 0.0f ? 0.55f : 1.0f);
+    const bool canStart = !busy && !intro && boss_.telegraphT <= 0.0f && boss_.attackRestT <= 0.0f;
+    boss_.vel = (busy || intro) ? V2{} : n * boss_.speed * phaseSpeed * (slowT_ > 0.0f ? 0.55f : 1.0f);
     boss_.pos += boss_.vel * dt;
     ClampInside(boss_.pos, boss_.radius);
     SyncBoss3D(boss_);
@@ -1552,18 +1558,39 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
         AddScore(static_cast<int>(appliedDmg * 4.0f), &owner);
         addNotice(L"ボーナス", Gold);
     }
-    const float hpPct = boss_.hp / boss_.maxHp;
-    const int nextPhase = hpPct < 0.25f ? 4 : (hpPct < 0.50f ? 3 : (hpPct < 0.75f ? 2 : 1));
+    // SAO風の分割HPゲージ：1本（=1/BossGaugeCount）削り切るたびにフェーズが上がり行動が激化。
+    const float gaugeHp = boss_.maxHp / static_cast<float>(BossGaugeCount);
+    const int depleted = static_cast<int>((boss_.maxHp - boss_.hp) / gaugeHp);
+    const int nextPhase = std::min(BossGaugeCount, depleted + 1);
     if (nextPhase > boss_.phase)
     {
         boss_.phase = nextPhase;
+        // 進行中の予兆・特殊技を一旦リセットして、フェーズ移行の溜め（無防備）を作る＝戦闘のピーク。
         boss_.attackCd = 0.9f;
         boss_.telegraphT = 0.0f;
         boss_.telegraphAttack = -1;
         boss_.telegraphAdd = false;
         boss_.telegraphMirror = false;
         boss_.telegraphField = false;
-        Burst(boss_.pos, Red, 50);
+        boss_.beamWarnT = boss_.beamActiveT = 0.0f;
+        boss_.megaBeamWarnT = boss_.megaBeamActiveT = 0.0f;
+        boss_.sweepWarnT = boss_.sweepActiveT = 0.0f;
+        boss_.grabReachWarnT = boss_.grabReachT = 0.0f;
+        boss_.phaseIntroT = BossPhaseIntroTime;
+        // 演出：敵弾を一掃して仕切り直し、ヒットストップ＋画面シェイク＋フラッシュ＋衝撃波で派手に。
+        for (auto& s : shots_) if (s.enemy) s.dead = true;
+        Burst(boss_.pos, Gold, 90);
+        Burst(boss_.pos, Red, 60);
+        hitstopT_ = std::max(hitstopT_, 0.18f);     // 一瞬スローでタメを作る
+        shakeMag_ = 0.85f;                          // 画面を大きく揺らす
+        shakeLife_ = 0.5f;
+        shakeT_ = shakeLife_;
+        screenFlashT_ = 0.30f;
+        screenFlashLife_ = screenFlashT_;
+        screenFlashColor_ = Red;
+        message_ = L"PHASE " + std::to_wstring(boss_.phase) + L" / " + std::to_wstring(BossGaugeCount);
+        messageT_ = std::max(messageT_, 2.0f);
+        audio_.PlaySoundEffect(SoundEffect::UltimateSlash);
     }
     if (boss_.hp <= 0.0f)
     {
