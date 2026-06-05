@@ -226,8 +226,9 @@ void SweetsApp::UpdatePlayer(float dt)
         --player_.blinkCharges;
         // 移動入力があればその方向、なければ向いている方向へ飛ぶ。
         const V2 blinkDir = LenSq(dir) > 0.001f ? dir : FromAngle(player_.face);
+        const float blinkDist = justDodge ? BlinkJustDistance : BlinkDistance; // 成功時は長く飛ぶ
         Burst(fromPos, Sky, 14);                       // 出発点に残光
-        player_.pos += blinkDir * BlinkDistance;
+        player_.pos += blinkDir * blinkDist;
         ClampInside(player_.pos, player_.radius);
         player_.inv = std::max(player_.inv, BlinkInvuln);
         player_.dashT = 0.0f;                           // 既存ダッシュ移動はキャンセル

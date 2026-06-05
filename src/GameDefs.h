@@ -5,16 +5,17 @@
 constexpr int MaxPlayers = 4;
 
 // スペースキーのブリンク（短距離テレポート回避）の調整値です。
-constexpr float BlinkDistance = 3.8f;    // 瞬間移動の距離
+constexpr float BlinkDistance = 3.8f;    // 通常ブリンク（ジャスト回避でない）の移動距離
+constexpr float BlinkJustDistance = 5.8f; // ジャスト回避成功時の移動距離（成功を見分けやすく長め）
 constexpr float BlinkInvuln = 0.35f;     // ブリンク直後の無敵時間（弾を抜けられる）
 constexpr int BlinkMaxCharges = 2;       // 連続で使える最大回数（チャージ）
 constexpr float BlinkChargeCooldown = 10.0f; // チャージ1回あたりの回復時間（秒）
 constexpr float BlinkAttackLock = 0.3f;  // ブリンク直後に攻撃を出せない時間（攻撃とブリンクの同時発動を禁止）
 
 // ジャスト回避（危険な状況でブリンク成功）時の演出。ヒットストップ＋自キャラへズーム。
-constexpr float HitstopTime = 0.13f;     // ヒットストップ（強スロー）の実時間長
+constexpr float HitstopTime = 0.22f;     // ヒットストップ（強スロー）の実時間長
 constexpr float HitstopScale = 0.06f;    // ヒットストップ中のゲーム内時間倍率
-constexpr float JustZoomLife = 0.34f;    // ズーム演出の長さ（実時間）
+constexpr float JustZoomLife = 0.55f;    // ズーム演出の長さ（実時間）
 constexpr float JustZoomPeak = 0.30f;    // ズーム量のピーク（1.0 + これ倍）
 constexpr float JustDodgeBulletRange = 1.35f; // この距離以内に迫る敵弾があればジャスト判定
 
