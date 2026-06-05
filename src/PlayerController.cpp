@@ -147,6 +147,14 @@ void SweetsApp::UpdatePlayer(float dt)
         mouseRightReleased_ = false;
         return;
     }
+    // ボスのつかみで拘束中は操作不可（位置・ダメージはボス側で処理）。
+    if (player_.grabbedT > 0.0f)
+    {
+        prevSpace_ = KeyDown(VK_SPACE);
+        prevMouseLeft_ = mouseLeft_;
+        mouseRightReleased_ = false;
+        return;
+    }
 
     V2 dir{};
     if (KeyDown('W') || KeyDown(VK_UP)) dir.z += 1.0f;

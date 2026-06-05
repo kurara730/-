@@ -343,12 +343,30 @@ void SweetsApp::SpawnBoss()
     boss_.beamCd = BossBeamCooldownMin + Rand(0.0f, BossBeamCooldownVar); // 戦闘開始直後に撃たないよう余裕を持たせる
     boss_.sweepCd = BossSweepCooldownMin + Rand(0.0f, BossSweepCooldownVar);
     boss_.burrowCd = BossBurrowCooldownMin + Rand(0.0f, BossBurrowCooldownVar);
+    boss_.megaBeamCd = BossMegaBeamCooldownMin + Rand(0.0f, BossMegaBeamCooldownVar);
+    boss_.grabCd = BossGrabCooldownMin + Rand(0.0f, BossGrabCooldownVar);
+    boss_.armAngle = Rand(0.0f, TwoPi);
+    boss_.armWanderTarget = Rand(0.0f, TwoPi);
+    boss_.armWanderCd = Rand(1.5f, 3.0f);
+    if (gameMode_ == GameMode::BossOnlyDebug)
+    {
+        boss_.maxHp *= 5.0f; // デバッグ用：耐久を5倍にして技を試しやすく
+        boss_.hp = boss_.maxHp;
+    }
+    for (int i = 0; i < 2; ++i)
+    {
+        boss_.armHp[i] = boss_.maxHp * BossArmHpRatio; // 腕HP＝ボス最大HPの10%
+        boss_.armDownT[i] = 0.0f;
+        boss_.armPos[i] = boss_.pos;
+    }
     if (gameMode_ == GameMode::BossOnlyDebug)
     {
         // デバッグステージは各技をすぐ・短い間隔で確認できるよう初期CDを短縮。
         boss_.beamCd = 3.0f;
         boss_.sweepCd = 2.0f;
         boss_.burrowCd = 5.0f;
+        boss_.megaBeamCd = 7.0f;
+        boss_.grabCd = 4.0f;
     }
     bossGimmick_ = {};
     bossGimmick_.type = boss_.bossType;
@@ -536,13 +554,73 @@ void SweetsApp::UpdateBoss(float dt)
     // 特殊攻撃（ビーム/薙ぎ払い）の予兆・実行中は本体を止める（方向を固定し、避け先を読みやすくする）
     const bool busy = boss_.beamWarnT > 0.0f || boss_.beamActiveT > 0.0f
         || boss_.sweepWarnT > 0.0f || boss_.sweepActiveT > 0.0f
-        || boss_.burrowWarnT > 0.0f || boss_.burrowSubT > 0.0f || boss_.burrowEruptT > 0.0f;
+        || boss_.burrowWarnT > 0.0f || boss_.burrowSubT > 0.0f || boss_.burrowEruptT > 0.0f
+        || boss_.megaBeamWarnT > 0.0f || boss_.megaBeamActiveT > 0.0f
+        || boss_.grabReachWarnT > 0.0f || boss_.grabReachT > 0.0f || boss_.grabHoldT > 0.0f;
     // デバッグステージでは新技を短い間隔で繰り返し確認できるようCDを縮める。
     const float specialCdMul = (gameMode_ == GameMode::BossOnlyDebug) ? 0.3f : 1.0f;
+    // 攻撃の重なり防止：何か攻撃中（特殊技＝busy／通常弾幕の予兆中）は小休止をリセットし続け、
+    // 攻撃が終わってから BossAttackRest 秒だけ次の攻撃開始を待たせる。
+    if (busy || boss_.telegraphT > 0.0f) boss_.attackRestT = BossAttackRest;
+    else if (boss_.attackRestT > 0.0f) boss_.attackRestT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+    const bool canStart = !busy && boss_.telegraphT <= 0.0f && boss_.attackRestT <= 0.0f;
     boss_.vel = busy ? V2{} : n * boss_.speed * (slowT_ > 0.0f ? 0.55f : 1.0f);
     boss_.pos += boss_.vel * dt;
     ClampInside(boss_.pos, boss_.radius);
     SyncBoss3D(boss_);
+
+    // 腕（ボス本体の一部・左右2本）の更新。基準向きを最寄りプレイヤー方向へ追従。
+    // 拘束中・つかみ突き出し中は基準向きを固定（避け先を読めるように）。
+    const bool grabBusy = boss_.grabHoldT > 0.0f || boss_.grabReachWarnT > 0.0f || boss_.grabReachT > 0.0f;
+    if (!grabBusy && boss_.burrowSubT <= 0.0f && boss_.flyT <= 0.0f)
+    {
+        // 通常時はプレイヤーを追わず、可変域をランダムに漂う（本体に弾が当たる隙を作る）。
+        boss_.armWanderCd -= dt;
+        if (boss_.armWanderCd <= 0.0f)
+        {
+            boss_.armWanderTarget = Rand(0.0f, TwoPi);
+            boss_.armWanderCd = Rand(1.5f, 3.0f);
+        }
+        float dArm = boss_.armWanderTarget - boss_.armAngle;
+        while (dArm > Pi) dArm -= TwoPi;
+        while (dArm < -Pi) dArm += TwoPi;
+        boss_.armAngle += ClampFloat(dArm, -BossArmTrackSpeed * dt, BossArmTrackSpeed * dt);
+    }
+    // 通常時の開き角を最大BossArmSpreadの範囲でゆっくり開閉させる。
+    const float armSpread = BossArmSpread *
+        (BossArmSpreadMinRatio + (1.0f - BossArmSpreadMinRatio) * (0.5f + 0.5f * std::sin(bossGimmick_.timer * BossArmSpreadSpeed)));
+    // 各腕の先端位置。つかみ中の腕は予兆で引き、突き出しで前方へ伸びる。
+    auto computeArmTip = [&](int i) -> V2 {
+        float angle = boss_.armAngle + (i == 0 ? armSpread : -armSpread);
+        float reach = BossArmReach;
+        if (i == boss_.grabArm)
+        {
+            angle = boss_.grabReachAngle;
+            if (boss_.grabReachWarnT > 0.0f) reach = BossArmReach * 0.6f;            // 引き
+            else if (boss_.grabReachT > 0.0f)
+            {
+                const float p = 1.0f - ClampFloat(boss_.grabReachT / BossGrabThrustTime, 0.0f, 1.0f);
+                reach = BossArmReach + (BossGrabReachMax - BossArmReach) * std::sin(p * Pi * 0.5f); // 突き出し
+            }
+        }
+        return boss_.pos + FromAngle(angle) * reach;
+    };
+    boss_.armPos[0] = computeArmTip(0);
+    boss_.armPos[1] = computeArmTip(1);
+    // 消滅中の腕は時間経過で復活（HP満タンに戻す）。
+    for (int i = 0; i < 2; ++i)
+    {
+        if (boss_.armDownT[i] > 0.0f)
+        {
+            boss_.armDownT[i] -= dt;
+            if (boss_.armDownT[i] <= 0.0f)
+            {
+                boss_.armDownT[i] = 0.0f;
+                boss_.armHp[i] = boss_.maxHp * BossArmHpRatio;
+                Burst(boss_.armPos[i], Red, 24);
+            }
+        }
+    }
 
     // === 貫通ビーム（パリィ不可・低頻度の強攻撃）===
     // 通常弾幕の予兆中(telegraphT)・特殊攻撃中はクールダウンを進めない＝攻撃が重ならない。
@@ -550,7 +628,7 @@ void SweetsApp::UpdateBoss(float dt)
     {
         boss_.beamCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
     }
-    if (boss_.beamCd <= 0.0f && !busy && boss_.telegraphT <= 0.0f)
+    if (boss_.beamCd <= 0.0f && canStart)
     {
         // 予兆開始：方向をプレイヤーへロックし、地面に予測線を出す。
         boss_.beamWarnT = BossBeamWarnTime;
@@ -613,8 +691,7 @@ void SweetsApp::UpdateBoss(float dt)
         boss_.sweepCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
     }
     // CDが切れ、プレイヤーが近いときだけ発動（接近を咎める置き攻撃）。
-    if (boss_.sweepCd <= 0.0f && boss_.sweepWarnT <= 0.0f && boss_.sweepActiveT <= 0.0f
-        && boss_.telegraphT <= 0.0f && d <= BossSweepTriggerRange)
+    if (boss_.sweepCd <= 0.0f && canStart && d <= BossSweepTriggerRange)
     {
         boss_.sweepWarnT = BossSweepWarnTime;
         boss_.sweepAngle = AngleOf(toP); // 振る方向をロック（裏や外へ回避できる）
@@ -677,8 +754,7 @@ void SweetsApp::UpdateBoss(float dt)
     {
         boss_.burrowCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
     }
-    if (boss_.burrowCd <= 0.0f && boss_.burrowWarnT <= 0.0f && boss_.burrowSubT <= 0.0f
-        && boss_.burrowEruptT <= 0.0f && boss_.telegraphT <= 0.0f)
+    if (boss_.burrowCd <= 0.0f && canStart)
     {
         boss_.burrowWarnT = BossBurrowWarnTime;
         boss_.flash = std::max(boss_.flash, BossBurrowWarnTime);
@@ -767,6 +843,169 @@ void SweetsApp::UpdateBoss(float dt)
             boss_.burrowCd = (BossBurrowCooldownMin + Rand(0.0f, BossBurrowCooldownVar)) * specialCdMul;
         }
         return; // 噴出演出中は通常攻撃しない
+    }
+
+    // === 極太回転ビーム薙ぎ払い（パリィ不可）===
+    if (!busy && boss_.telegraphT <= 0.0f) boss_.megaBeamCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+    if (boss_.megaBeamCd <= 0.0f && canStart)
+    {
+        boss_.megaBeamWarnT = BossMegaBeamWarnTime;
+        boss_.megaBeamAngle = AngleOf(toP);
+        boss_.megaBeamDir = (Rand(0.0f, 1.0f) < 0.5f) ? 1.0f : -1.0f; // 時計/反時計をランダム
+        boss_.flash = std::max(boss_.flash, BossMegaBeamWarnTime);
+        message_ = L"極太ビーム!";
+        messageT_ = std::max(messageT_, 1.0f);
+    }
+    if (boss_.megaBeamWarnT > 0.0f)
+    {
+        boss_.megaBeamWarnT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        if (boss_.megaBeamWarnT <= 0.0f)
+        {
+            boss_.megaBeamWarnT = 0.0f;
+            boss_.megaBeamActiveT = BossMegaBeamActiveTime;
+            Burst(boss_.pos, Red, 36);
+            audio_.PlaySoundEffect(SoundEffect::UltimateSlash);
+        }
+        return;
+    }
+    if (boss_.megaBeamActiveT > 0.0f)
+    {
+        boss_.megaBeamActiveT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        boss_.megaBeamAngle += boss_.megaBeamDir * BossMegaBeamRotateSpeed * dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        const V2 bdir = FromAngle(boss_.megaBeamAngle);
+        for (auto& p : players_)
+        {
+            if (!p.active || p.downed || p.inv > 0.0f) continue;
+            const V2 rel = p.pos - boss_.pos;
+            const float along = Dot(rel, bdir);
+            if (along < 0.0f || along > BossMegaBeamLength) continue;
+            const V2 perp = rel - bdir * along;
+            if (Len(perp) <= BossMegaBeamHalfWidth + p.radius)
+            {
+                ResolvePlayerHit(p, boss_.atk * BossMegaBeamDamageMul, boss_.megaBeamAngle);
+            }
+        }
+        if (boss_.megaBeamActiveT <= 0.0f)
+        {
+            boss_.megaBeamActiveT = 0.0f;
+            boss_.megaBeamCd = (BossMegaBeamCooldownMin + Rand(0.0f, BossMegaBeamCooldownVar)) * specialCdMul;
+        }
+        return;
+    }
+
+    // === 腕（赤先端）：常時の接触ダメージ＋つかみ攻撃（腕を伸ばして掴む）===
+    const bool bossPresent = boss_.burrowSubT <= 0.0f && boss_.flyT <= 0.0f && boss_.flyStrikeWarnT <= 0.0f;
+    // 生存腕の赤先端に触れているプレイヤーへ継続ダメージ（ダメージ床相当・常時）。
+    if (bossPresent && boss_.grabHoldT <= 0.0f)
+    {
+        for (int arm = 0; arm < 2; ++arm)
+        {
+            if (boss_.armDownT[arm] > 0.0f) continue;
+            for (int i = 0; i < MaxPlayers; ++i)
+            {
+                Player& p = players_[i];
+                if (!p.active || p.downed || p.inv > 0.0f) continue;
+                if (RuleDistance(p.pos, PlayerBodyY, boss_.armPos[arm], 0.0f) <= BossArmRadius + p.radius)
+                {
+                    ResolvePlayerHit(p, BossArmChipPerSec * dt, AngleOf(p.pos - boss_.armPos[arm]));
+                }
+            }
+        }
+    }
+    // つかみのクールダウン。
+    if (boss_.grabHoldT <= 0.0f && boss_.telegraphT <= 0.0f) boss_.grabCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+    // つかみ開始：生存腕の中からプレイヤー方向に近い側を選び、腕を引いて溜める。
+    if (boss_.grabCd <= 0.0f && canStart && boss_.grabReachWarnT <= 0.0f && boss_.grabReachT <= 0.0f
+        && boss_.grabHoldT <= 0.0f && d <= BossGrabTriggerRange)
+    {
+        int g = -1; float best = 100.0f;
+        for (int arm = 0; arm < 2; ++arm)
+        {
+            if (boss_.armDownT[arm] > 0.0f) continue;
+            float da = AngleOf(toP) - (boss_.armAngle + (arm == 0 ? armSpread : -armSpread));
+            while (da > Pi) da -= TwoPi;
+            while (da < -Pi) da += TwoPi;
+            if (std::fabs(da) < best) { best = std::fabs(da); g = arm; }
+        }
+        if (g >= 0)
+        {
+            boss_.grabArm = g;
+            boss_.grabReachWarnT = BossGrabReachWarn;
+            boss_.grabReachAngle = AngleOf(toP); // 突き出す方向をロック（避けられる）
+            boss_.flash = std::max(boss_.flash, BossGrabReachWarn);
+            message_ = L"つかみ!";
+            messageT_ = std::max(messageT_, 0.9f);
+        }
+    }
+    if (boss_.grabReachWarnT > 0.0f)
+    {
+        boss_.grabReachWarnT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        if (boss_.grabReachWarnT <= 0.0f)
+        {
+            boss_.grabReachWarnT = 0.0f;
+            boss_.grabReachT = BossGrabThrustTime; // 突き出し開始
+        }
+        return;
+    }
+    if (boss_.grabReachT > 0.0f)
+    {
+        boss_.grabReachT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        // 伸びた腕先（赤）が触れたプレイヤーを捕獲。
+        if (boss_.grabArm >= 0 && boss_.grabArm < 2 && boss_.armDownT[boss_.grabArm] <= 0.0f)
+        {
+            const V2 tip = boss_.armPos[boss_.grabArm];
+            for (int i = 0; i < MaxPlayers; ++i)
+            {
+                Player& p = players_[i];
+                if (!p.active || p.downed) continue;
+                if (RuleDistance(p.pos, PlayerBodyY, tip, 0.0f) <= BossArmRadius + p.radius)
+                {
+                    boss_.grabTarget = i;
+                    boss_.grabAngle = boss_.grabReachAngle;
+                    boss_.grabHoldT = BossGrabHoldTime;
+                    p.grabbedT = BossGrabHoldTime;
+                    boss_.grabReachT = 0.0f;
+                    boss_.grabArm = -1;
+                    Burst(p.pos, Grape, 24);
+                    message_ = L"捕獲!";
+                    messageT_ = std::max(messageT_, 1.0f);
+                    return;
+                }
+            }
+        }
+        if (boss_.grabReachT <= 0.0f)
+        {
+            boss_.grabReachT = 0.0f;
+            boss_.grabArm = -1;
+            boss_.grabCd = (BossGrabCooldownMin + Rand(0.0f, BossGrabCooldownVar)) * specialCdMul;
+        }
+        return;
+    }
+    if (boss_.grabHoldT > 0.0f)
+    {
+        boss_.grabHoldT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        Player* gp = (boss_.grabTarget >= 0 && boss_.grabTarget < MaxPlayers) ? &players_[boss_.grabTarget] : nullptr;
+        if (!gp || !gp->active || gp->downed)
+        {
+            boss_.grabHoldT = 0.0f;
+        }
+        else
+        {
+            // 腕の先（ボス正面）に拘束（移動不可）。周期ダメージ（i-frameで間引き）。
+            gp->pos = boss_.pos + FromAngle(boss_.grabAngle) * (boss_.radius + gp->radius + 0.3f);
+            ClampInside(gp->pos, gp->radius);
+            SyncPlayer3D(*gp);
+            gp->grabbedT = std::max(gp->grabbedT, boss_.grabHoldT);
+            if (gp->inv <= 0.0f) ResolvePlayerHit(*gp, boss_.atk * BossGrabTickDamageMul, boss_.grabAngle + Pi);
+        }
+        if (boss_.grabHoldT <= 0.0f)
+        {
+            boss_.grabHoldT = 0.0f;
+            if (gp) { gp->grabbedT = 0.0f; gp->inv = std::max(gp->inv, 0.4f); Burst(gp->pos, Cream, 18); }
+            boss_.grabTarget = -1;
+            boss_.grabCd = (BossGrabCooldownMin + Rand(0.0f, BossGrabCooldownVar)) * specialCdMul;
+        }
+        return;
     }
 
     if (boss_.bossType == BossType::GravityPudding || boss_.bossType == BossType::DemonParfait)
@@ -901,7 +1140,7 @@ void SweetsApp::UpdateBoss(float dt)
     }
 
     boss_.attackCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
-    if (boss_.attackCd <= 0.0f)
+    if (boss_.attackCd <= 0.0f && boss_.attackRestT <= 0.0f)
     {
         const BossPatternId pattern = PatternForBoss(boss_.bossType, bossGimmick_.patternStep++);
         const int attack = AttackIndexForPattern(pattern);
@@ -1069,6 +1308,24 @@ void SweetsApp::DamageBoss(float dmg, bool reflected, int ownerIndex)
 
 // ボスへのダメージ処理です。
 // 通常ボスと隠しボスで必要な補正が違うため、ここで分岐します。
+// 腕（赤先端）へのダメージ。HP（ボス最大HPの10%）を削り切ると一定時間消滅する。
+bool SweetsApp::DamageBossArm(int index, float dmg)
+{
+    if (!boss_.active || index < 0 || index > 1) return false;
+    if (boss_.armDownT[index] > 0.0f) return false; // 既に消滅中
+    boss_.armHp[index] -= dmg;
+    Burst(boss_.armPos[index], Red, 6);
+    if (boss_.armHp[index] <= 0.0f)
+    {
+        boss_.armHp[index] = 0.0f;
+        boss_.armDownT[index] = BossArmDestroyTime;
+        Burst(boss_.armPos[index], Cream, 44);
+        message_ = L"腕を破壊!";
+        messageT_ = std::max(messageT_, 1.4f);
+    }
+    return true;
+}
+
 void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int ownerIndex)
 {
     if (!boss_.active) return;

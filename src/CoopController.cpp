@@ -63,6 +63,7 @@ void SweetsApp::UpdateCoopPlayers(float dt)
         else p.fever = std::max(0.0f, p.fever - dt * 16.0f);
 
         if (p.downed) continue;
+        if (p.grabbedT > 0.0f) continue; // ボスのつかみ拘束中は操作不可
 
         if (coopSlotModes_[i] == CoopSlotMode::AI)
         {

@@ -105,6 +105,7 @@ struct Player
     int blinkCharges = BlinkMaxCharges; // 残りブリンク回数（最大BlinkMaxCharges、連続使用可）
     float blinkRechargeT = 0.0f;        // 1チャージ回復までの残り時間
     float blinkLockT = 0.0f;            // ブリンク直後の攻撃ロック残り時間（攻撃と同時発動を禁止）
+    float grabbedT = 0.0f;              // ボスのつかみで拘束されている残り時間（>0で操作不可）
     float bombCharge = 0.0f;    // チョコ爆弾のチャージ量（長押し時間）
     float fireHeat = 0.0f;      // ショートのヒート（撃ち続けた時間。移動でリセット）
     float overheatT = 0.0f;     // オーバーヒート中の発射ロック残時間（>0なら撃てない）
@@ -193,6 +194,7 @@ struct Boss
     bool telegraphAdd = false;
     bool telegraphMirror = false;
     bool telegraphField = false;
+    float attackRestT = 0.0f;   // 攻撃直後の小休止。これが>0の間は次の攻撃（弾幕/特殊技）を始めない
     // 貫通ビーム（パリィ不可・低頻度）。予兆→照射の小さなステートを本体に持たせます。
     float beamCd = 8.0f;        // 次のビームまでの残り時間
     float beamWarnT = 0.0f;     // 予兆中の残り（>0でビーム準備中）
@@ -210,6 +212,37 @@ struct Boss
     float burrowEruptT = 0.0f;  // 噴出の判定/演出が残る時間
     int burrowCount = 0;        // 噴出地点の数
     std::array<V2, MaxPlayers> burrowTargets{}; // 噴出予定地点（潜行中に各プレイヤーを追尾→ロック）
+    // 極太回転ビーム
+    float megaBeamCd = 12.0f;
+    float megaBeamWarnT = 0.0f;
+    float megaBeamActiveT = 0.0f;
+    float megaBeamAngle = 0.0f;
+    float megaBeamDir = 1.0f;   // 回転方向（+1=反時計, -1=時計）
+    // 腕（ボス本体の一部）。左右2本。先端の赤が掴み＆ダメージ判定。
+    float armAngle = 0.0f;      // 腕の基準向き。通常はランダムに漂い、つかみ時のみプレイヤー方向へ向く
+    float armWanderTarget = 0.0f; // 通常時に向かうランダム角
+    float armWanderCd = 0.0f;     // 次にランダム角を選び直すまでの残り時間
+    V2 armPos[2]{};            // 各腕の先端（赤）位置
+    float armHp[2] = { 0.0f, 0.0f };    // 各腕の残りHP（0で消滅）
+    float armDownT[2] = { 0.0f, 0.0f }; // >0なら消滅中（復活までの残り時間）
+    // つかみ攻撃（腕を伸ばして掴む）
+    float grabCd = 7.0f;
+    float grabReachWarnT = 0.0f;// 腕を引いて溜める予兆中
+    float grabReachT = 0.0f;    // 腕を突き出している最中
+    float grabReachAngle = 0.0f;// 突き出す方向（開始時にロック）
+    int grabArm = -1;           // 突き出している腕index（-1なし）
+    float grabHoldT = 0.0f;     // 拘束中の残り
+    float grabAngle = 0.0f;
+    int grabTarget = -1;        // 拘束中のプレイヤーindex（-1なし）
+    // 飛行必殺
+    float flyCd = 16.0f;
+    float flyWarnT = 0.0f;
+    float flyT = 0.0f;          // 飛行（周回）中の残り
+    float flyStrikeWarnT = 0.0f;// 着弾予兆の残り
+    float flyStrikeT = 0.0f;    // 着弾の残り
+    float flyAngle = 0.0f;      // 周回の現在角
+    float flyAngleAcc = 0.0f;   // 周回した累積角（一周判定用）
+    V2 flyStrikePos{};          // 着弾円の中心
     BossType bossType = BossType::Demon;
     bool active = false;
 };
