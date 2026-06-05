@@ -273,7 +273,34 @@ void SweetsApp::DrawGameplay3D()
 
     if (boss_.active)
     {
-        Color c = boss_.flash > 0.0f ? Cream : (boss_.bossType == BossType::HiddenBoss ? Grape : Rose);
+        Color c = boss_.flash > 0.0f ? Cream : (boss_.bossType == BossType::HiddenBoss ? Grape : Navy);
+        // 腕（ボス本体の一部・左右2本）。黒い節を連ねて先端に赤（掴み判定）。消滅中は描かない。
+        if (boss_.burrowSubT <= 0.0f && boss_.flyT <= 0.0f && boss_.flyStrikeWarnT <= 0.0f && boss_.bossType != BossType::HiddenBoss)
+        {
+            for (int arm = 0; arm < 2; ++arm)
+            {
+                if (boss_.armDownT[arm] > 0.0f) continue;
+                const V2 tip = boss_.armPos[arm];
+                const V2 dd = tip - boss_.pos;
+                const float ang = AngleOf(dd);
+                // 黒い節（ボス側→先端へ、だんだん大きく）
+                const float seg[4] = { 0.34f, 0.50f, 0.66f, 0.80f };
+                const float segR[4] = { 0.20f, 0.27f, 0.36f, 0.50f };
+                for (int s = 0; s < 4; ++s)
+                {
+                    const V2 sp = boss_.pos + dd * seg[s];
+                    DrawSphere(sp, boss_.height * 0.6f, segR[s], Ink);
+                }
+                // 先端の赤（掴み＆ダメージ）。掴み中は紫に。
+                const Color tipCol = (boss_.grabHoldT > 0.0f) ? Grape : Red;
+                DrawSphere(tip, boss_.height * 0.6f, BossArmRadius, tipCol);
+                DrawMesh(ringMesh_,
+                    XMMatrixScaling(BossArmRadius * 1.08f, 1.0f, BossArmRadius * 1.08f) *
+                    XMMatrixTranslation(tip.x, 0.13f, tip.z),
+                    WithAlpha(tipCol, 0.7f));
+                (void)ang;
+            }
+        }
         if (boss_.burrowSubT <= 0.0f) // 地中突き上げの潜行中は本体を隠す
         {
             DrawSphere(boss_.pos, boss_.height, boss_.radius, c);
@@ -427,6 +454,50 @@ void SweetsApp::DrawGameplay3D()
                 // 開始(g=1)で太く高く噴き上がり、減衰(g→0)で細く低くなる。
                 DrawCylinder(at, BossBurrowRadius * (0.45f + 0.55f * g), 0.4f + 1.8f * g, WithAlpha(Grape, 0.3f + 0.5f * g));
             }
+        }
+        // 極太回転ビーム：予兆は薄い線、照射は極太の発光角柱（回転）。
+        if (boss_.megaBeamWarnT > 0.0f || boss_.megaBeamActiveT > 0.0f)
+        {
+            const float ang = boss_.megaBeamAngle;
+            const V2 bdir = FromAngle(ang);
+            const V2 center = boss_.pos + bdir * (BossMegaBeamLength * 0.5f);
+            if (boss_.megaBeamActiveT > 0.0f)
+            {
+                const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 26.0f);
+                const float h = 0.95f;
+                DrawMesh(cubeMesh_,
+                    XMMatrixScaling(BossMegaBeamLength, h, BossMegaBeamHalfWidth * 2.0f) *
+                    XMMatrixRotationY(-ang) *
+                    XMMatrixTranslation(center.x, h * 0.5f + 0.05f, center.z),
+                    WithAlpha(Red, 0.6f));
+                DrawMesh(cubeMesh_,
+                    XMMatrixScaling(BossMegaBeamLength, h * 0.5f, BossMegaBeamHalfWidth) *
+                    XMMatrixRotationY(-ang) *
+                    XMMatrixTranslation(center.x, h * 0.5f + 0.07f, center.z),
+                    WithAlpha(Cream, ClampFloat(0.5f + 0.3f * pulse, 0.0f, 1.0f)));
+            }
+            else
+            {
+                const float blink = 0.3f + 0.35f * std::sin(gameTime_ * 18.0f);
+                DrawMesh(cubeMesh_,
+                    XMMatrixScaling(BossMegaBeamLength, 0.05f, BossMegaBeamHalfWidth * 2.0f) *
+                    XMMatrixRotationY(-ang) *
+                    XMMatrixTranslation(center.x, 0.06f, center.z),
+                    WithAlpha(Red, ClampFloat(blink, 0.0f, 0.7f)));
+            }
+        }
+        // つかみ：拘束中はボス→対象を結ぶ腕を強調表示（予兆は腕そのものが担う）。
+        if (boss_.grabHoldT > 0.0f && boss_.grabTarget >= 0 && boss_.grabTarget < MaxPlayers)
+        {
+            const V2 tp = players_[boss_.grabTarget].pos;
+            const V2 dd = tp - boss_.pos;
+            const float len = std::max(0.1f, Len(dd));
+            const V2 mid = (boss_.pos + tp) * 0.5f;
+            DrawMesh(cubeMesh_,
+                XMMatrixScaling(len, 0.4f, 0.45f) *
+                XMMatrixRotationY(-AngleOf(dd)) *
+                XMMatrixTranslation(mid.x, 0.38f, mid.z),
+                WithAlpha(Grape, 0.82f));
         }
     }
 

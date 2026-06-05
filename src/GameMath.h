@@ -43,6 +43,8 @@ constexpr Color Sky{ 0.30f, 0.60f, 1.0f, 1.0f };
 constexpr Color Grape{ 0.68f, 0.36f, 1.0f, 1.0f };
 constexpr Color Choco{ 0.55f, 0.32f, 0.18f, 1.0f };
 constexpr Color Red{ 1.0f, 0.24f, 0.22f, 1.0f };
+constexpr Color Ink{ 0.07f, 0.07f, 0.10f, 1.0f };   // 腕の節（黒）
+constexpr Color Navy{ 0.16f, 0.20f, 0.64f, 1.0f };  // ボス本体（青）
 
 // 進行ルールに関わる固定値です。
 // 隠しボスは3ゲージ制なので、1ゲージHPとゲージ数を分けて持っています。

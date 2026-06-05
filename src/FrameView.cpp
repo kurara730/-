@@ -276,6 +276,23 @@ void SweetsApp::DrawScene()
         spriteCanvas_.DrawQuad(nullptr, mid, { BossBeamHalfWidth * 2.0f, BossBeamLength }, boss_.beamAngle - Pi * 0.5f, WithAlpha(Red, 0.6f), 0.19f);
         spriteCanvas_.DrawQuad(nullptr, mid, { BossBeamHalfWidth, BossBeamLength }, boss_.beamAngle - Pi * 0.5f, WithAlpha(Cream, ClampFloat(0.5f + 0.3f * pulse, 0.0f, 1.0f)), 0.185f);
     }
+    // 極太回転ビーム（2D）。予兆は細い点滅線、照射は極太＋回転。
+    if (boss_.active && (boss_.megaBeamWarnT > 0.0f || boss_.megaBeamActiveT > 0.0f))
+    {
+        const V2 mid = boss_.pos + FromAngle(boss_.megaBeamAngle) * (BossMegaBeamLength * 0.5f);
+        const float rot = boss_.megaBeamAngle - Pi * 0.5f;
+        if (boss_.megaBeamActiveT > 0.0f)
+        {
+            const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 26.0f);
+            spriteCanvas_.DrawQuad(nullptr, mid, { BossMegaBeamHalfWidth * 2.0f, BossMegaBeamLength }, rot, WithAlpha(Red, 0.62f), 0.19f);
+            spriteCanvas_.DrawQuad(nullptr, mid, { BossMegaBeamHalfWidth, BossMegaBeamLength }, rot, WithAlpha(Cream, ClampFloat(0.5f + 0.3f * pulse, 0.0f, 1.0f)), 0.185f);
+        }
+        else
+        {
+            const float blink = 0.3f + 0.35f * std::sin(gameTime_ * 18.0f);
+            spriteCanvas_.DrawQuad(nullptr, mid, { BossMegaBeamHalfWidth * 2.0f, BossMegaBeamLength }, rot, WithAlpha(Red, ClampFloat(blink, 0.0f, 0.6f)), 0.19f);
+        }
+    }
 
     for (const auto& o : obstacles_)
     {
@@ -384,6 +401,25 @@ void SweetsApp::DrawScene()
     if (boss_.active)
     {
         Color c = boss_.flash > 0.0f ? Cream : (boss_.bossType == BossType::HiddenBoss ? Grape : (boss_.bossType == BossType::DonutKing ? Sky : (boss_.bossType == BossType::MirrorMacaron ? Gold : Rose)));
+        // 腕（左右2本）の2D表示。黒い節＋赤先端。消滅中は描かない。
+        if (boss_.burrowSubT <= 0.0f && boss_.flyT <= 0.0f && boss_.flyStrikeWarnT <= 0.0f && boss_.bossType != BossType::HiddenBoss)
+        {
+            const Color tipCol = boss_.grabHoldT > 0.0f ? Grape : Red;
+            for (int arm = 0; arm < 2; ++arm)
+            {
+                if (boss_.armDownT[arm] > 0.0f) continue;
+                const V2 tip = boss_.armPos[arm];
+                const V2 dd = tip - boss_.pos;
+                const float seg[4] = { 0.34f, 0.50f, 0.66f, 0.80f };
+                const float segR[4] = { 0.20f, 0.27f, 0.36f, 0.50f };
+                for (int s = 0; s < 4; ++s)
+                {
+                    spriteCanvas_.DrawCircle(boss_.pos + dd * seg[s], segR[s], WithAlpha(Ink, 0.95f), 0.185f, 24);
+                }
+                spriteCanvas_.DrawCircle(tip, BossArmRadius, WithAlpha(tipCol, 0.9f), 0.18f, 36);
+                spriteCanvas_.DrawRing(tip, BossArmRadius, 0.12f, WithAlpha(Cream, 0.5f), 0.178f, 40);
+            }
+        }
         if (boss_.burrowSubT <= 0.0f) // 地中突き上げの潜行中は本体を隠す
         {
             DrawSprite2D(boss_.bossType == BossType::HiddenBoss ? L"2d_boss_hidden" : L"2d_boss_normal", boss_.pos, { boss_.radius * 2.85f, boss_.radius * 2.85f }, boss_.spin * 0.35f, c, 0.18f);

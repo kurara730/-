@@ -105,9 +105,8 @@ void SweetsApp::BuildStage()
 
     if (stage_ == StageType::BossArena)
     {
-        // ボス戦でも使える、動くダメージ床
-        addHazard({ -3.0f, -1.5f }, 1.3f, { 1.6f, 0.9f }, Red);
-        addHazard({ 3.2f, 1.8f }, 1.15f, { -1.1f, 1.4f }, Gold);
+        // ダメージ床はボス本体の「腕」として統合したので、独立したハザードは置かない。
+        (void)addHazard; // 他ステージ用に定義は残す
         return;
     }
 

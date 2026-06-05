@@ -29,6 +29,56 @@ constexpr float BossBeamDamageMul = 2.2f;     // boss_.atk への倍率（強攻
 constexpr float BossBeamCooldownMin = 12.0f;  // 次のビームまでの最短秒数（発動頻度・低め）
 constexpr float BossBeamCooldownVar = 5.0f;   // 上記に加算される乱数幅
 
+// どの攻撃（弾幕・特殊技）も、終わった後この秒数は次の攻撃を始めない（攻撃の重なり防止＝間合い確保）。
+constexpr float BossAttackRest = 0.7f;
+
+// ボスの極太回転ビーム薙ぎ払い（パリィ不可）。極太ビームを出しながらゆっくり回す。
+constexpr float BossMegaBeamWarnTime = 1.6f;
+constexpr float BossMegaBeamActiveTime = 3.2f;   // 回しながら照射する時間
+constexpr float BossMegaBeamHalfWidth = 2.1f;    // 極太
+constexpr float BossMegaBeamLength = 28.0f;
+constexpr float BossMegaBeamDamageMul = 1.5f;
+constexpr float BossMegaBeamRotateSpeed = 0.55f; // 回転速度（ラジアン/秒）
+constexpr float BossMegaBeamCooldownMin = 17.0f;
+constexpr float BossMegaBeamCooldownVar = 6.0f;
+
+// ボスの腕（ダメージ床）。ボス本体の一部として最寄りプレイヤー方向へ伸び、触れると継続ダメージ。
+// 腕に触れた瞬間、つかみ(下記)が可能ならそのプレイヤーを捕獲する。
+constexpr float BossArmRadius = 1.1f;        // 腕先端（赤＝掴み判定）の半径
+constexpr float BossArmReach = 3.6f;         // ボス中心から腕先端（赤）までの距離
+constexpr float BossArmTrackSpeed = 2.2f;    // 腕がプレイヤー方向へ向き直る速さ（ラジアン/秒）
+constexpr float BossArmChipPerSec = 8.0f;    // 腕に触れている間の継続ダメージ（毎秒・従来のダメージ床と同等）
+constexpr float BossArmSpread = 0.7f;        // 左右2本の腕の開き角の最大値（ラジアン）
+constexpr float BossArmSpreadMinRatio = 0.3f;// 開き角の最小＝最大×この割合（この範囲で開閉する）
+constexpr float BossArmSpreadSpeed = 1.2f;   // 開閉のゆっくりした速さ（ラジアン/秒）
+constexpr float BossArmHpRatio = 0.10f;      // 腕のHP＝ボス最大HPのこの割合。これだけ削ると腕が消滅
+constexpr float BossArmDestroyTime = 20.0f;  // 腕が消滅してから復活するまでの時間（秒）
+
+// ボスのつかみ攻撃（回避専用）。腕に触れると捕獲し、拘束ダメージ→解放。
+constexpr float BossGrabWarnTime = 0.9f;
+constexpr float BossGrabReachTime = 0.35f;       // 手を伸ばす判定時間（外したら終了）
+constexpr float BossGrabRange = 6.5f;
+constexpr float BossGrabArc = 0.7f;              // 正面コーンの全角（ラジアン）
+constexpr float BossGrabHoldTime = 2.2f;         // 拘束時間
+constexpr float BossGrabTickDamageMul = 0.55f;   // 拘束中の周期ダメージ（i-frameで約0.45s間引き）
+constexpr float BossGrabCooldownMin = 6.0f;
+constexpr float BossGrabCooldownVar = 2.0f;
+// つかみ攻撃で腕を「伸ばす」動き。
+constexpr float BossGrabTriggerRange = 9.5f;     // この距離以内にプレイヤーがいると掴みを試みる
+constexpr float BossGrabReachWarn = 0.55f;       // 腕を引いて溜める予兆時間
+constexpr float BossGrabThrustTime = 0.42f;      // 腕を突き出す時間
+constexpr float BossGrabReachMax = 9.0f;         // 突き出した腕先（赤）の最大到達距離
+
+// ボスの飛行必殺（フィールドを一周してから大範囲円に強攻撃）。
+constexpr float BossFlyWarnTime = 1.2f;          // 飛び立つ前の予兆
+constexpr float BossFlyLapTime = 3.0f;           // フィールドを一周する時間
+constexpr float BossFlyStrikeWarnTime = 1.5f;    // 着弾円の予兆
+constexpr float BossFlyStrikeTime = 0.6f;        // 着弾（判定/演出）
+constexpr float BossFlyStrikeRadius = 5.9f;      // 着弾円の半径（フィールドの約1/3）
+constexpr float BossFlyDamageMul = 3.0f;         // 必殺の威力
+constexpr float BossFlyCooldownMin = 22.0f;
+constexpr float BossFlyCooldownVar = 6.0f;
+
 // ボスの薙ぎ払い（近接・回避専用＝パリィ不可）の調整値です。
 // プレイヤーが近いときに前方の扇を予告→振り抜く。接近を咎める対近接攻撃。
 constexpr float BossSweepWarnTime = 0.85f;     // 予兆（短め＝近接の圧）

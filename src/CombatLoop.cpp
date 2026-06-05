@@ -381,6 +381,22 @@ void SweetsApp::UpdateShots(float dt)
                     break;
                 }
             }
+            // ボスの腕（赤先端）への命中：腕HPを削る。腕は本体をある程度かばう。
+            if (!s.dead && !s.enemy && boss_.active)
+            {
+                for (int ai = 0; ai < 2; ++ai)
+                {
+                    if (boss_.armDownT[ai] > 0.0f) continue;
+                    if (RuleDistance(s.pos, s.height, boss_.armPos[ai], 0.0f) < s.radius + BossArmRadius)
+                    {
+                        DamageBossArm(ai, ReflectedDamage(s));
+                        if (s.charged) s.dead = true;
+                        else if (s.pierce > 0) --s.pierce;
+                        else s.dead = true;
+                        break;
+                    }
+                }
+            }
             // ボスへの貫通弾/斬撃波は hitBoss で多段ヒットを防ぎます。
             // これを入れないと、1発が毎フレーム当たり続けてHPを一瞬で削ってしまいます。
             if (!s.dead && !s.hitBoss && boss_.active && RuleDistance(s, boss_) < s.radius + boss_.radius)
