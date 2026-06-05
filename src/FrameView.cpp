@@ -501,12 +501,6 @@ void SweetsApp::DrawScene()
                 spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (3.10f + t * 0.55f), 0.045f, WithAlpha(Sky, 0.42f), 0.15f, 96);
             }
         }
-        // 薙ぎ払いの予兆扇（2D）。
-        if (boss_.sweepWarnT > 0.0f)
-        {
-            const float blink = 0.28f + 0.34f * std::sin(gameTime_ * 22.0f);
-            spriteCanvas_.DrawArc(boss_.pos, BossSweepRange * 0.6f, BossSweepRange * 0.34f, boss_.sweepAngle, BossSweepArc, WithAlpha(Red, ClampFloat(blink, 0.0f, 0.72f)), 0.16f, 40);
-        }
     }
 
     for (const auto& s : slashes_)
