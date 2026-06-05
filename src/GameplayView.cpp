@@ -408,22 +408,6 @@ void SweetsApp::DrawGameplay3D()
                     WithAlpha(Red, ClampFloat(blink, 0.0f, 0.7f)));
             }
         }
-        // 薙ぎ払いの予兆扇（ウェッジメッシュは半角0.65固定なので、広い扇は2枚で覆う）。
-        if (boss_.sweepWarnT > 0.0f)
-        {
-            const float blink = 0.28f + 0.34f * std::sin(gameTime_ * 22.0f);
-            const Color col = WithAlpha(Red, ClampFloat(blink, 0.0f, 0.7f));
-            const float off = std::max(0.0f, BossSweepArc * 0.5f - 0.65f);
-            for (float k = -1.0f; k <= 1.0f; k += 2.0f)
-            {
-                const float a = boss_.sweepAngle + k * off;
-                DrawMesh(wedgeMesh_,
-                    XMMatrixScaling(BossSweepRange, 1.0f, BossSweepRange) *
-                    XMMatrixRotationY(-a) *
-                    XMMatrixTranslation(boss_.pos.x, 0.07f, boss_.pos.z),
-                    col);
-            }
-        }
         // 地中突き上げ：潜行中は予測円（ロック前は点滅・ロック後は実線寄り）、噴出中は発光円。
         if (boss_.burrowSubT > 0.0f)
         {

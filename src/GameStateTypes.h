@@ -233,6 +233,7 @@ struct Boss
     int grabArm = -1;           // 突き出している腕index（-1なし）
     float grabHoldT = 0.0f;     // 拘束中の残り
     float grabAngle = 0.0f;
+    float grabHoldDist = 0.0f;  // 拘束中に腕を伸ばして保持する距離（捕獲位置）
     int grabTarget = -1;        // 拘束中のプレイヤーindex（-1なし）
     // 飛行必殺
     float flyCd = 16.0f;

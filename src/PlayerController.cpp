@@ -148,9 +148,53 @@ void SweetsApp::UpdatePlayer(float dt)
         return;
     }
     // ボスのつかみで拘束中は操作不可（位置・ダメージはボス側で処理）。
+    // ただしブリンク（スペース）でだけは拘束を振りほどいて脱出できる。
     if (player_.grabbedT > 0.0f)
     {
-        prevSpace_ = KeyDown(VK_SPACE);
+        const bool spaceHeldNow = KeyDown(VK_SPACE);
+        const bool spacePressedNow = spaceHeldNow && !prevSpace_;
+        if (spacePressedNow && player_.blinkCharges > 0)
+        {
+            // 脱出方向：移動入力があればその方向、なければボスから離れる方向へ飛ぶ。
+            V2 esc{};
+            if (KeyDown('W') || KeyDown(VK_UP)) esc.z += 1.0f;
+            if (KeyDown('S') || KeyDown(VK_DOWN)) esc.z -= 1.0f;
+            if (KeyDown('A') || KeyDown(VK_LEFT)) esc.x -= 1.0f;
+            if (KeyDown('D') || KeyDown(VK_RIGHT)) esc.x += 1.0f;
+            const V2 escDir = LenSq(esc) > 0.001f ? Normalize(esc)
+                : Normalize(player_.pos - boss_.pos);
+            const V2 fromPos = player_.pos;
+            // チャージ消費（連続使用の回復タイマー起動）。
+            if (player_.blinkCharges == BlinkMaxCharges) player_.blinkRechargeT = BlinkChargeCooldown;
+            --player_.blinkCharges;
+            // 拘束を解除（プレイヤー側・ボス側の双方）。ボスはつかみのクールダウンへ。
+            player_.grabbedT = 0.0f;
+            boss_.grabHoldT = 0.0f;
+            boss_.grabTarget = -1;
+            boss_.grabArm = -1;
+            boss_.grabCd = std::max(boss_.grabCd, BossGrabCooldownMin);
+            // 脱出ブリンク：振りほどき成功＝ジャスト回避扱いで気持ちよく飛ばす。
+            Burst(fromPos, Sky, 16);
+            player_.pos += escDir * BlinkJustDistance;
+            ClampInside(player_.pos, player_.radius);
+            player_.inv = std::max(player_.inv, BlinkInvuln);
+            player_.dashT = 0.0f;
+            player_.blinkLockT = BlinkAttackLock;
+            SyncPlayer3D(player_);
+            Burst(player_.pos, Cream, 20);
+            audio_.PlaySoundEffect(SoundEffect::Reflect);
+            hitstopT_ = HitstopTime;
+            justZoomT_ = JustZoomLife;
+            justZoomLife_ = JustZoomLife;
+            Burst(fromPos, Gold, 26);
+            message_ = L"振りほどいた!";
+            messageT_ = std::max(messageT_, 0.9f);
+            prevSpace_ = spaceHeldNow;
+            prevMouseLeft_ = mouseLeft_;
+            mouseRightReleased_ = false;
+            return;
+        }
+        prevSpace_ = spaceHeldNow;
         prevMouseLeft_ = mouseLeft_;
         mouseRightReleased_ = false;
         return;

@@ -551,9 +551,8 @@ void SweetsApp::UpdateBoss(float dt)
     const V2 toP = targetPlayer->pos - boss_.pos;
     const float d = RuleDistance(boss_.pos, boss_.height, targetPlayer->pos, PlayerBodyY);
     const V2 n = Normalize(toP);
-    // 特殊攻撃（ビーム/薙ぎ払い）の予兆・実行中は本体を止める（方向を固定し、避け先を読みやすくする）
+    // 特殊攻撃（ビーム等）の予兆・実行中は本体を止める（方向を固定し、避け先を読みやすくする）
     const bool busy = boss_.beamWarnT > 0.0f || boss_.beamActiveT > 0.0f
-        || boss_.sweepWarnT > 0.0f || boss_.sweepActiveT > 0.0f
         || boss_.burrowWarnT > 0.0f || boss_.burrowSubT > 0.0f || boss_.burrowEruptT > 0.0f
         || boss_.megaBeamWarnT > 0.0f || boss_.megaBeamActiveT > 0.0f
         || boss_.grabReachWarnT > 0.0f || boss_.grabReachT > 0.0f || boss_.grabHoldT > 0.0f;
@@ -601,6 +600,11 @@ void SweetsApp::UpdateBoss(float dt)
             {
                 const float p = 1.0f - ClampFloat(boss_.grabReachT / BossGrabThrustTime, 0.0f, 1.0f);
                 reach = BossArmReach + (BossGrabReachMax - BossArmReach) * std::sin(p * Pi * 0.5f); // 突き出し
+            }
+            else if (boss_.grabHoldT > 0.0f)
+            {
+                angle = boss_.grabAngle;       // 捕獲した方向
+                reach = boss_.grabHoldDist;    // 腕を伸ばしたまま捕獲位置で保持
             }
         }
         return boss_.pos + FromAngle(angle) * reach;
@@ -682,70 +686,6 @@ void SweetsApp::UpdateBoss(float dt)
             boss_.beamCd = (BossBeamCooldownMin + Rand(0.0f, BossBeamCooldownVar)) * specialCdMul;
         }
         return; // 照射中は通常攻撃しない
-    }
-
-    // === 薙ぎ払い（近接・回避専用＝パリィ不可）===
-    // ここに来ている時点でビームは非アクティブ。通常弾幕の予兆中はCDを進めない。
-    if (boss_.telegraphT <= 0.0f)
-    {
-        boss_.sweepCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
-    }
-    // CDが切れ、プレイヤーが近いときだけ発動（接近を咎める置き攻撃）。
-    if (boss_.sweepCd <= 0.0f && canStart && d <= BossSweepTriggerRange)
-    {
-        boss_.sweepWarnT = BossSweepWarnTime;
-        boss_.sweepAngle = AngleOf(toP); // 振る方向をロック（裏や外へ回避できる）
-        boss_.flash = std::max(boss_.flash, BossSweepWarnTime);
-        message_ = L"薙ぎ払い!";
-        messageT_ = std::max(messageT_, 0.8f);
-    }
-    if (boss_.sweepWarnT > 0.0f)
-    {
-        boss_.sweepWarnT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
-        if (boss_.sweepWarnT <= 0.0f)
-        {
-            boss_.sweepWarnT = 0.0f;
-            boss_.sweepActiveT = BossSweepActiveTime;
-            // 振り抜き：扇内のプレイヤーへ即時ダメージ＋ノックバック。
-            for (auto& p : players_)
-            {
-                if (!p.active || p.downed || p.inv > 0.0f) continue;
-                const float dist = RuleDistance(boss_.pos, boss_.height, p.pos, PlayerBodyY);
-                if (dist > BossSweepRange + p.radius) continue;
-                float da = AngleOf(p.pos - boss_.pos) - boss_.sweepAngle;
-                while (da > Pi) da -= TwoPi;
-                while (da < -Pi) da += TwoPi;
-                if (std::fabs(da) <= BossSweepArc * 0.5f)
-                {
-                    ResolvePlayerHit(p, boss_.atk * BossSweepDamageMul, boss_.sweepAngle);
-                }
-            }
-            // 斬撃の見た目（Slashを流用。判定は上で実施済みなので damage は持たせない）。
-            Slash s{};
-            s.pos = boss_.pos;
-            s.angle = boss_.sweepAngle;
-            s.range = BossSweepRange;
-            s.arc = BossSweepArc;
-            s.ttl = BossSweepActiveTime;
-            s.life = BossSweepActiveTime;
-            s.damage = 0.0f;
-            s.color = Red;
-            s.height = boss_.height * 0.6f;
-            s.visualMode = SlashVisualMode::Sector;
-            s.sweep = true;
-            SyncSlash3D(s);
-            slashes_.push_back(s);
-            Burst(boss_.pos + FromAngle(boss_.sweepAngle) * (BossSweepRange * 0.5f), Red, 22);
-            audio_.PlaySoundEffect(SoundEffect::ChocoSlash);
-            boss_.sweepCd = (BossSweepCooldownMin + Rand(0.0f, BossSweepCooldownVar)) * specialCdMul;
-        }
-        return; // 振りかぶり中は通常攻撃しない
-    }
-    if (boss_.sweepActiveT > 0.0f)
-    {
-        boss_.sweepActiveT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
-        if (boss_.sweepActiveT <= 0.0f) boss_.sweepActiveT = 0.0f;
-        return; // 振り抜き演出中は通常攻撃しない
     }
 
     // === 地中突き上げ（Burrow→Eruption・回避専用＝パリィ不可）===
@@ -963,9 +903,12 @@ void SweetsApp::UpdateBoss(float dt)
                     boss_.grabTarget = i;
                     boss_.grabAngle = boss_.grabReachAngle;
                     boss_.grabHoldT = BossGrabHoldTime;
+                    // 捕まえた距離を保持（本体に引き寄せず、腕を伸ばしたまま掴む）。
+                    boss_.grabHoldDist = ClampFloat(Len(boss_.armPos[boss_.grabArm] - boss_.pos),
+                        boss_.radius + p.radius + 0.2f, BossGrabReachMax);
                     p.grabbedT = BossGrabHoldTime;
                     boss_.grabReachT = 0.0f;
-                    boss_.grabArm = -1;
+                    // grabArm は維持：拘束中も腕を伸ばした状態で描画・保持する。
                     Burst(p.pos, Grape, 24);
                     message_ = L"捕獲!";
                     messageT_ = std::max(messageT_, 1.0f);
@@ -991,8 +934,8 @@ void SweetsApp::UpdateBoss(float dt)
         }
         else
         {
-            // 腕の先（ボス正面）に拘束（移動不可）。周期ダメージ（i-frameで間引き）。
-            gp->pos = boss_.pos + FromAngle(boss_.grabAngle) * (boss_.radius + gp->radius + 0.3f);
+            // 伸ばした腕の先（捕獲位置）に拘束（移動不可）。周期ダメージ（i-frameで間引き）。
+            gp->pos = boss_.pos + FromAngle(boss_.grabAngle) * boss_.grabHoldDist;
             ClampInside(gp->pos, gp->radius);
             SyncPlayer3D(*gp);
             gp->grabbedT = std::max(gp->grabbedT, boss_.grabHoldT);
@@ -1003,6 +946,7 @@ void SweetsApp::UpdateBoss(float dt)
             boss_.grabHoldT = 0.0f;
             if (gp) { gp->grabbedT = 0.0f; gp->inv = std::max(gp->inv, 0.4f); Burst(gp->pos, Cream, 18); }
             boss_.grabTarget = -1;
+            boss_.grabArm = -1; // 拘束終了で腕を戻す
             boss_.grabCd = (BossGrabCooldownMin + Rand(0.0f, BossGrabCooldownVar)) * specialCdMul;
         }
         return;
