@@ -428,7 +428,51 @@ void SweetsApp::DrawHud()
                     D2D1::RectF(left, top + 38.0f, left + bw, top + 62.0f), textBrush_.Get());
             }
         }
+        // ブレイクコンボ表示（ブレイク中のみ）。ヒットを重ねるほど倍率が上がる。
+        if (boss_.breakT > 0.0f && breakCombo_ > 0)
+        {
+            const float mul = std::min(BreakComboMaxMul, 1.0f + static_cast<float>(breakCombo_) * BreakComboDamagePerHit);
+            wchar_t buf[64];
+            swprintf_s(buf, L"BREAK COMBO  %d   x%.2f", breakCombo_, mul);
+            const float pop = 1.0f + 0.06f * std::sin(gameTime_ * 18.0f);
+            D2D1_MATRIX_3X2_F prev; d2dContext_->GetTransform(&prev);
+            const D2D1_POINT_2F c = D2D1::Point2F(static_cast<float>(width_) * 0.5f, top + 64.0f);
+            d2dContext_->SetTransform(D2D1::Matrix3x2F::Scale(pop, pop, c) * prev);
+            smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+            textBrush_->SetColor(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.55f));
+            d2dContext_->DrawTextW(buf, static_cast<UINT32>(wcslen(buf)), smallFormat_.Get(), D2D1::RectF(c.x - 159.0f, c.y + 1.0f, c.x + 161.0f, c.y + 27.0f), textBrush_.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
+            textBrush_->SetColor(D2D1::ColorF(1.0f, 0.85f, 0.30f, 1.0f));
+            d2dContext_->DrawTextW(buf, static_cast<UINT32>(wcslen(buf)), smallFormat_.Get(), D2D1::RectF(c.x - 160.0f, c.y, c.x + 160.0f, c.y + 26.0f), textBrush_.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
+            smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+            d2dContext_->SetTransform(prev);
+        }
     }
+    // ダメージ数値（モンハンライズ風）。ワールド座標→スクリーンへ投影し、黒縁付きで描く。
+    if (!damageNumbers_.empty()) smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    for (const auto& dn : damageNumbers_)
+    {
+        const float fade = ClampFloat(dn.ttl / std::max(0.01f, dn.life), 0.0f, 1.0f);
+        const V2 s = WorldToScreen(dn.pos);
+        wchar_t buf[24];
+        swprintf_s(buf, L"%d", static_cast<int>(dn.value + 0.5f));
+        const float scale = dn.crit ? 1.5f : 1.0f;
+        D2D1_MATRIX_3X2_F prev; d2dContext_->GetTransform(&prev);
+        const D2D1_POINT_2F c = D2D1::Point2F(s.x, s.z);
+        d2dContext_->SetTransform(D2D1::Matrix3x2F::Scale(scale, scale, c) * prev);
+        const D2D1_RECT_F box = D2D1::RectF(c.x - 60.0f, c.y - 13.0f, c.x + 60.0f, c.y + 13.0f);
+        // 黒縁
+        textBrush_->SetColor(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.7f * fade));
+        for (int oy = -1; oy <= 1; ++oy) for (int ox = -1; ox <= 1; ++ox)
+        {
+            if (ox == 0 && oy == 0) continue;
+            d2dContext_->DrawTextW(buf, static_cast<UINT32>(wcslen(buf)), smallFormat_.Get(),
+                D2D1::RectF(box.left + ox, box.top + oy, box.right + ox, box.bottom + oy), textBrush_.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
+        }
+        textBrush_->SetColor(D2D1::ColorF(dn.color.r, dn.color.g, dn.color.b, fade));
+        d2dContext_->DrawTextW(buf, static_cast<UINT32>(wcslen(buf)), smallFormat_.Get(), box, textBrush_.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
+        d2dContext_->SetTransform(prev);
+    }
+    if (!damageNumbers_.empty()) smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 
     textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.88f));
     const wchar_t* help = L"WASD/矢印: 移動  |  左クリック: 通常弾  |  Space: ブリンク回避  |  右クリック長押し: チャージ  |  Q: 必殺  |  P: 一時停止";

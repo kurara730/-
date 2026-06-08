@@ -127,6 +127,8 @@ void SweetsApp::ResetGame()
     messageT_ = 0.0f;
     screenFlashT_ = 0.0f;
     combatNotices_.clear();
+    damageNumbers_.clear();
+    breakCombo_ = 0;
     worldTelegraphs_.clear();
     camera_.center = player_.pos;
     camera_.target = player_.pos;

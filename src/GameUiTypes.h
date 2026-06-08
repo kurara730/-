@@ -179,6 +179,18 @@ struct CombatNotice
     Color color = Gold;
 };
 
+// ダメージ数値（モンハンライズ風のフローティングテキスト）。ワールド座標で湧き、上へ流れて消える。
+struct DamageNumber
+{
+    V2 pos{};       // ワールド座標
+    V2 vel{};       // 上方向ドリフト
+    float value = 0.0f;
+    float ttl = 0.0f;
+    float life = 0.0f;
+    Color color = Cream;
+    bool crit = false; // 反射/ブレイクコンボなどの強調表示
+};
+
 struct WorldTelegraph
 {
     V2 pos{};

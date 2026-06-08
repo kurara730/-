@@ -67,6 +67,44 @@ void SweetsApp::UpdateEffectVisuals(float dt)
     worldTelegraphs_.erase(
         std::remove_if(worldTelegraphs_.begin(), worldTelegraphs_.end(), [](const WorldTelegraph& telegraph) { return telegraph.ttl <= 0.0f; }),
         worldTelegraphs_.end());
+    // ダメージ数値：上へ流れながら減速し、寿命で消える。
+    for (auto& dn : damageNumbers_)
+    {
+        dn.ttl -= dt;
+        dn.pos += dn.vel * dt;
+        dn.vel = dn.vel * 0.90f; // だんだん止まる
+    }
+    damageNumbers_.erase(
+        std::remove_if(damageNumbers_.begin(), damageNumbers_.end(), [](const DamageNumber& dn) { return dn.ttl <= 0.0f; }),
+        damageNumbers_.end());
+}
+
+// ダメージ数値（モンハンライズ風）を1つ湧かせる。小さなダメージや連続ヒットは直近の数値へ合算する。
+void SweetsApp::SpawnDamageNumber(V2 pos, float value, Color color, bool crit)
+{
+    if (value < 1.0f) return; // 微小な連続ダメージ（反射の毎フレーム等）は出さない
+    // 近くに出たばかりの数値があれば合算（数字の洪水を防ぐ）。
+    for (auto& dn : damageNumbers_)
+    {
+        if (dn.ttl > dn.life - 0.18f && Len(dn.pos - pos) < 1.1f)
+        {
+            dn.value += value;
+            dn.ttl = dn.life;          // 寿命リフレッシュ
+            dn.crit = dn.crit || crit;
+            if (crit) dn.color = color;
+            return;
+        }
+    }
+    if (damageNumbers_.size() > 60) return; // 上限
+    DamageNumber dn{};
+    dn.pos = pos + V2{ Rand(-0.4f, 0.4f), Rand(-0.2f, 0.2f) };
+    dn.vel = V2{ Rand(-0.6f, 0.6f), 2.6f }; // 上（+z）へ
+    dn.value = value;
+    dn.life = crit ? 0.95f : 0.7f;
+    dn.ttl = dn.life;
+    dn.color = color;
+    dn.crit = crit;
+    damageNumbers_.push_back(dn);
 }
 
 // 敵弾を1発作る共通処理です。
