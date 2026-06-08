@@ -46,6 +46,10 @@ constexpr float BossPhaseAggroPerPhase = 0.30f;// フェーズ毎の攻撃頻度
 constexpr float BossPhaseSpeedPerPhase = 0.15f;// フェーズ毎の移動速度上昇
 constexpr float BossPhaseIntroTime = 0.9f;     // フェーズ移行時の小休止（無防備の溜め＝ピーク演出）
 
+// ブレイクコンボ：ブレイク中だけ有効。ヒットを重ねるほど与ダメージ倍率が上がり、ブレイク終了で必ずリセット。
+constexpr float BreakComboDamagePerHit = 0.06f;// 1ヒットごとの倍率上昇（+6%）
+constexpr float BreakComboMaxMul = 3.0f;       // 倍率の上限
+
 // ボスの極太回転ビーム薙ぎ払い（パリィ不可）。極太ビームを出しながらゆっくり回す。
 constexpr float BossMegaBeamWarnTime = 1.6f;
 constexpr float BossMegaBeamActiveTime = 3.2f;   // 回しながら照射する時間

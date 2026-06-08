@@ -348,12 +348,13 @@ void SweetsApp::SpawnBoss()
     boss_.breakGauge = 0.0f;
     boss_.breakGaugeMax = BossBreakGaugeMax;
     boss_.breakT = 0.0f;
+    breakCombo_ = 0;
     boss_.armAngle = Rand(0.0f, TwoPi);
     boss_.armWanderTarget = Rand(0.0f, TwoPi);
     boss_.armWanderCd = Rand(1.5f, 3.0f);
     if (gameMode_ == GameMode::BossOnlyDebug)
     {
-        boss_.maxHp *= 5.0f; // デバッグ用：耐久を5倍にして技を試しやすく
+        boss_.maxHp *= 2.0f; // デバッグ用：耐久を2倍にして技を試しやすく
         boss_.hp = boss_.maxHp;
     }
     for (int i = 0; i < 2; ++i)
@@ -557,6 +558,7 @@ void SweetsApp::UpdateBoss(float dt)
         if (boss_.breakT <= 0.0f)
         {
             boss_.breakT = 0.0f;
+            breakCombo_ = 0; // ブレイク終了でコンボは必ずリセット
             Burst(boss_.pos, Cream, 40);
             message_ = L"ブレイク終了";
             messageT_ = std::max(messageT_, 0.8f);
@@ -735,6 +737,7 @@ void SweetsApp::UpdateBoss(float dt)
             {
                 boss_.breakGauge = 0.0f;
                 boss_.breakT = BossBreakDuration;
+                breakCombo_ = 0;                // ブレイク開始時はコンボ0から
                 boss_.beamActiveT = 0.0f;       // 進行中のビームをキャンセル
                 boss_.beamReflectDist = 0.0f;
                 boss_.beamCd = (BossBeamCooldownMin + Rand(0.0f, BossBeamCooldownVar)) * specialCdMul;
@@ -1328,6 +1331,7 @@ bool SweetsApp::DamageBossArm(int index, float dmg)
     if (boss_.armDownT[index] > 0.0f) return false; // 既に消滅中
     boss_.armHp[index] -= dmg;
     Burst(boss_.armPos[index], Red, 6);
+    SpawnDamageNumber(boss_.armPos[index], dmg, Red, false);
     if (boss_.armHp[index] <= 0.0f)
     {
         boss_.armHp[index] = 0.0f;
@@ -1550,8 +1554,20 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
         }
     }
     appliedDmg = std::min(appliedDmg, NormalBossHitCap(boss_.maxHp, kind, reflected));
+    // ブレイクコンボ：ブレイク中のヒットは重ねるほど火力UP（終了で必ずリセット）。
+    bool breakHit = false;
+    if (boss_.breakT > 0.0f)
+    {
+        const float comboMul = std::min(BreakComboMaxMul, 1.0f + static_cast<float>(breakCombo_) * BreakComboDamagePerHit);
+        appliedDmg *= comboMul;
+        ++breakCombo_;
+        breakHit = true;
+    }
     boss_.hp -= appliedDmg;
     boss_.flash = 0.15f;
+    // ダメージ数値（モンハンライズ風）。反射・ブレイクコンボは強調表示。
+    SpawnDamageNumber(boss_.pos + V2{ 0.0f, boss_.radius * 0.6f }, appliedDmg,
+        breakHit ? Gold : (isReflected ? Sky : Cream), breakHit || isReflected);
     if (isReflected)
     {
         Player& owner = players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))];

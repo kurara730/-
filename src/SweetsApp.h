@@ -168,6 +168,7 @@ private:
     void DamageBoss(float dmg, bool reflected, int ownerIndex);
     void DamageBoss(float dmg, BossDamageKind kind, bool reflected, int ownerIndex);
     bool DamageBossArm(int index, float dmg); // 腕（赤）にダメージ。HPが尽きると一定時間消滅。命中したらtrue
+    void SpawnDamageNumber(V2 pos, float value, Color color, bool crit); // ダメージ数値を湧かせる
     void Burst(V2 p, Color c, int count);
     void PlayCombatEffect(const std::wstring& id, V2 position, float y, float rotationY, float scale, Color fallbackColor, int fallbackCount);
     void ReflectEnemyShotsNear(V2 center, float radius, int ownerIndex, CharacterType source, Color color, float power);
@@ -382,6 +383,8 @@ private:
     std::array<HiddenBossCore, HiddenBossCoreCount> hiddenBossCores_{};
     BossGimmickState bossGimmick_{};
     std::vector<CombatNotice> combatNotices_;
+    std::vector<DamageNumber> damageNumbers_;
+    int breakCombo_ = 0;        // ブレイク中のヒット数（=火力倍率の元）。ブレイク終了でリセット。
     std::vector<WorldTelegraph> worldTelegraphs_;
     AssetCatalog assetCatalog_;
     EffekseerSystem effekseer_;
