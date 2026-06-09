@@ -89,7 +89,7 @@ void SweetsApp::ResetGame()
     shakeMag_ = 0.0f;
     player_.blinkCharges = BlinkMaxCharges;
     player_.blinkRechargeT = 0.0f;
-    for (auto& pl : players_) pl.grabbedT = 0.0f;
+    for (auto& pl : players_) { pl.grabbedT = 0.0f; pl.coreCharge = 0.0f; }
     clearTimer_ = 0.0f;
     hiddenIntroT_ = 0.0f;
     hiddenBossT_ = 0.0f;

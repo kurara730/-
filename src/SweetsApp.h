@@ -107,6 +107,7 @@ private:
     V2 ResolvePlayerAimPoint(const Player& p, int ownerIndex, V2 cursorPoint, float range) const;
     // チョコウォールを最大 maxWalls 枚に保つ。超える場合は一番古い壁の ttl を 0 にして既存の除去パスへ任せる（FIFO）。
     void EnforceChocoWallLimit(size_t maxWalls);
+    void EnforceReflectionCoreLimit(size_t maxCores); // 恒久コアの最大数を保つ（古い順に撤去）
     // 指定位置が「危険」かを判定（ジャスト回避用）。迫る敵弾・ボスの照射ビーム・ダメージ床・地中噴出など。
     bool IsBlinkJustDodge(V2 pos) const;
     bool Use3DRules() const;

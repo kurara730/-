@@ -252,6 +252,19 @@ void SweetsApp::DrawHud()
                     : D2D1::ColorF(0.30f, 0.55f, 0.72f, 0.95f); // 回復中：暗いシアン
                 fillBar(bx, top + 5.0f, 22.0f, 14.0f, pct, barBg, fg);
             }
+            // リフレクションコア（チャージ）。満タンで右クリック設置可。
+            hudText(L"コア", 762.0f, top + 3.0f, 800.0f, D2D1::ColorF(0.80f, 0.95f, 1.0f, 0.95f));
+            const float corePct = ClampFloat(p.coreCharge / ReflectionCoreCost, 0.0f, 1.0f);
+            const bool coreReady = p.coreCharge >= ReflectionCoreCost;
+            const D2D1::ColorF coreFg = coreReady
+                ? D2D1::ColorF(0.45f, 1.0f, 0.70f, 0.97f)   // 満タン：明るい緑シアン
+                : D2D1::ColorF(0.30f, 0.62f, 0.55f, 0.95f); // 蓄積中：暗い緑シアン
+            fillBar(800.0f, top + 5.0f, 90.0f, 14.0f, corePct, barBg, coreFg);
+            if (coreReady)
+            {
+                const float gl = 0.6f + 0.4f * std::sin(gameTime_ * 8.0f);
+                hudText(L"READY 右クリック", 896.0f, top + 3.0f, 1080.0f, D2D1::ColorF(0.5f, 1.0f, 0.8f, ClampFloat(gl, 0.0f, 1.0f)));
+            }
         }
 
         // ショートのヒートゲージ（自機の頭上。撃ち続けると伸び、レッドゾーンで最大火力、振り切るとオーバーヒート）
@@ -475,7 +488,7 @@ void SweetsApp::DrawHud()
     if (!damageNumbers_.empty()) smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 
     textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.88f));
-    const wchar_t* help = L"WASD/矢印: 移動  |  左クリック: 通常弾  |  Space: ブリンク回避  |  右クリック長押し: チャージ  |  Q: 必殺  |  P: 一時停止";
+    const wchar_t* help = L"WASD/矢印: 移動  |  左クリック: 攻撃  |  右クリック: リフレクションコア設置(チャージ満タンで)  |  Space: ブリンク回避  |  E: 必殺  |  P: 一時停止";
     d2dContext_->DrawTextW(help, static_cast<UINT32>(wcslen(help)), smallFormat_.Get(),
         D2D1::RectF(18.0f, static_cast<float>(height_) - 34.0f, static_cast<float>(width_) - 18.0f, static_cast<float>(height_) - 8.0f), textBrush_.Get());
 

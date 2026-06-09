@@ -106,6 +106,7 @@ struct Player
     float blinkRechargeT = 0.0f;        // 1チャージ回復までの残り時間
     float blinkLockT = 0.0f;            // ブリンク直後の攻撃ロック残り時間（攻撃と同時発動を禁止）
     float grabbedT = 0.0f;              // ボスのつかみで拘束されている残り時間（>0で操作不可）
+    float coreCharge = 0.0f;            // リフレクションコアのチャージ（敵に攻撃を当てて蓄積。満タンで右クリック設置）
     float bombCharge = 0.0f;    // チョコ爆弾のチャージ量（長押し時間）
     float fireHeat = 0.0f;      // ショートのヒート（撃ち続けた時間。移動でリセット）
     float overheatT = 0.0f;     // オーバーヒート中の発射ロック残時間（>0なら撃てない）
