@@ -50,6 +50,12 @@ constexpr float BossPhaseIntroTime = 0.9f;     // フェーズ移行時の小休
 constexpr float BreakComboDamagePerHit = 0.06f;// 1ヒットごとの倍率上昇（+6%）
 constexpr float BreakComboMaxMul = 3.0f;       // 倍率の上限
 
+// リフレクションコア：全キャラ共通。敵に攻撃を当ててチャージ→満タンで右クリック設置（時間では消えず壊れるまで残る）。
+constexpr float ReflectionCoreCost = 100.0f;        // 設置に必要なチャージ量
+constexpr float ReflectionCoreChargePerDamage = 0.7f;// 与ダメージ1あたりのチャージ獲得
+constexpr int ReflectionCoreMax = 3;                // 同時設置できる最大数（超えると古い順に消える）
+constexpr float ReflectionCoreHp = 140.0f;          // コアの耐久（敵に壊されると消える）
+
 // ボスの極太回転ビーム薙ぎ払い（パリィ不可）。極太ビームを出しながらゆっくり回す。
 constexpr float BossMegaBeamWarnTime = 1.6f;
 constexpr float BossMegaBeamActiveTime = 3.2f;   // 回しながら照射する時間

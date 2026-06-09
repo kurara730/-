@@ -182,7 +182,7 @@ void SweetsApp::OnKeyDown(WPARAM key)
     }
     if (screen_ == Screen::Playing || screen_ == Screen::HiddenBoss)
     {
-        if (key == 'Q') UseUltimate();
+        if (key == 'E') UseUltimate();
         if (key == 'R') RestartCurrentRun();
         if (key == 'T') SetAimMode(static_cast<AimMode>((static_cast<int>(aimMode_) + 1) % 3), true);
     }

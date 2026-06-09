@@ -700,7 +700,10 @@ void SweetsApp::UpdateBoss(float dt)
         float reflectDist = -1.0f;
         for (const auto& o : obstacles_)
         {
-            if (!o.chocoWall || o.ttl <= 0.0f) continue;
+            // リフレクションコア（chocoWall）。恒久コアは ttl=-1、旧時限壁は ttl>0。
+            // 除去待ち（ttl が (-0.5, 0]）のものだけスキップする。
+            if (!o.chocoWall) continue;
+            if (o.ttl <= 0.0f && o.ttl > -0.5f) continue;
             const V2 rel = o.pos - boss_.pos;
             const float along = Dot(rel, bdir);
             if (along <= 0.0f || along > BossBeamLength) continue;
@@ -1239,6 +1242,11 @@ void SweetsApp::DamageEnemy(Enemy& e, float dmg, V2 from, float knock, bool refl
 
     e.hp -= dmg;
     e.flash = 0.12f;
+    // リフレクションコアのチャージ：敵に攻撃を当てた分だけ溜まる。
+    {
+        Player& owner = players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))];
+        owner.coreCharge = std::min(ReflectionCoreCost, owner.coreCharge + dmg * ReflectionCoreChargePerDamage);
+    }
     V2 push = Normalize(e.pos - from);
     e.pos += push * (0.08f * knock);
     ClampInside(e.pos, e.radius);
@@ -1565,6 +1573,11 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
     }
     boss_.hp -= appliedDmg;
     boss_.flash = 0.15f;
+    // リフレクションコアのチャージ：ボスに与えた分だけ溜まる。
+    {
+        Player& chgOwner = players_[std::max(0, std::min(ownerIndex, MaxPlayers - 1))];
+        chgOwner.coreCharge = std::min(ReflectionCoreCost, chgOwner.coreCharge + appliedDmg * ReflectionCoreChargePerDamage);
+    }
     // ダメージ数値（モンハンライズ風）。反射・ブレイクコンボは強調表示。
     SpawnDamageNumber(boss_.pos + V2{ 0.0f, boss_.radius * 0.6f }, appliedDmg,
         breakHit ? Gold : (isReflected ? Sky : Cream), breakHit || isReflected);

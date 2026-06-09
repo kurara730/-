@@ -95,6 +95,27 @@ void SweetsApp::EnforceChocoWallLimit(size_t maxWalls)
     }
 }
 
+// リフレクションコア（恒久＝ttl<-0.5）の最大数を保つ。超過分は古い順に静かに撤去（衝撃波なし）。
+void SweetsApp::EnforceReflectionCoreLimit(size_t maxCores)
+{
+    auto countCores = [this]() {
+        size_t n = 0;
+        for (const auto& o : obstacles_) if (o.chocoWall && o.ttl < -0.5f) ++n;
+        return n;
+    };
+    while (countCores() >= maxCores)
+    {
+        Obstacle* oldest = nullptr;
+        for (auto& o : obstacles_)
+        {
+            if (o.chocoWall && o.ttl < -0.5f) { oldest = &o; break; }
+        }
+        if (!oldest) break;
+        Burst(oldest->pos, Cream, 10);
+        oldest->ttl = -0.25f; // breakableの衝撃波を出さずに除去パスで回収させる
+    }
+}
+
 // ブリンクした位置が「危険だったか」を判定します（ジャスト回避演出のトリガー）。
 // 迫る敵弾、ボスの照射ビーム帯、ダメージ床、地中噴出の円のいずれかに掛かっていれば true。
 bool SweetsApp::IsBlinkJustDodge(V2 pos) const
@@ -254,6 +275,7 @@ void SweetsApp::UpdatePlayer(float dt)
     const V2 aimPoint = ScreenToWorld(mouseX_, mouseY_);
     player_.face = ResolvePlayerAim(player_, 0, dir, aimPoint);
     const V2 actionPoint = ResolvePlayerAimPoint(player_, 0, aimPoint, 8.0f);
+    (void)actionPoint; // 旧チャージ攻撃で使用。現在は未使用だが照準計算の整合のため残す。
 
     // スペースキーでブリンク（短距離テレポート＋短い無敵）。最大BlinkMaxChargesまで連続使用可。
     // チャージは1回ごとに BlinkChargeCooldown 秒かけて順番に回復する。
@@ -392,51 +414,38 @@ void SweetsApp::UpdatePlayer(float dt)
         FirePrimaryFor(player_, 0, player_.face);
     }
 
-    // 右クリックはチャージ専用です。チョコだけ短押し時に壁設置へ分岐します。
-    // ブリンク直後のロック中は受け付けない（攻撃とブリンクの同時発動を防ぐ）。
-    if (attackLocked)
+    // 右クリック：リフレクションコアを設置（全キャラ共通）。チャージ満タンのときだけ、その場に置ける。
+    // 時間では消えず、敵に壊されるまで残る。最大数を超えたら古いコアから撤去（FIFO）。
+    if (mouseRightReleased_ && player_.coreCharge >= ReflectionCoreCost && obstacles_.size() < 24)
     {
-        // ロック中は右クリックの状態を進めず、リリースも握りつぶす。
+        EnforceReflectionCoreLimit(ReflectionCoreMax);
+        Obstacle core{};
+        // 「その場」に設置。足元だと自分と重なるので、向いている方向へわずかに前へ。
+        core.pos = player_.pos + FromAngle(player_.face) * 0.9f;
+        ClampInside(core.pos, 0.8f);
+        core.radius = 0.52f;
+        core.hp = ReflectionCoreHp + player_.level * 12.0f;
+        core.maxHp = core.hp;
+        core.ttl = -1.0f;             // 恒久（時間では消えない）
+        core.kind = 2;
+        core.ownerIndex = 0;
+        core.reflectPower = 1.35f + player_.corePower;
+        core.cheeseWall = true;       // 反射挙動
+        core.chocoWall = true;        // 長方形描画＆レーザー反射＆コア識別
+        // 当面は破壊不可（敵がコアを壊す処理は未実装。自分の弾で壊れるのを防ぐためbreakableは付けない）。
+        core.spin = player_.face;
+        core.color = Choco;
+        SyncObstacle3D(core);
+        obstacles_.push_back(core);
+        player_.coreCharge = 0.0f;    // 設置で消費→次のチャージ開始
+        Burst(core.pos, Sky, 22);
+        audio_.PlaySoundEffect(SoundEffect::Reflect);
     }
-    else if (mouseRight_)
-    {
-        player_.chargeT += dt;
-        player_.chargeReady = player_.chargeT >= 0.55f;
-        player_.chargeFull = player_.chargeT >= 1.15f;
-        player_.charging = true;
-    }
-    else if (mouseRightReleased_ || player_.charging)
-    {
-        if (player_.chargeReady && player_.chargeCd <= 0.0f)
-        {
-            FireCharged(player_, 0, player_.face, actionPoint);
-        }
-        else if (mouseRightReleased_ && player_.character == CharacterType::Chocolate && obstacles_.size() < 20)
-        {
-            // 出す前に最大3枚へ調整（古い壁から消える=FIFO）。
-            EnforceChocoWallLimit(3);
-            Obstacle wall{};
-            // チャージボムの発射方向（player_.face）と同じ向きへ出す。
-            wall.pos = player_.pos + FromAngle(player_.face) * 1.1f;
-            ClampInside(wall.pos, 0.8f);
-            wall.radius = 0.52f;          // 判定（反射）は従来通りこの円のまま
-            wall.hp = 110.0f + player_.level * 18.0f;
-            wall.ttl = 7.5f;
-            wall.kind = 2;
-            wall.ownerIndex = 0;
-            wall.reflectPower = 1.35f + player_.corePower;
-            wall.cheeseWall = true;       // 反射挙動は従来通り
-            wall.chocoWall = true;        // FIFO管理＆長方形描画の対象
-            wall.spin = player_.face;     // 長方形の向き。chocoWall は spin を加算更新しないので固定される
-            wall.color = Choco;
-            SyncObstacle3D(wall);
-            obstacles_.push_back(wall);
-        }
-        player_.charging = false;
-        player_.chargeReady = false;
-        player_.chargeFull = false;
-        player_.chargeT = 0.0f;
-    }
+    // 旧チャージ状態は使わないが、ブリンク等の参照のため0に保つ。
+    player_.charging = false;
+    player_.chargeReady = false;
+    player_.chargeFull = false;
+    player_.chargeT = 0.0f;
     mouseRightReleased_ = false;
     prevMouseLeft_ = primaryHeld;
 }
