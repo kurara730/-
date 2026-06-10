@@ -685,6 +685,7 @@ void SweetsApp::UpdateBoss(float dt)
         {
             boss_.beamWarnT = 0.0f;
             boss_.beamActiveT = BossBeamActiveTime;
+            beamWasReflecting_ = false; // 新しいビーム開始：反射カウントをリセット
             Burst(boss_.pos, Red, 30);
             audio_.PlaySoundEffect(SoundEffect::UltimateSlash);
         }
@@ -712,6 +713,10 @@ void SweetsApp::UpdateBoss(float dt)
             if (reflectDist < 0.0f || along < reflectDist) reflectDist = along;
         }
         const float effLen = reflectDist >= 0.0f ? reflectDist : BossBeamLength;
+        // ビーム反射の「開始」を1回だけカウント（ネガポジ突入の進捗）。
+        const bool reflectingNow = reflectDist >= 0.0f;
+        if (reflectingNow && !beamWasReflecting_) RegisterReflectSuccess();
+        beamWasReflecting_ = reflectingNow;
         // 照射：本体から beamAngle 方向の線分（壁まで）に乗ったプレイヤーへダメージ（貫通・パリィ不可）。
         for (auto& p : players_)
         {
@@ -1479,6 +1484,15 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
             message_ = nextForm == 2 ? L"金色キー弾を弾き返せ" : L"最後は正面勝負";
             messageT_ = 1.8f;
         }
+        return;
+    }
+    // ネガポジ中はボスへの攻撃が反転＝回復になる（受けに徹して終了時のお返しで決める）。
+    // ※お返し自体は GameFlow 側で negaposiT_=0 にしてから呼ぶので通常ダメージとして通る。
+    if (negaposiT_ > 0.0f)
+    {
+        boss_.hp = std::min(boss_.maxHp, boss_.hp + dmg);
+        boss_.flash = 0.1f;
+        Burst(boss_.pos, Mint, 6);
         return;
     }
     float appliedDmg = dmg;

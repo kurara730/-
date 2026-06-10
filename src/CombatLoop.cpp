@@ -251,6 +251,8 @@ void SweetsApp::UpdateShots(float dt)
                     s.color = Gold;
                     s.damage *= 1.25f;
                     s.bounce = std::max(s.bounce, 2);
+                    // リフレクションコアで敵弾を反射＝反射成功（ネガポジ進捗）。
+                    if (o.chocoWall) RegisterReflectSuccess();
                 }
                 else if (o.bumper)
                 {

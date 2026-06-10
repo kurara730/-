@@ -800,6 +800,27 @@ void SweetsApp::ResolvePlayerHit(float dmg, float angle)
     ResolvePlayerHit(player_, dmg, angle);
 }
 
+// リフレクションコアの反射成功を記録し、規定回数でネガポジへ突入する。
+// ネガポジ発動中・ボス不在時はカウントしない。
+void SweetsApp::RegisterReflectSuccess()
+{
+    if (negaposiT_ > 0.0f) return;
+    ++reflectCount_;
+    if (reflectCount_ < NegaPosiReflectReq) return;
+    reflectCount_ = 0;
+    ++negaposiCount_;
+    negaposiT_ = NegaPosiDuration;
+    negaposiAccum_ = 0.0f;
+    screenFlashT_ = 0.3f;
+    screenFlashLife_ = screenFlashT_;
+    screenFlashColor_ = Grape;
+    shakeMag_ = 0.7f; shakeLife_ = 0.4f; shakeT_ = shakeLife_;
+    Burst(player_.pos, Grape, 60);
+    message_ = L"ネガポジ! 受けて返せ";
+    messageT_ = std::max(messageT_, 2.0f);
+    audio_.PlaySoundEffect(SoundEffect::Reflect);
+}
+
 // プレイヤー被弾処理です。
 // ダメージ、無敵時間、ノックバック、HP0時のダウン状態をここでまとめて処理します。
 void SweetsApp::ResolvePlayerHit(Player& p, float dmg, float angle)
@@ -809,6 +830,14 @@ void SweetsApp::ResolvePlayerHit(Player& p, float dmg, float angle)
 #endif
     if (p.inv > 0.0f || p.downed) return;
     if (p.shieldT > 0.0f) dmg *= 0.35f;
+    // ネガポジ中（1P）：被ダメージを反転＝回復＋蓄積。終了時にまとめてお返しする。
+    if (negaposiT_ > 0.0f && p.index == 0)
+    {
+        p.hp = std::min(p.maxHp, p.hp + dmg);
+        negaposiAccum_ = std::min(NegaPosiAccumMax, negaposiAccum_ + dmg);
+        Burst(p.pos, Mint, 8);
+        return; // ダメージは受けない（i-frameも消費せず受け続けられる）
+    }
     p.hp -= dmg;
     p.inv = 0.45f;
     p.grazeChain = 0;

@@ -487,6 +487,34 @@ void SweetsApp::DrawHud()
     }
     if (!damageNumbers_.empty()) smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 
+    // 自機付近：ジャスト回避カウント（常時）とネガポジ状態を小さく表示。
+    if ((screen_ == Screen::Playing || screen_ == Screen::HiddenBoss) && !player_.downed)
+    {
+        const V2 ps = WorldToScreen(player_.pos);
+        smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        if (negaposiT_ > 0.0f)
+        {
+            wchar_t nb[64];
+            swprintf_s(nb, L"NEGA/POSI %.1f  蓄積 %d", negaposiT_, static_cast<int>(negaposiAccum_));
+            const float gl = 0.6f + 0.4f * std::sin(gameTime_ * 10.0f);
+            textBrush_->SetColor(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.6f));
+            d2dContext_->DrawTextW(nb, static_cast<UINT32>(wcslen(nb)), smallFormat_.Get(), D2D1::RectF(ps.x - 109.0f, ps.z - 61.0f, ps.x + 111.0f, ps.z - 41.0f), textBrush_.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
+            textBrush_->SetColor(D2D1::ColorF(0.88f, 0.6f, 1.0f, ClampFloat(gl, 0.0f, 1.0f)));
+            d2dContext_->DrawTextW(nb, static_cast<UINT32>(wcslen(nb)), smallFormat_.Get(), D2D1::RectF(ps.x - 110.0f, ps.z - 62.0f, ps.x + 110.0f, ps.z - 42.0f), textBrush_.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
+        }
+        else
+        {
+            wchar_t jb[32];
+            swprintf_s(jb, L"反射 %d/%d", reflectCount_, NegaPosiReflectReq);
+            const bool nearReady = reflectCount_ >= NegaPosiReflectReq - 1;
+            textBrush_->SetColor(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.55f));
+            d2dContext_->DrawTextW(jb, static_cast<UINT32>(wcslen(jb)), smallFormat_.Get(), D2D1::RectF(ps.x - 59.0f, ps.z - 57.0f, ps.x + 61.0f, ps.z - 39.0f), textBrush_.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
+            textBrush_->SetColor(nearReady ? D2D1::ColorF(1.0f, 0.7f, 0.9f, 0.95f) : D2D1::ColorF(1.0f, 0.9f, 0.45f, 0.85f));
+            d2dContext_->DrawTextW(jb, static_cast<UINT32>(wcslen(jb)), smallFormat_.Get(), D2D1::RectF(ps.x - 60.0f, ps.z - 58.0f, ps.x + 60.0f, ps.z - 40.0f), textBrush_.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
+        }
+        smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    }
+
     textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.88f));
     const wchar_t* help = L"WASD/矢印: 移動  |  左クリック: 攻撃  |  右クリック: リフレクションコア設置(チャージ満タンで)  |  Space: ブリンク回避  |  E: 必殺  |  P: 一時停止";
     d2dContext_->DrawTextW(help, static_cast<UINT32>(wcslen(help)), smallFormat_.Get(),

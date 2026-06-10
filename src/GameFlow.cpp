@@ -87,6 +87,11 @@ void SweetsApp::ResetGame()
     justZoomLife_ = 0.0f;
     shakeT_ = 0.0f;
     shakeMag_ = 0.0f;
+    reflectCount_ = 0;
+    beamWasReflecting_ = false;
+    negaposiT_ = 0.0f;
+    negaposiAccum_ = 0.0f;
+    negaposiCount_ = 0;
     player_.blinkCharges = BlinkMaxCharges;
     player_.blinkRechargeT = 0.0f;
     for (auto& pl : players_) { pl.grabbedT = 0.0f; pl.coreCharge = 0.0f; }
@@ -572,6 +577,31 @@ void SweetsApp::UpdatePlaying(float dt)
     gameTime_ += dt;
     if (messageT_ > 0.0f) messageT_ -= dt;
     if (slowT_ > 0.0f) slowT_ -= dt;
+    // ネガポジ：残り時間を減らし、終了時に蓄積ダメージをまとめてボスへお返しする。
+    if (negaposiT_ > 0.0f)
+    {
+        negaposiT_ -= dt;
+        if (negaposiT_ <= 0.0f)
+        {
+            negaposiT_ = 0.0f; // 先に0にしてからお返し（DamageBossが反転で回復にならないように）
+            const float mul = NegaPosiPaybackBase + static_cast<float>(std::max(0, negaposiCount_ - 1)) * NegaPosiPaybackPerCount;
+            const float payback = negaposiAccum_ * mul;
+            negaposiAccum_ = 0.0f;
+            if (boss_.active && payback > 0.0f)
+            {
+                DamageBoss(payback, BossDamageKind::ReflectedShot, true, 0);
+                Burst(boss_.pos, Sky, 90);
+                screenFlashT_ = 0.3f;
+                screenFlashLife_ = screenFlashT_;
+                screenFlashColor_ = Sky;
+                shakeMag_ = 0.8f; shakeLife_ = 0.45f; shakeT_ = shakeLife_;
+                message_ = L"お返し! " + std::to_wstring(static_cast<int>(payback)) + L" (x" +
+                    std::to_wstring(static_cast<int>(mul * 10) / 10) + L"." + std::to_wstring(static_cast<int>(mul * 10) % 10) + L")";
+                messageT_ = std::max(messageT_, 2.0f);
+                audio_.PlaySoundEffect(SoundEffect::UltimateSlash);
+            }
+        }
+    }
     if (player_.inv > 0.0f) player_.inv -= dt;
     if (player_.shieldT > 0.0f) player_.shieldT -= dt;
     if (player_.bombT > 0.0f) player_.bombT -= dt;

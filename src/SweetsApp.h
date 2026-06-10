@@ -170,6 +170,7 @@ private:
     void DamageBoss(float dmg, BossDamageKind kind, bool reflected, int ownerIndex);
     bool DamageBossArm(int index, float dmg); // 腕（赤）にダメージ。HPが尽きると一定時間消滅。命中したらtrue
     void SpawnDamageNumber(V2 pos, float value, Color color, bool crit); // ダメージ数値を湧かせる
+    void RegisterReflectSuccess(); // リフレクションコアの反射成功を記録し、規定回数でネガポジへ突入
     void Burst(V2 p, Color c, int count);
     void PlayCombatEffect(const std::wstring& id, V2 position, float y, float rotationY, float scale, Color fallbackColor, int fallbackCount);
     void ReflectEnemyShotsNear(V2 center, float radius, int ownerIndex, CharacterType source, Color color, float power);
@@ -363,6 +364,11 @@ private:
     float shakeT_ = 0.0f;        // 画面シェイク残り（実時間）
     float shakeLife_ = 0.01f;    // シェイク全体の長さ（補間用）
     float shakeMag_ = 0.0f;      // シェイクの強さ（ワールド単位）
+    int reflectCount_ = 0;       // ネガポジ突入までのリフレクションコア反射成功回数
+    bool beamWasReflecting_ = false; // 直前フレームでビームを反射していたか（1ビーム1カウント用）
+    float negaposiT_ = 0.0f;     // ネガポジ残り時間（>0で発動中＝世界反転）
+    float negaposiAccum_ = 0.0f; // ネガポジ中に受けたダメージの蓄積（終了時にお返し）
+    int negaposiCount_ = 0;      // ネガポジに入った累計回数（お返し倍率の元）
     bool mouseRight_ = false;
     bool mouseRightReleased_ = false;
     float mouseX_ = 640.0f;

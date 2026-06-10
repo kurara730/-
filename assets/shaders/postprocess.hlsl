@@ -63,6 +63,10 @@ float4 PSMain(VSOut input) : SV_TARGET
     float vignette = 1.0f - dot(q, q) * params2.y;
     mapped *= saturate(vignette);
 
+    // ネガポジ(色反転)。params2.w が反転量(0..1)。発動中は世界がネガになる。
+    float invertAmt = saturate(params2.w);
+    mapped = lerp(mapped, 1.0f - mapped, invertAmt);
+
     float4 current = float4(mapped, 1.0f);
     float4 history = historyTex.Sample(linearSampler, input.uv);
     return lerp(current, history, saturate(params.x));

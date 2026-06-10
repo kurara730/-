@@ -865,8 +865,16 @@ void SweetsApp::CompositeScene()
 #else
     post.params = XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f);
 #endif
-    // params2: x=ブルーム強度, y=ビネット, z=トーンマッピング有効, w=未使用
-    post.params2 = XMFLOAT4(0.75f, 0.28f, 1.0f, 0.0f);
+    // ネガポジ（色反転）量。発動中は1.0、入り/抜けを短くフェード。
+    float negaInvert = 0.0f;
+    if (negaposiT_ > 0.0f)
+    {
+        const float fadeIn = ClampFloat((NegaPosiDuration - negaposiT_) / 0.3f, 0.0f, 1.0f);
+        const float fadeOut = ClampFloat(negaposiT_ / 0.4f, 0.0f, 1.0f);
+        negaInvert = std::min(fadeIn, fadeOut);
+    }
+    // params2: x=ブルーム強度, y=ビネット, z=トーンマッピング有効, w=ネガポジ反転量
+    post.params2 = XMFLOAT4(0.75f, 0.28f, 1.0f, negaInvert);
     context_->UpdateSubresource(postCB_.Get(), 0, nullptr, &post, 0, 0);
     ID3D11Buffer* pcb = postCB_.Get();
     context_->PSSetConstantBuffers(0, 1, &pcb);
