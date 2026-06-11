@@ -41,6 +41,11 @@ bool SweetsApp::HandleScreenClick(float sx, float sy)
         SetCapture(hwnd_);
         return true;
     }
+    if (screen_ == Screen::CustomBoss && HandleCustomBossClick(sx, sy))
+    {
+        SetCapture(hwnd_);
+        return true;
+    }
     if (screen_ == Screen::Title && SelectTitleMenuAt(sx, sy)) return true;
     if (screen_ == Screen::CharacterSelect && SelectCoopSlotAt(sx, sy)) return true;
     if (screen_ == Screen::CharacterSelect && SelectLoadoutAt(sx, sy)) return true;
@@ -121,7 +126,7 @@ void SweetsApp::UpdateGamepad(float dt)
         int navY = 0;
         if ((buttons & XINPUT_GAMEPAD_DPAD_UP) || PadThumb(state.Gamepad.sThumbLY) > 0.5f) navY = 1;
         else if ((buttons & XINPUT_GAMEPAD_DPAD_DOWN) || PadThumb(state.Gamepad.sThumbLY) < -0.5f) navY = -1;
-        const int itemCount = 3; // ボス戦 / Credits / 設定
+        const int itemCount = 4; // ボス戦 / カスタムボス / Credits / 設定
         if (navY == 1 && padNavPrevY_ != 1) titleMenuIndex_ = (titleMenuIndex_ + itemCount - 1) % itemCount; // 上=前の項目
         else if (navY == -1 && padNavPrevY_ != -1) titleMenuIndex_ = (titleMenuIndex_ + 1) % itemCount;      // 下=次の項目
         padNavPrevY_ = navY;

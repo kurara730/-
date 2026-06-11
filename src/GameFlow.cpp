@@ -198,7 +198,7 @@ void SweetsApp::StartWave()
 {
     waveStarted_ = true;
     // デバッグステージは常にボスウェーブ（雑魚なし・ボス即出現）。
-    bossWave_ = (wave_ % 3 == 0) || gameMode_ == GameMode::BossOnlyDebug;
+    bossWave_ = (wave_ % 3 == 0) || gameMode_ == GameMode::BossOnlyDebug || gameMode_ == GameMode::CustomBoss;
     enemies_.clear();
     shots_.clear();
     meteors_.clear();
@@ -245,6 +245,15 @@ void SweetsApp::ClearWave()
                 p.feverT = std::max(p.feverT, 6.0f);
             }
         }
+    }
+    // カスタムボス：単体戦。倒したらクリア。
+    if (gameMode_ == GameMode::CustomBoss)
+    {
+        message_ = L"カスタムボス撃破!";
+        messageT_ = 6.0f;
+        clearTimer_ = 0.0f;
+        screen_ = Screen::Clear;
+        return;
     }
     // ボスラッシュ（連続戦）：GauntletBossCount体倒すとクリア。未達なら次のボスを出す。
     if (gameMode_ == GameMode::BossOnlyDebug)
@@ -513,6 +522,7 @@ void SweetsApp::UpdateAudioForScreen()
     case Screen::Title:
     case Screen::CharacterSelect:
     case Screen::DifficultySelect:
+    case Screen::CustomBoss:
     case Screen::Credits:
         audio_.PlayLoop(MusicTrack::Title, L"assets/audio/333_BPM177.mp3");
         break;

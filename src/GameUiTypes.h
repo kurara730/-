@@ -14,6 +14,7 @@ enum class Screen
     GameplayLoading,
     Title,
     Settings,
+    CustomBoss,         // カスタムボス：技を選んで戦う設定画面
     CharacterSelect,
     DifficultySelect,
     Playing,
@@ -65,7 +66,8 @@ enum class GameMode
     Story,
     Endless,
     HiddenBossPractice,
-    BossOnlyDebug      // デバッグ用：ボスのみ即出現し、新技（ビーム/薙ぎ払い/地中突き上げ）だけを使う
+    BossOnlyDebug,     // デバッグ用：ボスのみ即出現し、新技（ビーム/薙ぎ払い/地中突き上げ）だけを使う
+    CustomBoss         // カスタムボス：プレイヤーが選んだ技セットの単体ボスと戦う
 };
 
 enum class TitleMenuItem

@@ -618,7 +618,7 @@ void SweetsApp::DrawHud()
         d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), titleFormat_.Get(),
             D2D1::RectF(38.0f, 34.0f, dividerX - 22.0f, 92.0f), textBrush_.Get());
 
-        const std::array<const wchar_t*, 3> items{ L"ボス戦", L"Credits", L"設定 (音量)" };
+        const std::array<const wchar_t*, 4> items{ L"ボス戦", L"カスタムボス", L"Credits", L"設定 (音量)" };
         const float itemW = 248.0f;
         const float itemH = 58.0f;
         const float gap = 12.0f;
@@ -669,6 +669,10 @@ void SweetsApp::DrawHud()
     if (screen_ == Screen::CharacterSelect)
     {
         DrawCharacterSelect();
+    }
+    else if (screen_ == Screen::CustomBoss)
+    {
+        DrawCustomBossMenu();
     }
     else if (screen_ == Screen::Credits)
     {
@@ -1056,6 +1060,115 @@ void SweetsApp::DrawSettingsMenu()
     const wchar_t* hint = L"スライダーと攻撃方向をクリックで操作。Esc / Backspaceで戻る";
     d2dContext_->DrawTextW(hint, static_cast<UINT32>(wcslen(hint)), smallFormat_.Get(),
         D2D1::RectF(left, top + panelH - 40.0f, left + panelW, top + panelH - 12.0f), textBrush_.Get());
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+}
+
+// カスタムボス設定画面。通常技ON/OFF・大技1択・キャラ選択・戦うボタンを並べる。
+// レイアウトの座標計算は HandleCustomBossClick と完全に一致させること（重複だが単純さを優先）。
+void SweetsApp::DrawCustomBossMenu()
+{
+    textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 1.0f));
+    d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
+
+    const float panelW = 560.0f;
+    const float panelH = 560.0f;
+    const float left = (static_cast<float>(width_) - panelW) * 0.5f;
+    const float top = (static_cast<float>(height_) - panelH) * 0.5f;
+    const D2D1_RECT_F panel = D2D1::RectF(left, top, left + panelW, top + panelH);
+    textBrush_->SetColor(D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.96f));
+    d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(panel, 8.0f, 8.0f), textBrush_.Get());
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, 0.95f));
+    d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(panel, 8.0f, 8.0f), textBrush_.Get(), 2.0f);
+
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.86f, 0.36f, 1.0f));
+    const wchar_t* title = L"カスタムボス";
+    d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), hudFormat_.Get(),
+        D2D1::RectF(left, top + 18.0f, left + panelW, top + 54.0f), textBrush_.Get());
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    // セクション見出し：通常技
+    textBrush_->SetColor(D2D1::ColorF(0.65f, 0.95f, 0.78f, 1.0f));
+    d2dContext_->DrawTextW(L"通常技 (好きなだけ)", 11, smallFormat_.Get(),
+        D2D1::RectF(left + 40.0f, top + 64.0f, left + panelW - 40.0f, top + 86.0f), textBrush_.Get());
+
+    const std::array<const wchar_t*, 5> normals{ L"タレット", L"レーザー砲", L"分裂", L"扇状斬撃", L"チャージ衝撃波" };
+    const float normalTop = top + 90.0f;
+    for (int i = 0; i < 5; ++i)
+    {
+        const float y = normalTop + i * 44.0f;
+        const D2D1_RECT_F rect = D2D1::RectF(left + 40.0f, y, left + panelW - 40.0f, y + 36.0f);
+        const bool on = customKitNormals_[i];
+        const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
+        textBrush_->SetColor(OldSelectFill(on || hover));
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get());
+        textBrush_->SetColor(OldSelectStroke(on || hover));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get(), on ? 2.4f : 1.0f);
+        textBrush_->SetColor(OldSelectText(on || hover));
+        d2dContext_->DrawTextW(normals[i], static_cast<UINT32>(wcslen(normals[i])), smallFormat_.Get(),
+            D2D1::RectF(rect.left + 16.0f, rect.top + 7.0f, rect.right - 60.0f, rect.bottom), textBrush_.Get());
+        const wchar_t* state = on ? L"ON" : L"OFF";
+        d2dContext_->DrawTextW(state, static_cast<UINT32>(wcslen(state)), smallFormat_.Get(),
+            D2D1::RectF(rect.right - 52.0f, rect.top + 7.0f, rect.right - 12.0f, rect.bottom), textBrush_.Get());
+    }
+
+    // セクション見出し：大技
+    const float bigLabelY = normalTop + 5 * 44.0f + 6.0f;
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.6f, 0.45f, 1.0f));
+    d2dContext_->DrawTextW(L"大技 (1つ)", 7, smallFormat_.Get(),
+        D2D1::RectF(left + 40.0f, bigLabelY, left + panelW - 40.0f, bigLabelY + 22.0f), textBrush_.Get());
+    const std::array<const wchar_t*, 3> bigs{ L"極太薙ぎ払い", L"隕石", L"突進" };
+    const float bigTop = bigLabelY + 28.0f;
+    const float bigW = (panelW - 80.0f - 2.0f * 12.0f) / 3.0f;
+    for (int i = 0; i < 3; ++i)
+    {
+        const float x = left + 40.0f + i * (bigW + 12.0f);
+        const D2D1_RECT_F rect = D2D1::RectF(x, bigTop, x + bigW, bigTop + 38.0f);
+        const bool sel = customBigMove_ == i;
+        const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
+        textBrush_->SetColor(OldSelectFill(sel || hover));
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get());
+        textBrush_->SetColor(OldSelectStroke(sel || hover));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get(), sel ? 2.4f : 1.0f);
+        textBrush_->SetColor(OldSelectText(sel || hover));
+        d2dContext_->DrawTextW(bigs[i], static_cast<UINT32>(wcslen(bigs[i])), smallFormat_.Get(),
+            D2D1::RectF(rect.left + 6.0f, rect.top + 8.0f, rect.right, rect.bottom), textBrush_.Get());
+    }
+
+    // キャラ選択（サイクル）
+    const wchar_t* charNames[4] = { L"ショート(威力)", L"チョコ(増殖)", L"チーズ(連鎖)", L"ロール(渦)" };
+    const int charIdx = static_cast<int>(Loadouts[std::max(0, std::min(loadoutIndex_, static_cast<int>(Loadouts.size()) - 1))].character);
+    const float charTop = bigTop + 56.0f;
+    const D2D1_RECT_F charRect = D2D1::RectF(left + 40.0f, charTop, left + panelW - 40.0f, charTop + 38.0f);
+    const bool charHover = PointInRect(mouseX_, mouseY_, charRect.left, charRect.top, charRect.right, charRect.bottom);
+    textBrush_->SetColor(OldSelectFill(charHover));
+    d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(charRect, 6.0f, 6.0f), textBrush_.Get());
+    textBrush_->SetColor(OldSelectStroke(charHover));
+    d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(charRect, 6.0f, 6.0f), textBrush_.Get(), 1.4f);
+    textBrush_->SetColor(OldSelectText(charHover));
+    std::wstring charText = std::wstring(L"キャラ: ") + charNames[std::max(0, std::min(charIdx, 3))] + L"  (クリックで変更)";
+    d2dContext_->DrawTextW(charText.c_str(), static_cast<UINT32>(charText.size()), smallFormat_.Get(),
+        D2D1::RectF(charRect.left + 16.0f, charRect.top + 8.0f, charRect.right, charRect.bottom), textBrush_.Get());
+
+    // 戦うボタン
+    const float fightTop = charTop + 58.0f;
+    const D2D1_RECT_F fightRect = D2D1::RectF(left + panelW * 0.5f - 110.0f, fightTop, left + panelW * 0.5f + 110.0f, fightTop + 44.0f);
+    const bool fightHover = PointInRect(mouseX_, mouseY_, fightRect.left, fightRect.top, fightRect.right, fightRect.bottom);
+    textBrush_->SetColor(fightHover ? D2D1::ColorF(1.0f, 0.45f, 0.3f, 1.0f) : D2D1::ColorF(0.85f, 0.30f, 0.22f, 0.95f));
+    d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(fightRect, 8.0f, 8.0f), textBrush_.Get());
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.95f, 0.85f, 1.0f));
+    d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(fightRect, 8.0f, 8.0f), textBrush_.Get(), 2.0f);
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    d2dContext_->DrawTextW(L"戦う", 2, hudFormat_.Get(),
+        D2D1::RectF(fightRect.left, fightRect.top + 4.0f, fightRect.right, fightRect.bottom), textBrush_.Get());
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f));
+    const wchar_t* hint2 = L"通常技をON/OFF、大技を1つ選んで「戦う」。Esc / Backspaceで戻る";
+    d2dContext_->DrawTextW(hint2, static_cast<UINT32>(wcslen(hint2)), smallFormat_.Get(),
+        D2D1::RectF(left, top + panelH - 34.0f, left + panelW, top + panelH - 10.0f), textBrush_.Get());
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 

@@ -258,6 +258,8 @@ private:
     float DebugFxDisplayValue(int index) const;
     void RestartCurrentRun();
     void StartSelectedTitleItem();
+    void DrawCustomBossMenu();              // カスタムボス設定画面の描画
+    bool HandleCustomBossClick(float sx, float sy); // カスタムボス設定画面のクリック処理
     void ActivatePauseMenuItem();
     bool HandlePauseClick(float sx, float sy);
     bool HandlePauseDrag(float sx, float sy);
@@ -460,6 +462,9 @@ private:
     bool bossWave_ = false;
     bool waveStarted_ = false;
     int gauntletIndex_ = 0;     // ボスラッシュで今何体目か（0始まり）。GauntletBossCount体倒すとクリア。
+    // カスタムボス：プレイヤーが選んだ技セット（0:タレット 1:ビーム 2:分裂 3:扇 4:衝撃波）と大技。
+    bool customKitNormals_[5] = { true, true, false, false, false };
+    int  customBigMove_ = 0;    // BossBigMove（0:薙払 1:隕石 2:突進）
     StageType stage_ = StageType::Donut;
     FieldShape fieldShape_ = FieldShape::Circle;
     float stageTimer_ = 0.0f;

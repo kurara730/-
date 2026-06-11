@@ -364,9 +364,9 @@ void SweetsApp::SpawnBoss()
     boss_.armAngle = Rand(0.0f, TwoPi);
     boss_.armWanderTarget = Rand(0.0f, TwoPi);
     boss_.armWanderCd = Rand(1.5f, 3.0f);
-    if (gameMode_ == GameMode::BossOnlyDebug)
+    if (gameMode_ == GameMode::BossOnlyDebug || gameMode_ == GameMode::CustomBoss)
     {
-        boss_.maxHp *= 2.0f; // デバッグ用：耐久を2倍にして技を試しやすく
+        boss_.maxHp *= 2.0f; // ボス単体戦：耐久を2倍にして歯ごたえを出す
         boss_.hp = boss_.maxHp;
     }
     for (int i = 0; i < 2; ++i)
@@ -430,6 +430,16 @@ void SweetsApp::SpawnBoss()
         // 見た目もラッシュの体ごとに変える。
         boss_.type = gauntletIndex_ % 6;
         boss_.bossType = static_cast<BossType>(boss_.type);
+    }
+    else if (gameMode_ == GameMode::CustomBoss)
+    {
+        // カスタムボス：プレイヤーが設定画面で選んだ技セットをそのまま付与。
+        boss_.kitTurret    = customKitNormals_[0];
+        boss_.kitBeam      = customKitNormals_[1];
+        boss_.kitSplit     = customKitNormals_[2];
+        boss_.kitFanSlash  = customKitNormals_[3];
+        boss_.kitShockwave = customKitNormals_[4];
+        boss_.bigMove = customBigMove_;
     }
     else
     {
@@ -1472,8 +1482,8 @@ void SweetsApp::UpdateBoss(float dt)
         ResolvePlayerHit(*targetPlayer, boss_.atk, AngleOf(toP));
     }
 
-    // ボスのみデバッグステージでは弾幕（通常パターン）を撃たず、新技だけを使う。
-    if (gameMode_ == GameMode::BossOnlyDebug) return;
+    // ボス単体戦（デバッグ/カスタム）では弾幕（通常パターン）を撃たず、選ばれた技だけを使う。
+    if (gameMode_ == GameMode::BossOnlyDebug || gameMode_ == GameMode::CustomBoss) return;
 
     const EncounterTuning& tuning = CurrentEncounterTuning();
     // 予兆が終わった瞬間に実際の攻撃を出すラムダです。

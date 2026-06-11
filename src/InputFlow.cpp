@@ -130,6 +130,16 @@ void SweetsApp::OnKeyDown(WPARAM key)
         return;
     }
 
+    if (screen_ == Screen::CustomBoss)
+    {
+        if (key == VK_ESCAPE || key == VK_BACK)
+        {
+            screen_ = Screen::Title;
+            return;
+        }
+        return;
+    }
+
     if (screen_ == Screen::DifficultySelect)
     {
         if (key == VK_ESCAPE || key == VK_BACK)
@@ -621,6 +631,58 @@ void SweetsApp::SetFullscreenFromSettings(bool enabled)
     SetFullscreen(enabled, true);
 }
 
+// カスタムボス設定画面のクリック処理。座標計算は DrawCustomBossMenu と一致させること。
+bool SweetsApp::HandleCustomBossClick(float sx, float sy)
+{
+    const float panelW = 560.0f;
+    const float panelH = 560.0f;
+    const float left = (static_cast<float>(width_) - panelW) * 0.5f;
+    const float top = (static_cast<float>(height_) - panelH) * 0.5f;
+
+    // 通常技トグル（5行）。
+    const float normalTop = top + 90.0f;
+    for (int i = 0; i < 5; ++i)
+    {
+        const float y = normalTop + i * 44.0f;
+        if (PointInRect(sx, sy, left + 40.0f, y, left + panelW - 40.0f, y + 36.0f))
+        {
+            customKitNormals_[i] = !customKitNormals_[i];
+            return true;
+        }
+    }
+    // 大技（3択）。
+    const float bigTop = normalTop + 5 * 44.0f + 6.0f + 28.0f;
+    const float bigW = (panelW - 80.0f - 2.0f * 12.0f) / 3.0f;
+    for (int i = 0; i < 3; ++i)
+    {
+        const float x = left + 40.0f + i * (bigW + 12.0f);
+        if (PointInRect(sx, sy, x, bigTop, x + bigW, bigTop + 38.0f))
+        {
+            customBigMove_ = i;
+            return true;
+        }
+    }
+    // キャラ選択（サイクル）。
+    const float charTop = bigTop + 56.0f;
+    if (PointInRect(sx, sy, left + 40.0f, charTop, left + panelW - 40.0f, charTop + 38.0f))
+    {
+        loadoutIndex_ = (loadoutIndex_ + 1) % static_cast<int>(Loadouts.size());
+        player_.weapon = Loadouts[loadoutIndex_].weapon;
+        player_.character = Loadouts[loadoutIndex_].character;
+        return true;
+    }
+    // 戦う。
+    const float fightTop = charTop + 58.0f;
+    if (PointInRect(sx, sy, left + panelW * 0.5f - 110.0f, fightTop, left + panelW * 0.5f + 110.0f, fightTop + 44.0f))
+    {
+        pendingGameMode_ = GameMode::CustomBoss;
+        difficultyIndex_ = static_cast<int>(Difficulty::Normal);
+        StartGameWithDifficulty(false);
+        return true;
+    }
+    return true; // パネル内クリックは消費
+}
+
 float* SweetsApp::MutableVolumeSliderValue(int index)
 {
     switch (index)
@@ -684,8 +746,8 @@ void SweetsApp::RestartCurrentRun()
 
 void SweetsApp::StartSelectedTitleItem()
 {
-    // メニューはボス戦に一本化：0=ボス戦, 1=Credits, 2=設定
-    if (titleMenuIndex_ == 2)
+    // メニュー：0=ボス戦, 1=カスタムボス, 2=Credits, 3=設定
+    if (titleMenuIndex_ == 3)
     {
         settingsReturnScreen_ = Screen::Title;
         pauseMenuIndex_ = 2;
@@ -693,9 +755,15 @@ void SweetsApp::StartSelectedTitleItem()
         screen_ = Screen::Settings;
         return;
     }
-    if (titleMenuIndex_ == 1)
+    if (titleMenuIndex_ == 2)
     {
         screen_ = Screen::Credits;
+        return;
+    }
+    if (titleMenuIndex_ == 1)
+    {
+        // カスタムボス：技セット設定画面へ。
+        screen_ = Screen::CustomBoss;
         return;
     }
     // 0 = ボス戦：キャラ選択へ（選択後すぐボス戦開始）
@@ -779,7 +847,7 @@ bool SweetsApp::SelectTitleMenuAt(float sx, float sy)
     const float gap = 12.0f;
     const float startX = 42.0f;
     const float top = std::max(112.0f, static_cast<float>(height_) * 0.18f);
-    for (int i = 0; i < 3; ++i) // ボス戦 / Credits / 設定
+    for (int i = 0; i < 4; ++i) // ボス戦 / カスタムボス / Credits / 設定
     {
         const float y = top + i * (itemH + gap);
         if (sx >= startX && sx <= startX + itemW && sy >= y && sy <= y + itemH)
