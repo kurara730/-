@@ -234,18 +234,18 @@ SettingsLayout SweetsApp::BuildSettingsLayout() const
 {
     SettingsLayout layout{};
     const float panelW = 480.0f;
-    const float panelH = 452.0f;
+    const float panelH = 496.0f; // 画面振動スライダー1行ぶん追加
     const float left = (static_cast<float>(width_) - panelW) * 0.5f;
     const float top = (static_cast<float>(height_) - panelH) * 0.5f;
     layout.panel = { left, top, left + panelW, top + panelH };
     layout.sliderLeft = left + 170.0f;
     layout.sliderRight = left + panelW - 48.0f;
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 5; ++i)
     {
         const float y = top + 110.0f + i * 44.0f;
         layout.volumeSliders[i] = { layout.sliderLeft - 12.0f, y - 14.0f, layout.sliderRight + 12.0f, y + 22.0f };
     }
-    const float aimTop = top + 110.0f + 4 * 44.0f + 8.0f;
+    const float aimTop = top + 110.0f + 5 * 44.0f + 8.0f;
     const float aimButtonW = 104.0f;
     const float aimButtonH = 32.0f;
     const float aimStartX = left + 138.0f;

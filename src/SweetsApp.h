@@ -162,6 +162,7 @@ private:
     void UpdateEnemies(float dt);
     void UpdateBoss(float dt);
     void UpdateBossTurrets(float dt); // タレットはボスのダウン中も常時稼働
+    void UpdateMeteors(float dt);     // 隕石（大技）の予兆→着弾処理
     void UpdateShots(float dt);
     void ReleaseCaughtIfNoBomb();
     void UpdatePickups(float dt);
@@ -388,6 +389,7 @@ private:
     Boss boss_;
     std::vector<Enemy> enemies_;
     std::vector<Shot> shots_;
+    std::vector<Meteor> meteors_;       // 隕石（大技）
     std::vector<Slash> slashes_;
     std::vector<Pickup> pickups_;
     std::vector<Obstacle> obstacles_;
@@ -442,6 +444,7 @@ private:
     bool eventVideoSkippable_ = true;
     bool bossWave_ = false;
     bool waveStarted_ = false;
+    int gauntletIndex_ = 0;     // ボスラッシュで今何体目か（0始まり）。GauntletBossCount体倒すとクリア。
     StageType stage_ = StageType::Donut;
     FieldShape fieldShape_ = FieldShape::Circle;
     float stageTimer_ = 0.0f;
@@ -495,6 +498,7 @@ private:
     float bgmVolume_ = 1.0f;
     float seVolume_ = 1.0f;
     float uiVolume_ = 1.0f;
+    float shakeScale_ = 1.0f;   // 画面振動の強さ（設定。0=なし〜1=標準）
     uint64_t titleVideoSerial_ = 0;
     uint64_t eventVideoSerial_ = 0;
     Screen eventVideoNextScreen_ = Screen::Title;

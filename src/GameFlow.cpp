@@ -68,6 +68,7 @@ void SweetsApp::ResetGame()
     enemies_.reserve(256);
     enemySerial_ = 0;
     shots_.clear();
+    meteors_.clear();
     slashes_.clear();
     pickups_.clear();
     particles_.clear();
@@ -75,6 +76,7 @@ void SweetsApp::ResetGame()
     swordEffectVisuals_.clear();
     obstacles_.clear();
     wave_ = 1;
+    gauntletIndex_ = 0;     // ボスラッシュのカウントを最初から
     score_ = 0;
     reflectKills_ = 0;
     gameTime_ = 0.0f;
@@ -195,6 +197,7 @@ void SweetsApp::StartWave()
     bossWave_ = (wave_ % 3 == 0) || gameMode_ == GameMode::BossOnlyDebug;
     enemies_.clear();
     shots_.clear();
+    meteors_.clear();
     slashes_.clear();
     boss_ = {};
     BuildStage();
@@ -238,6 +241,26 @@ void SweetsApp::ClearWave()
                 p.feverT = std::max(p.feverT, 6.0f);
             }
         }
+    }
+    // ボスラッシュ（連続戦）：GauntletBossCount体倒すとクリア。未達なら次のボスを出す。
+    if (gameMode_ == GameMode::BossOnlyDebug)
+    {
+        if (gauntletIndex_ >= GauntletBossCount)
+        {
+            SaveProgress();
+            AddScore(50000, &player_);
+            message_ = L"ボスラッシュ制覇!";
+            messageT_ = 6.0f;
+            clearTimer_ = 0.0f;
+            screen_ = Screen::Clear;
+            return;
+        }
+        // 次のボスへ。wave_ を進めて見た目・耐久を変え、ステージを作り直す。
+        wave_ += 3;
+        StartWave();
+        message_ = std::wstring(L"BOSS ") + std::to_wstring(gauntletIndex_ + 1) + L" / " + std::to_wstring(GauntletBossCount);
+        messageT_ = 2.2f;
+        return;
     }
     if (wave_ >= FinalWave && gameMode_ == GameMode::Story)
     {
@@ -629,6 +652,7 @@ void SweetsApp::UpdatePlaying(float dt)
     UpdateCoopPlayers(dt);
     UpdateEnemies(dt);
     UpdateBoss(dt);
+    UpdateMeteors(dt);       // 隕石（大技）の予兆→着弾
     UpdateReflectShield(dt); // 左クリックの反射シールド（UpdateShotsの前に反射を確定）
     UpdateShots(dt);
     ReleaseCaughtIfNoBomb();

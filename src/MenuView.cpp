@@ -435,6 +435,28 @@ void SweetsApp::DrawHud()
                     D2D1::RectF(left, top + 38.0f, left + bw, top + 62.0f), textBrush_.Get());
             }
         }
+        // デバッグ（ボスラッシュ）：このボスの技セットと、技を即発動できるキー一覧を表示。
+        if (gameMode_ == GameMode::BossOnlyDebug)
+        {
+            std::wostringstream dbg;
+            dbg << L"[技] ";
+            if (boss_.kitTurret) dbg << L"タレット ";
+            if (boss_.kitBeam) dbg << L"ビーム ";
+            if (boss_.kitSplit) dbg << L"分裂 ";
+            if (boss_.kitFanSlash) dbg << L"扇 ";
+            if (boss_.kitShockwave) dbg << L"衝撃波 ";
+            const wchar_t* big = boss_.bigMove == static_cast<int>(BossBigMove::MegaBeam) ? L"薙払"
+                : (boss_.bigMove == static_cast<int>(BossBigMove::Meteor) ? L"隕石" : L"突進");
+            dbg << L"/ 大技:" << big;
+            const std::wstring kitText = dbg.str();
+            textBrush_->SetColor(D2D1::ColorF(0.65f, 0.95f, 0.78f, 0.95f));
+            d2dContext_->DrawTextW(kitText.c_str(), static_cast<UINT32>(kitText.size()), smallFormat_.Get(),
+                D2D1::RectF(left, top + 44.0f, left + bw, top + 66.0f), textBrush_.Get());
+            const wchar_t* keyHint = L"DBG発動: 1ビーム 2タレット 3分裂 4扇 5衝撃波 6薙払 7隕石 8突進 9つかみ";
+            textBrush_->SetColor(D2D1::ColorF(0.85f, 0.85f, 0.85f, 0.85f));
+            d2dContext_->DrawTextW(keyHint, static_cast<UINT32>(wcslen(keyHint)), smallFormat_.Get(),
+                D2D1::RectF(left, top + 64.0f, left + bw + 200.0f, top + 86.0f), textBrush_.Get());
+        }
         // ブレイクコンボ表示（ブレイク中のみ）。ヒットを重ねるほど倍率が上がる。
         if (boss_.breakT > 0.0f && breakCombo_ > 0)
         {
@@ -953,8 +975,8 @@ void SweetsApp::DrawSettingsMenu()
 
     hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
-    const std::array<const wchar_t*, 4> labels{ L"全体", L"BGM", L"効果音", L"UI" };
-    for (int i = 0; i < 4; ++i)
+    const std::array<const wchar_t*, 5> labels{ L"全体", L"BGM", L"効果音", L"UI", L"画面振動" };
+    for (int i = 0; i < 5; ++i)
     {
         const float y = top + 110.0f + i * 44.0f;
         const UiRect& hit = layout.volumeSliders[i];
@@ -979,7 +1001,7 @@ void SweetsApp::DrawSettingsMenu()
     }
 
     // 攻撃方向(照準モード)。マウスクリックで選択(ゲーム中は T キーでも切替可)。
-    const float aimTop = top + 110.0f + 4 * 44.0f + 8.0f;
+    const float aimTop = top + 110.0f + 5 * 44.0f + 8.0f;
     textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.92f));
     const wchar_t* aimLabel = L"自機の攻撃方向";
     d2dContext_->DrawTextW(aimLabel, static_cast<UINT32>(wcslen(aimLabel)), smallFormat_.Get(),

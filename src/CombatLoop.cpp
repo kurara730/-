@@ -256,7 +256,21 @@ void SweetsApp::UpdateShots(float dt)
         // アリーナ外へ出た弾は、反射回数が残っていれば跳ね返り、無ければ消えます。
         if (ResolveFieldBoundary(s.pos, s.radius, fieldNormal))
         {
-            if (s.bounce > 0)
+            if (s.fanSlash)
+            {
+                // 扇状斬撃は壁で必ず反射する（壁では消えない）。最初の数回だけ巨大化＆強化。
+                // 消滅するのは本体（自分）かプレイヤー（敵）に当たった時だけ。
+                ApplyShotReflection(s, fieldNormal, 1.0f);
+                if (s.bounce > 0)
+                {
+                    --s.bounce;
+                    s.radius *= BossFanSlashGrowth;
+                    s.damage *= BossFanSlashGrowth;
+                }
+                Burst(s.pos, Grape, 12);
+                SyncShot3D(s);
+            }
+            else if (s.bounce > 0)
             {
                 ApplyShotReflection(s, fieldNormal, s.sourceCharacter == CharacterType::Roll ? 1.18f : 1.0f);
                 --s.bounce;
@@ -271,13 +285,13 @@ void SweetsApp::UpdateShots(float dt)
                         messageT_ = std::max(messageT_, 0.55f);
                     }
                 }
+                SyncShot3D(s);
             }
             else
             {
                 s.dead = true;
                 continue;
             }
-            SyncShot3D(s);
         }
 
         // チーズ壁などの障害物との衝突。
@@ -385,6 +399,14 @@ void SweetsApp::UpdateShots(float dt)
                     s.dead = true;
                     break;
                 }
+            }
+            // 扇状斬撃は壁で規定回数（BossFanSlashBounce回）跳ね返り切ってから、
+            // 本体（自分）に当たると消滅する。それまではボスをすり抜けて壁で跳ね続ける。
+            if (!s.dead && s.fanSlash && s.bounce <= 0 && boss_.active
+                && RuleDistance(s, boss_) < s.radius + boss_.radius)
+            {
+                s.dead = true;
+                Burst(s.pos, Grape, 16);
             }
         }
         else

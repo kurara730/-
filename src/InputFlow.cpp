@@ -186,6 +186,24 @@ void SweetsApp::OnKeyDown(WPARAM key)
         if (key == 'R') RestartCurrentRun();
         if (key == 'T') SetAimMode(static_cast<AimMode>((static_cast<int>(aimMode_) + 1) % 3), true);
     }
+    // === デバッグ：ボスラッシュ中、数字キーで指定した技を即発動 ===
+    // キットフラグも立てるので、その後のランダム選択でも出るようになる。
+    if (screen_ == Screen::Playing && gameMode_ == GameMode::BossOnlyDebug && boss_.active)
+    {
+        switch (key)
+        {
+        case '1': boss_.kitBeam = true;     boss_.beamCd = 0.0f;        message_ = L"[DBG] レーザー砲"; messageT_ = 1.0f; break;
+        case '2': boss_.kitTurret = true;   boss_.turretSpawnCd = 0.0f; message_ = L"[DBG] タレット";   messageT_ = 1.0f; break;
+        case '3': boss_.kitSplit = true;    boss_.splitCd = 0.0f;       message_ = L"[DBG] 分裂";       messageT_ = 1.0f; break;
+        case '4': boss_.kitFanSlash = true; boss_.fanSlashCd = 0.0f;    message_ = L"[DBG] 扇状斬撃";   messageT_ = 1.0f; break;
+        case '5': boss_.kitShockwave = true; boss_.shockCd = 0.0f;      message_ = L"[DBG] チャージ衝撃波"; messageT_ = 1.0f; break;
+        case '6': boss_.bigMove = static_cast<int>(BossBigMove::MegaBeam); boss_.megaBeamCd = 0.0f; message_ = L"[DBG] 大技:極太薙ぎ払い"; messageT_ = 1.0f; break;
+        case '7': boss_.bigMove = static_cast<int>(BossBigMove::Meteor); boss_.meteorCd = 0.0f;     message_ = L"[DBG] 大技:隕石"; messageT_ = 1.0f; break;
+        case '8': boss_.bigMove = static_cast<int>(BossBigMove::InvincibleChase); boss_.rushCd = 0.0f; message_ = L"[DBG] 大技:突進"; messageT_ = 1.0f; break;
+        case '9': boss_.grabCd = 0.0f;      message_ = L"[DBG] つかみ";     messageT_ = 1.0f; break;
+        default: break;
+        }
+    }
 }
 
 // デバッグ用キー入力です。
@@ -567,7 +585,7 @@ bool SweetsApp::HandleSettingsClick(float sx, float sy)
         return false;
     }
 
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 5; ++i)
     {
         const UiRect& rect = layout.volumeSliders[i];
         if (PointInRect(sx, sy, rect.left, rect.top, rect.right, rect.bottom))
@@ -611,6 +629,7 @@ float* SweetsApp::MutableVolumeSliderValue(int index)
     case 1: return &bgmVolume_;
     case 2: return &seVolume_;
     case 3: return &uiVolume_;
+    case 4: return &shakeScale_;
     default: return nullptr;
     }
 }
@@ -623,6 +642,7 @@ float SweetsApp::VolumeSliderValue(int index) const
     case 1: return bgmVolume_;
     case 2: return seVolume_;
     case 3: return uiVolume_;
+    case 4: return shakeScale_;
     default: return 0.0f;
     }
 }
