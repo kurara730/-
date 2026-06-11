@@ -106,6 +106,12 @@ struct Player
     float blinkRechargeT = 0.0f;        // 1チャージ回復までの残り時間
     float blinkLockT = 0.0f;            // ブリンク直後の攻撃ロック残り時間（攻撃と同時発動を禁止）
     float grabbedT = 0.0f;              // ボスのつかみで拘束されている残り時間（>0で操作不可）
+    float reflectShieldT = 0.0f;        // 反射シールド展開中の残り時間（左クリック・全キャラ共通）
+    float reflectShieldCd = 0.0f;       // （未使用）旧クールダウン
+    float shieldStamina = ShieldStaminaMax; // シールドスタミナ（構えで減り、下ろすと回復）
+    bool shieldExhausted = false;       // スタミナ切れ中（一定回復まで再展開不可）
+    float reflectPerfectT = 0.0f;       // 構え直後のパーフェクト反射の残り窓
+    int   rollVortexStock = 0;          // ロール渦反射：シールドで巻き取った敵弾のストック（満タン/パーフェクトでスパイラル放出）
     float coreCharge = 0.0f;            // リフレクションコアのチャージ（敵に攻撃を当てて蓄積。満タンで右クリック設置）
     float bombCharge = 0.0f;    // チョコ爆弾のチャージ量（長押し時間）
     float fireHeat = 0.0f;      // ショートのヒート（撃ち続けた時間。移動でリセット）
@@ -251,6 +257,19 @@ struct Boss
     float flyAngle = 0.0f;      // 周回の現在角
     float flyAngleAcc = 0.0f;   // 周回した累積角（一周判定用）
     V2 flyStrikePos{};          // 着弾円の中心
+    // 分身：本体＋分身が反射可能な弾をまとめて撃つ。
+    float cloneCd = 9.0f;
+    float cloneWarnT = 0.0f;    // 出現予兆中
+    float cloneActiveT = 0.0f;  // 分身が残っている時間（演出）
+    int cloneCount = 0;         // 出している分身数
+    V2 clonePos[BossCloneMax]{};// 分身の位置
+    // タレット：合間に設置する反射可能な砲台。
+    float turretSpawnCd = 4.0f;
+    float turretFireT[BossTurretMax]{};   // 各タレットの次発射までの残り
+    float turretHp[BossTurretMax]{};      // 各タレットHP（0以下で消滅）
+    V2 turretPos[BossTurretMax]{};        // 各タレット位置
+    bool turretActive[BossTurretMax]{};   // 有効フラグ
+    int turretTier[BossTurretMax]{};      // 強さ段階（0:通常 1:強化 2:ビーム）
     BossType bossType = BossType::Demon;
     bool active = false;
 };
@@ -305,6 +324,8 @@ struct Shot
     float homingStrength = 0.0f;
     float yoyoRetargetT = 0.0f;
     float warpCd = 0.0f;
+    float reflectCd = 0.0f;     // チョコ増殖反射：ビーム巻き取りの再発生待ち
+    int chainJumps = 0;         // チーズ連鎖反射：残りの飛び移り回数（ボス/タレット/分身へホップ）
     CharacterType sourceCharacter = CharacterType::Shortcake;
     bool enemy = false;
     bool dead = false;

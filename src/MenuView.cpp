@@ -252,19 +252,13 @@ void SweetsApp::DrawHud()
                     : D2D1::ColorF(0.30f, 0.55f, 0.72f, 0.95f); // 回復中：暗いシアン
                 fillBar(bx, top + 5.0f, 22.0f, 14.0f, pct, barBg, fg);
             }
-            // リフレクションコア（チャージ）。満タンで右クリック設置可。
-            hudText(L"コア", 762.0f, top + 3.0f, 800.0f, D2D1::ColorF(0.80f, 0.95f, 1.0f, 0.95f));
-            const float corePct = ClampFloat(p.coreCharge / ReflectionCoreCost, 0.0f, 1.0f);
-            const bool coreReady = p.coreCharge >= ReflectionCoreCost;
-            const D2D1::ColorF coreFg = coreReady
-                ? D2D1::ColorF(0.45f, 1.0f, 0.70f, 0.97f)   // 満タン：明るい緑シアン
-                : D2D1::ColorF(0.30f, 0.62f, 0.55f, 0.95f); // 蓄積中：暗い緑シアン
-            fillBar(800.0f, top + 5.0f, 90.0f, 14.0f, corePct, barBg, coreFg);
-            if (coreReady)
-            {
-                const float gl = 0.6f + 0.4f * std::sin(gameTime_ * 8.0f);
-                hudText(L"READY 右クリック", 896.0f, top + 3.0f, 1080.0f, D2D1::ColorF(0.5f, 1.0f, 0.8f, ClampFloat(gl, 0.0f, 1.0f)));
-            }
+            // シールドスタミナ（構えで減り、下ろすと回復。切れ中は赤）。
+            hudText(L"シールド", 762.0f, top + 3.0f, 800.0f, D2D1::ColorF(0.80f, 0.95f, 1.0f, 0.95f));
+            const float stamPct = ClampFloat(p.shieldStamina / ShieldStaminaMax, 0.0f, 1.0f);
+            const D2D1::ColorF stamFg = p.shieldExhausted
+                ? D2D1::ColorF(0.95f, 0.35f, 0.35f, 0.95f)   // 切れ中：赤
+                : D2D1::ColorF(0.45f, 0.85f, 1.0f, 0.96f);   // 通常：水色
+            fillBar(800.0f, top + 5.0f, 90.0f, 14.0f, stamPct, barBg, stamFg);
         }
 
         // ショートのヒートゲージ（自機の頭上。撃ち続けると伸び、レッドゾーンで最大火力、振り切るとオーバーヒート）
@@ -382,7 +376,7 @@ void SweetsApp::DrawHud()
             textBrush_->SetColor(D2D1::ColorF(1.0f, 0.95f, 0.85f, 0.95f));
             d2dContext_->DrawTextW(gaugeText.c_str(), static_cast<UINT32>(gaugeText.size()), smallFormat_.Get(), D2D1::RectF(left + bw - 70.0f, top + 22.0f, left + bw, top + 46.0f), textBrush_.Get());
         }
-        // ブレイクゲージ（反射ダメージの蓄積）。HPバーの直下に水色で薄く表示。満タン/ブレイク中は強調。
+        // 崩し（体幹）ゲージ。反射の蓄積でHPバー直下に水色表示。満タン/崩し中は強調。
         if (boss_.bossType != BossType::HiddenBoss && boss_.breakGaugeMax > 0.0f)
         {
             const float by = top + 15.0f;
@@ -397,7 +391,7 @@ void SweetsApp::DrawHud()
                 const float blink = 0.6f + 0.4f * std::sin(gameTime_ * 12.0f);
                 textBrush_->SetColor(D2D1::ColorF(1.0f, 0.85f, 0.30f, ClampFloat(blink, 0.0f, 1.0f)));
                 d2dContext_->FillRectangle(D2D1::RectF(left, by, left + bw, by + bhh), textBrush_.Get());
-                const wchar_t* bt = L"BREAK!";
+                const wchar_t* bt = L"崩し!";
                 textBrush_->SetColor(D2D1::ColorF(1.0f, 0.95f, 0.55f, 1.0f));
                 d2dContext_->DrawTextW(bt, static_cast<UINT32>(wcslen(bt)), smallFormat_.Get(), D2D1::RectF(left + bw * 0.5f - 40.0f, top + 22.0f, left + bw * 0.5f + 40.0f, top + 46.0f), textBrush_.Get());
             }
@@ -516,7 +510,7 @@ void SweetsApp::DrawHud()
     }
 
     textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.88f));
-    const wchar_t* help = L"WASD/矢印: 移動  |  左クリック: 攻撃  |  右クリック: リフレクションコア設置(チャージ満タンで)  |  Space: ブリンク回避  |  E: 必殺  |  P: 一時停止";
+    const wchar_t* help = L"WASD/矢印: 移動  |  左クリック: 反射シールド  |  右クリック: リフレクションコア設置(チャージ満タンで)  |  Space: ブリンク回避  |  E: 必殺  |  P: 一時停止";
     d2dContext_->DrawTextW(help, static_cast<UINT32>(wcslen(help)), smallFormat_.Get(),
         D2D1::RectF(18.0f, static_cast<float>(height_) - 34.0f, static_cast<float>(width_) - 18.0f, static_cast<float>(height_) - 8.0f), textBrush_.Get());
 
@@ -602,13 +596,13 @@ void SweetsApp::DrawHud()
         d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), titleFormat_.Get(),
             D2D1::RectF(38.0f, 34.0f, dividerX - 22.0f, 92.0f), textBrush_.Get());
 
-        const std::array<const wchar_t*, 4> items{ L"Story", L"Endless", L"Credits", L"設定 (音量)" };
+        const std::array<const wchar_t*, 3> items{ L"ボス戦", L"Credits", L"設定 (音量)" };
         const float itemW = 248.0f;
         const float itemH = 58.0f;
         const float gap = 12.0f;
         const float menuX = 42.0f;
         const float menuTop = std::max(112.0f, static_cast<float>(height_) * 0.18f);
-        for (int i = 0; i < 4; ++i)
+        for (int i = 0; i < static_cast<int>(items.size()); ++i)
         {
             const float y = menuTop + i * (itemH + gap);
             const D2D1_RECT_F rect = D2D1::RectF(menuX, y, menuX + itemW, y + itemH);

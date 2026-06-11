@@ -347,6 +347,48 @@ V2 SweetsApp::FindNearestEnemyOrBoss(V2 pos) const
     return best;
 }
 
+// チーズ連鎖反射のホップ先を探す。ボス本体・起動中タレット・出現中の分身を候補にし、
+// 直前にヒットした的（exclude 付近）は外して、from に最も近いものを返す。
+bool SweetsApp::FindNearestChainTarget(V2 from, V2 exclude, V2& out) const
+{
+    bool found = false;
+    float bestD = 1e9f;
+    auto consider = [&](V2 p)
+    {
+        if (LenSq(p - exclude) < 0.7f * 0.7f) return; // 直前の的は除外して別の的へ跳ぶ
+        const float d = LenSq(p - from);
+        if (d < bestD) { bestD = d; out = p; found = true; }
+    };
+    // ヒット時にホップが発生するため、当たり判定のある的だけを候補にする（ボス本体・タレット）。
+    if (boss_.active) consider(boss_.pos);
+    for (int i = 0; i < BossTurretMax; ++i)
+        if (boss_.turretActive[i]) consider(boss_.turretPos[i]);
+    return found;
+}
+
+// チーズ連鎖反射：いまヒットした的(hitPos)から、次の最も近い的へ弾を飛ばす。
+// 残りホップが無い／次の的が無ければ false（呼び出し側が通常通り消す）。
+bool SweetsApp::TryChainHop(Shot& s, V2 hitPos)
+{
+    if (s.chainJumps <= 0) return false;
+    V2 next{};
+    if (!FindNearestChainTarget(s.pos, hitPos, next)) return false;
+    const V2 dir = Normalize(next - s.pos);
+    if (LenSq(dir) < 0.001f) return false;
+    const float spd = std::max(CheeseReflectChainSpeed, Len(s.vel));
+    s.vel = dir * spd;
+    s.pos += dir * (s.radius + 0.05f);
+    --s.chainJumps;
+    s.damage *= CheeseReflectChainGain; // 跳ねるほど威力UP
+    s.hitBoss = false;                   // 次の的に当たれるようリセット
+    s.reflected = true;
+    Burst(hitPos, Gold, 8);              // つながる演出
+    message_ = L"連鎖!";
+    messageT_ = std::max(messageT_, 0.4f);
+    SyncShot3D(s);
+    return true;
+}
+
 // スコア加算の共通処理です。
 // ScoreDouble中は倍率を掛け、最終的な加算値を返します。
 float SweetsApp::AddScore(int base, const Player* source)

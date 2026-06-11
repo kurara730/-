@@ -664,8 +664,8 @@ void SweetsApp::RestartCurrentRun()
 
 void SweetsApp::StartSelectedTitleItem()
 {
-    const TitleMenuItem item = static_cast<TitleMenuItem>(titleMenuIndex_);
-    if (item == TitleMenuItem::Settings)
+    // メニューはボス戦に一本化：0=ボス戦, 1=Credits, 2=設定
+    if (titleMenuIndex_ == 2)
     {
         settingsReturnScreen_ = Screen::Title;
         pauseMenuIndex_ = 2;
@@ -673,13 +673,13 @@ void SweetsApp::StartSelectedTitleItem()
         screen_ = Screen::Settings;
         return;
     }
-    if (item == TitleMenuItem::Credits)
+    if (titleMenuIndex_ == 1)
     {
         screen_ = Screen::Credits;
         return;
     }
-
-    pendingGameMode_ = item == TitleMenuItem::Endless ? GameMode::Endless : GameMode::Story;
+    // 0 = ボス戦：キャラ選択へ（選択後すぐボス戦開始）
+    pendingGameMode_ = GameMode::BossOnlyDebug;
     screen_ = Screen::CharacterSelect;
 }
 
@@ -701,7 +701,10 @@ bool SweetsApp::SelectLoadoutAt(float sx, float sy)
             loadoutIndex_ = i;
             player_.weapon = Loadouts[loadoutIndex_].weapon;
             player_.character = Loadouts[loadoutIndex_].character;
-            screen_ = Screen::DifficultySelect;
+            // 難易度選択は廃止。キャラを選んだら即ボス戦を開始（全キャラ選択可）。
+            pendingGameMode_ = GameMode::BossOnlyDebug;
+            difficultyIndex_ = static_cast<int>(Difficulty::Normal);
+            StartGameWithDifficulty(false);
             return true;
         }
     }
@@ -756,7 +759,7 @@ bool SweetsApp::SelectTitleMenuAt(float sx, float sy)
     const float gap = 12.0f;
     const float startX = 42.0f;
     const float top = std::max(112.0f, static_cast<float>(height_) * 0.18f);
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 3; ++i) // ボス戦 / Credits / 設定
     {
         const float y = top + i * (itemH + gap);
         if (sx >= startX && sx <= startX + itemW && sy >= y && sy <= y + itemH)

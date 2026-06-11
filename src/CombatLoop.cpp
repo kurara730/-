@@ -69,6 +69,29 @@ void SweetsApp::ReflectEnemyShotsNear(V2 center, float radius, int ownerIndex, C
 void SweetsApp::UpdateShots(float dt)
 {
     std::vector<Shot> spawned; // 反射分裂などイテレーション中に増える弾を遅延追加
+    // チョコの増殖反射：from地点からボスへ向けて count 発の反射弾を扇状に撃ち出す（spawnedへ遅延追加）。
+    auto spawnReflectVolley = [&](V2 from, int count, float dmg)
+    {
+        if (!boss_.active) return;
+        const float baseA = AngleOf(boss_.pos - from);
+        for (int i = 0; i < count; ++i)
+        {
+            const float spread = (count > 1) ? (static_cast<float>(i) / static_cast<float>(count - 1) - 0.5f) * 0.5f : 0.0f;
+            Shot b{};
+            b.pos = from;
+            b.vel = FromAngle(baseA + spread) * ChocoReflectBoltSpeed;
+            b.radius = 0.20f;
+            b.damage = dmg;
+            b.ttl = 2.0f;
+            b.color = Sky;
+            b.enemy = false;
+            b.ownerIndex = 0;
+            b.reflected = true;
+            b.pierce = 1;
+            SyncShot3D(b);
+            spawned.push_back(b);
+        }
+    };
     for (auto& s : shots_)
     {
         if (s.dead) continue;
@@ -132,11 +155,50 @@ void SweetsApp::UpdateShots(float dt)
                     }
                 }
             }
+            // === チョコの増殖反射 ===
+            // 飛行中のチョコボムが、敵弾やボスのビームを巻き取り、数を増やしてボスへ撃ち返す。
+            if (!s.enemy && s.ownerIndex == 0)
+            {
+                if (s.reflectCd > 0.0f) s.reflectCd -= dt;
+                // 敵弾を巻き取る：触れた敵弾を消し、増殖反射弾をボスへ。
+                for (auto& es : shots_)
+                {
+                    if (!es.enemy || es.dead) continue;
+                    if (RuleDistance(s.pos, s.height, es.pos, es.height) < s.radius + es.radius + 0.3f)
+                    {
+                        es.dead = true;
+                        spawnReflectVolley(es.pos, ChocoReflectMultiply, ChocoReflectBoltDamage);
+                        boss_.breakGauge = std::min(boss_.breakGaugeMax, boss_.breakGauge + ChocoReflectBreakPerCatch);
+                        RegisterReflectSuccess();
+                        Burst(es.pos, Sky, 10);
+                    }
+                }
+                // ボスのビーム帯に触れたら増殖反射（連続発生を防ぐためクールダウン制）。
+                if (boss_.active && boss_.beamActiveT > 0.0f && s.reflectCd <= 0.0f)
+                {
+                    const V2 bdir = FromAngle(boss_.beamAngle);
+                    const V2 rel = s.pos - boss_.pos;
+                    const float along = Dot(rel, bdir);
+                    if (along > 0.0f && along < BossBeamLength)
+                    {
+                        const V2 perp = rel - bdir * along;
+                        if (Len(perp) < BossBeamHalfWidth + s.radius)
+                        {
+                            spawnReflectVolley(s.pos, ChocoReflectMultiply, ChocoReflectBoltDamage);
+                            boss_.breakGauge = std::min(boss_.breakGaugeMax, boss_.breakGauge + ChocoReflectBreakPerCatch + 2.0f);
+                            RegisterReflectSuccess();
+                            Burst(s.pos, Sky, 12);
+                            s.reflectCd = ChocoReflectBeamCd;
+                        }
+                    }
+                }
+            }
             SyncShot3D(s);
             continue;
         }
 
-        if (s.enemy && (std::fabs(s.angularVel) > 0.0001f || std::fabs(s.accel) > 0.0001f))
+        // 回転(angularVel)/加速(accel)を持つ弾を曲げる。敵弾に加え、ロールの渦放出弾（味方）も回す。
+        if (std::fabs(s.angularVel) > 0.0001f || std::fabs(s.accel) > 0.0001f)
         {
             float speed = Len(s.vel);
             float angle = AngleOf(s.vel) + s.angularVel * dt;
@@ -377,7 +439,8 @@ void SweetsApp::UpdateShots(float dt)
                             Player& owner = players_[std::max(0, std::min(s.ownerIndex, MaxPlayers - 1))];
                             AddScore(36 + s.reflectedCount * 18, &owner);
                         }
-                        if (s.pierce > 0) --s.pierce;
+                        if (s.chainJumps > 0 && TryChainHop(s, e.pos)) { /* 次の的へ連鎖（生存） */ }
+                        else if (s.pierce > 0) --s.pierce;
                         else s.dead = true;
                     }
                     break;
@@ -419,7 +482,8 @@ void SweetsApp::UpdateShots(float dt)
                 }
                 DamageBoss(ReflectedDamage(s), kind, s.reflected, s.ownerIndex);
                 s.hitBoss = true;
-                if (s.charged) s.dead = true;
+                if (s.chainJumps > 0 && TryChainHop(s, boss_.pos)) { /* 次の的へ連鎖（生存） */ }
+                else if (s.charged) s.dead = true;
                 else if (s.pierce > 0) --s.pierce;
                 else s.dead = true;
             }

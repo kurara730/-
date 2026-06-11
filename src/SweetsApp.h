@@ -99,6 +99,11 @@ private:
     Player* FindNearestPlayer(V2 pos);
     const Player* FindNearestPlayer(V2 pos) const;
     V2 FindNearestEnemyOrBoss(V2 pos) const;
+    // チーズ連鎖反射：from から最も近い「ボス側の的」（ボス本体/起動中タレット/分身）を返す。
+    // exclude 付近（直前にヒットした的）は除外。見つかれば true。
+    bool FindNearestChainTarget(V2 from, V2 exclude, V2& out) const;
+    // チーズ連鎖反射：ヒットした的(hitPos)から次の的へ弾を飛ばす。ホップしたら true。
+    bool TryChainHop(Shot& s, V2 hitPos);
 
     // --- 照準と 2D/3D ルール ---
     // 攻撃方向はカーソル、移動方向、近い敵オートのいずれかで決まります。
@@ -156,6 +161,7 @@ private:
     void UpdatePlayer(float dt);
     void UpdateEnemies(float dt);
     void UpdateBoss(float dt);
+    void UpdateBossTurrets(float dt); // タレットはボスのダウン中も常時稼働
     void UpdateShots(float dt);
     void ReleaseCaughtIfNoBomb();
     void UpdatePickups(float dt);
@@ -171,6 +177,7 @@ private:
     bool DamageBossArm(int index, float dmg); // 腕（赤）にダメージ。HPが尽きると一定時間消滅。命中したらtrue
     void SpawnDamageNumber(V2 pos, float value, Color color, bool crit); // ダメージ数値を湧かせる
     void RegisterReflectSuccess(); // リフレクションコアの反射成功を記録し、規定回数でネガポジへ突入
+    void UpdateReflectShield(float dt); // 左クリックの反射シールド：前方の攻撃を反射（キャラ別効果）
     void Burst(V2 p, Color c, int count);
     void PlayCombatEffect(const std::wstring& id, V2 position, float y, float rotationY, float scale, Color fallbackColor, int fallbackCount);
     void ReflectEnemyShotsNear(V2 center, float radius, int ownerIndex, CharacterType source, Color color, float power);

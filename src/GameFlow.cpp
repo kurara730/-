@@ -94,7 +94,7 @@ void SweetsApp::ResetGame()
     negaposiCount_ = 0;
     player_.blinkCharges = BlinkMaxCharges;
     player_.blinkRechargeT = 0.0f;
-    for (auto& pl : players_) { pl.grabbedT = 0.0f; pl.coreCharge = 0.0f; }
+    for (auto& pl : players_) { pl.grabbedT = 0.0f; pl.coreCharge = 0.0f; pl.reflectShieldT = 0.0f; pl.reflectShieldCd = 0.0f; pl.shieldStamina = ShieldStaminaMax; pl.shieldExhausted = false; pl.reflectPerfectT = 0.0f; pl.rollVortexStock = 0; }
     clearTimer_ = 0.0f;
     hiddenIntroT_ = 0.0f;
     hiddenBossT_ = 0.0f;
@@ -488,7 +488,16 @@ void SweetsApp::UpdateAudioForScreen()
         break;
     case Screen::Playing:
     case Screen::Paused:
-        audio_.PlayLoop(MusicTrack::Gameplay, L"assets/audio/233_BPM163.mp3");
+        // キャラ選択から進んだ先のボス戦BGM。東方イメージの楽曲を置けば差し替わる。
+        // 無ければ従来曲にフォールバックするので、ファイル未設置でも無音にならない。
+        if (AssetExists(L"assets/audio/boss_touhou.mp3"))
+        {
+            audio_.PlayLoop(MusicTrack::Gameplay, L"assets/audio/boss_touhou.mp3");
+        }
+        else
+        {
+            audio_.PlayLoop(MusicTrack::Gameplay, L"assets/audio/233_BPM163.mp3");
+        }
         break;
     case Screen::GameOver:
         audio_.PlayLoop(MusicTrack::GameOver, L"assets/audio/ruins.mp3");
@@ -620,6 +629,7 @@ void SweetsApp::UpdatePlaying(float dt)
     UpdateCoopPlayers(dt);
     UpdateEnemies(dt);
     UpdateBoss(dt);
+    UpdateReflectShield(dt); // 左クリックの反射シールド（UpdateShotsの前に反射を確定）
     UpdateShots(dt);
     ReleaseCaughtIfNoBomb();
     UpdatePickups(dt);

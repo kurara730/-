@@ -320,6 +320,40 @@ void SweetsApp::DrawScene()
         spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (1.6f + 0.25f * pulse), 0.08f, WithAlpha(Gold, ClampFloat(0.55f + 0.35f * pulse, 0.0f, 1.0f)), 0.05f, 48);
         spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (2.1f + 0.3f * pulse), 0.05f, WithAlpha(Sky, 0.45f), 0.05f, 48);
     }
+    // タレット（反射可能な砲台）：紫の小円＋HPに応じた明滅。
+    if (boss_.active)
+    {
+        for (int i = 0; i < BossTurretMax; ++i)
+        {
+            if (!boss_.turretActive[i]) continue;
+            const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 10.0f + i);
+            const bool beam = boss_.turretTier[i] >= 2;          // ビームタレットは赤系で強調
+            const Color body = beam ? Berry : Grape;
+            const Color ring = beam ? Gold : Berry;
+            spriteCanvas_.DrawCircle(boss_.turretPos[i], BossTurretRadius * (beam ? 1.15f : 1.0f), WithAlpha(body, 0.85f), 0.30f, 28);
+            spriteCanvas_.DrawRing(boss_.turretPos[i], BossTurretRadius * (1.1f + 0.15f * pulse) * (beam ? 1.2f : 1.0f), 0.05f, WithAlpha(ring, 0.7f), 0.295f, 28);
+        }
+    }
+    // 分身：予兆/発射中は本体色の半透明コピーを表示。
+    if (boss_.active && (boss_.cloneWarnT > 0.0f || boss_.cloneActiveT > 0.0f))
+    {
+        const float a = boss_.cloneWarnT > 0.0f
+            ? (1.0f - boss_.cloneWarnT / BossCloneWarnTime) * 0.6f
+            : ClampFloat(boss_.cloneActiveT / BossCloneActiveTime, 0.0f, 1.0f) * 0.7f;
+        for (int i = 0; i < boss_.cloneCount; ++i)
+        {
+            spriteCanvas_.DrawCircle(boss_.clonePos[i], boss_.radius, WithAlpha(Grape, ClampFloat(a, 0.0f, 0.7f)), 0.31f, 32);
+            spriteCanvas_.DrawRing(boss_.clonePos[i], boss_.radius * 1.15f, 0.06f, WithAlpha(Berry, ClampFloat(a, 0.0f, 0.8f)), 0.305f, 32);
+        }
+    }
+    // 反射シールド（左クリック・全キャラ共通）：自機の正面に弧を展開。
+    if (player_.reflectShieldT > 0.0f && !player_.downed)
+    {
+        const float life = ClampFloat(player_.reflectShieldT / ReflectShieldActive, 0.0f, 1.0f);
+        const float pulse = 0.6f + 0.4f * std::sin(gameTime_ * 24.0f);
+        const Color sc = WithAlpha(Sky, ClampFloat(0.35f + 0.45f * life * pulse, 0.0f, 0.9f));
+        spriteCanvas_.DrawArc(player_.pos, ReflectShieldRange * 0.92f, ReflectShieldRange * 0.5f, player_.face, ReflectShieldArc, sc, 0.06f, 40);
+    }
     // フェーズ移行中：フェーズ色のオーラ＋外へ広がる衝撃波リングで派手に演出。
     if (boss_.active && boss_.phaseIntroT > 0.0f)
     {
