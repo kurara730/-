@@ -94,6 +94,10 @@ void SweetsApp::ResetGame()
     negaposiCount_ = 0;
     player_.blinkCharges = BlinkMaxCharges;
     player_.blinkRechargeT = 0.0f;
+    // ゲーム開始時の入力エッジを初期化する。パッドのAボタン（決定＝ブリンク兼用）や
+    // スペースを押したまま開始しても、開始直後にブリンクが暴発しないようにする。
+    prevSpace_ = true;
+    prevMouseLeft_ = mouseLeft_;
     for (auto& pl : players_) { pl.grabbedT = 0.0f; pl.coreCharge = 0.0f; pl.reflectShieldT = 0.0f; pl.reflectShieldCd = 0.0f; pl.shieldStamina = ShieldStaminaMax; pl.shieldExhausted = false; pl.reflectPerfectT = 0.0f; pl.rollVortexStock = 0; }
     clearTimer_ = 0.0f;
     hiddenIntroT_ = 0.0f;
@@ -295,6 +299,9 @@ void SweetsApp::SpawnPickup()
 // screen_ ごとに必要な処理だけを動かすことで、メニュー背景でゲームが進まないようにしています。
 void SweetsApp::Update(float dt)
 {
+    // コントローラ入力は画面更新の前に取り込み、ゲーム中の移動/攻撃フラグやメニュー操作へ反映する。
+    UpdateGamepad(dt);
+
     if (screen_ == Screen::BootLoading)
     {
         UpdateBootLoading(dt);

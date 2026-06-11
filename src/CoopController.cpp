@@ -86,10 +86,12 @@ void SweetsApp::UpdateCoopPlayers(float dt)
 
 // ゲームパッド操作のプレイヤー更新です。
 // Pad指定の枠は、未接続でも自動AIにはせず、明示的な入力だけを使います。
+// コントローラ割り当ては「プレイヤー番号 = コントローラ番号」。1P が #0（GamepadInput.cpp）、
+// 2P-4P はここで #1 以降を使うため、1P のパッドと取り合いになりません。
 void SweetsApp::UpdateGamepadPlayer(Player& p, int playerIndex, float dt)
 {
     XINPUT_STATE state{};
-    if (XInputGetState(static_cast<DWORD>(playerIndex - 1), &state) != ERROR_SUCCESS) return;
+    if (XInputGetState(static_cast<DWORD>(playerIndex), &state) != ERROR_SUCCESS) return;
 
     V2 move{ NormalizeThumb(state.Gamepad.sThumbLX), NormalizeThumb(state.Gamepad.sThumbLY) };
     move = Normalize(move);

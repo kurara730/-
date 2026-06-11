@@ -172,7 +172,8 @@ void SweetsApp::UpdatePlayer(float dt)
     // ただしブリンク（スペース）でだけは拘束を振りほどいて脱出できる。
     if (player_.grabbedT > 0.0f)
     {
-        const bool spaceHeldNow = KeyDown(VK_SPACE);
+        // スペース（キーボード）またはAボタン（パッド）で振りほどく。
+        const bool spaceHeldNow = KeyDown(VK_SPACE) || padBlinkHeld_;
         const bool spacePressedNow = spaceHeldNow && !prevSpace_;
         if (spacePressedNow && player_.blinkCharges > 0)
         {
@@ -182,6 +183,7 @@ void SweetsApp::UpdatePlayer(float dt)
             if (KeyDown('S') || KeyDown(VK_DOWN)) esc.z -= 1.0f;
             if (KeyDown('A') || KeyDown(VK_LEFT)) esc.x -= 1.0f;
             if (KeyDown('D') || KeyDown(VK_RIGHT)) esc.x += 1.0f;
+            esc += padMove_; // パッドの左スティック方向も加味
             const V2 escDir = LenSq(esc) > 0.001f ? Normalize(esc)
                 : Normalize(player_.pos - boss_.pos);
             const V2 fromPos = player_.pos;
@@ -226,10 +228,11 @@ void SweetsApp::UpdatePlayer(float dt)
     if (KeyDown('S') || KeyDown(VK_DOWN)) dir.z -= 1.0f;
     if (KeyDown('A') || KeyDown(VK_LEFT)) dir.x -= 1.0f;
     if (KeyDown('D') || KeyDown(VK_RIGHT)) dir.x += 1.0f;
+    dir += padMove_; // パッドの左スティック＋十字キーを加算してから正規化
     dir = Normalize(dir);
 
-    // Shift集中移動は速度を落として、弾幕を避けやすくする操作です。
-    player_.focus = KeyDown(VK_SHIFT);
+    // Shift（キーボード）/ LB（パッド）の集中移動は速度を落として、弾幕を避けやすくする操作です。
+    player_.focus = KeyDown(VK_SHIFT) || padFocus_;
     const float focusMul = player_.focus ? 0.42f : 1.0f;
     const float spd = player_.speed * focusMul * (player_.speedBuffT > 0.0f ? 1.55f : 1.0f);
     if (player_.dashT > 0.0f)
@@ -274,6 +277,8 @@ void SweetsApp::UpdatePlayer(float dt)
     // マウス座標をゲーム内座標へ変換して、照準モードに応じた向きを作ります。
     const V2 aimPoint = ScreenToWorld(mouseX_, mouseY_);
     player_.face = ResolvePlayerAim(player_, 0, dir, aimPoint);
+    // パッドの右スティックを倒している間は、照準モードに関わらずその方向へ向ける（ツインスティック操作）。
+    if (LenSq(padAim_) > 0.04f) player_.face = AngleOf(padAim_);
     const V2 actionPoint = ResolvePlayerAimPoint(player_, 0, aimPoint, 8.0f);
     (void)actionPoint; // 旧チャージ攻撃で使用。現在は未使用だが照準計算の整合のため残す。
 
@@ -288,7 +293,7 @@ void SweetsApp::UpdatePlayer(float dt)
             player_.blinkRechargeT = (player_.blinkCharges < BlinkMaxCharges) ? BlinkChargeCooldown : 0.0f;
         }
     }
-    const bool spaceHeld = KeyDown(VK_SPACE);
+    const bool spaceHeld = KeyDown(VK_SPACE) || padBlinkHeld_;
     const bool spacePressed = spaceHeld && !prevSpace_;
     if (spacePressed && player_.blinkCharges > 0)
     {
@@ -322,8 +327,8 @@ void SweetsApp::UpdatePlayer(float dt)
     if (player_.reflectPerfectT > 0.0f) player_.reflectPerfectT -= dt;
     // ブリンク直後は攻撃ロック中。クリックをこの間は受け付けない＝同時発動を防ぐ。
     const bool attackLocked = player_.blinkLockT > 0.0f;
-    // 左クリック：基本は前方シールドで反射。ただし「ボスが崩し中＝無防備」のときだけ攻撃に変わる。
-    const bool primaryHeld = mouseLeft_ && !attackLocked;
+    // 左クリック（マウス）/ RT・RB（パッド）：基本は前方シールドで反射。
+    const bool primaryHeld = (mouseLeft_ || padPrimaryHeld_) && !attackLocked;
     bool shieldHeldThisFrame = false;
     // 左クリックは常に反射シールド（直接攻撃はしない＝反射主体）。
     // ボスのダウン中も同じく、攻撃ではなく反射でフィールドに干渉して有利を作る。

@@ -607,7 +607,8 @@ void SweetsApp::DrawHud()
             const float y = menuTop + i * (itemH + gap);
             const D2D1_RECT_F rect = D2D1::RectF(menuX, y, menuX + itemW, y + itemH);
             const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
-            const bool active = hover;
+            // マウスのホバーに加え、コントローラの上下選択（titleMenuIndex_）もハイライトする。
+            const bool active = hover || i == titleMenuIndex_;
             if (active)
             {
                 textBrush_->SetColor(OldSelectFill(true));
