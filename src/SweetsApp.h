@@ -243,6 +243,10 @@ private:
     float GameplayViewHalfHeight() const;
 
     void OnKeyDown(WPARAM key);
+    // コントローラ入力の毎フレーム処理。1P操作（移動/攻撃/必殺/ポーズ）とメニュー操作を行います。
+    void UpdateGamepad(float dt);
+    // 画面状態に応じたクリック（決定）処理。マウス左クリックとパッドのAボタンで共通利用します。
+    bool HandleScreenClick(float sx, float sy);
     bool HandleDebugKey(WPARAM key);
     bool HandleDebugClick(float sx, float sy);
     bool HandleDebugDrag(float sx, float sy);
@@ -381,6 +385,17 @@ private:
     bool mouseRightReleased_ = false;
     float mouseX_ = 640.0f;
     float mouseY_ = 400.0f;
+
+    // コントローラ（XInput #0）入力状態。1P操作とメニュー操作の両方に使います。
+    // 毎フレーム UpdateGamepad で更新し、ゲーム中の移動/攻撃は UpdatePlayer がここを参照します。
+    bool padConnected_ = false;       // コントローラ接続中か（未接続ならゲームへ影響しない）
+    unsigned short padPrevButtons_ = 0; // 直前フレームのボタン状態（押した瞬間の検出用）
+    V2 padMove_{};                    // 左スティック＋十字キーの移動入力（WASD相当）
+    V2 padAim_{};                     // 右スティックの照準入力（倒している時だけ向きを上書き）
+    bool padFocus_ = false;           // LB:集中移動（Shift相当）
+    bool padPrimaryHeld_ = false;     // RT/RB:反射シールド（左クリック長押し相当）
+    bool padBlinkHeld_ = false;       // A:ブリンク（スペース相当。エッジ検出は prevSpace_ を共用）
+    int padNavPrevY_ = 0;             // メニュー上下ナビの直前フレーム方向（-1/0/+1。押した瞬間検出用）
 
     Screen screen_ = Screen::BootLoading;
     Screen settingsReturnScreen_ = Screen::Title; // 音量設定画面から戻る先(タイトル or ポーズ)

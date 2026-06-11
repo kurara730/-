@@ -25,6 +25,7 @@ add_executable(SweetsActionDX11 WIN32
     src/EnemyController.cpp
     src/FrameView.cpp
     src/GameFlow.cpp
+    src/GamepadInput.cpp
     src/GameplayView.cpp
     src/GraphicsDevice.cpp
     src/HiddenBossLogic.cpp
