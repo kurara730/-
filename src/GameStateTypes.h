@@ -106,6 +106,23 @@ struct Player
     float blinkRechargeT = 0.0f;        // 1チャージ回復までの残り時間
     float blinkLockT = 0.0f;            // ブリンク直後の攻撃ロック残り時間（攻撃と同時発動を禁止）
     float grabbedT = 0.0f;              // ボスのつかみで拘束されている残り時間（>0で操作不可）
+    float reflectShieldT = 0.0f;        // 反射シールド展開中の残り時間（左クリック・全キャラ共通）
+    float reflectShieldCd = 0.0f;       // （未使用）旧クールダウン
+    float shieldStamina = ShieldStaminaMax; // シールドスタミナ（構えで減り、下ろすと回復）
+    bool shieldExhausted = false;       // スタミナ切れ中（一定回復まで再展開不可）
+    float reflectPerfectT = 0.0f;       // 構え直後のパーフェクト反射の残り窓
+    int   rollVortexStock = 0;          // ロール渦反射：シールドで巻き取った敵弾のストック（満タン/パーフェクトでスパイラル放出）
+    // === アイテム効果 ===
+    float itemShieldEnlargeT = 0.0f;    // 反射板巨大化（×1.2＋スタミナ消費なし）の残り
+    float itemBlinkBoostT = 0.0f;       // ブリンク強化（距離×1.2）の残り
+    float itemMagnetT = 0.0f;           // マグネット（弾を反射板中央へ）の残り
+    float itemReflectBuffT = 0.0f;      // チャージブリンク由来の反射×1.1 の残り
+    int   chargeBlinkStacks = 0;        // 色変化ブリンクの残り使用回数（最大ItemChargeBlinkMaxStacks）
+    bool  hasOverloadCore = false;      // オーバーロードコア所持（反射全部×1.2・最大HP80%固定）
+    bool  hasPhoenix = false;           // フェニックスの羽所持（一度だけ復活）
+    float reflectSizeMul = 1.0f;        // 反射板サイズ倍率（毎フレーム算出・描画/判定で共有）
+    float reflectDmgMul = 1.0f;         // 反射ダメージ倍率（毎フレーム算出）
+    float coreCharge = 0.0f;            // リフレクションコアのチャージ（敵に攻撃を当てて蓄積。満タンで右クリック設置）
     float bombCharge = 0.0f;    // チョコ爆弾のチャージ量（長押し時間）
     float fireHeat = 0.0f;      // ショートのヒート（撃ち続けた時間。移動でリセット）
     float overheatT = 0.0f;     // オーバーヒート中の発射ロック残時間（>0なら撃てない）
@@ -167,6 +184,18 @@ struct Enemy
     bool hiddenBossClone = false;
     bool caught = false;        // チョコ最大弾に巻き込まれて固定中
     V2 caughtOffset{};          // 弾中心からの相対位置
+    float lifeT = 0.0f;         // >0なら寿命タイマー（0で消滅）。ボス分裂の分身などに使用
+    bool bossSplit = false;     // ボスの「分裂」技で生まれた分身（HP1/4・反射可能弾を撃つ）
+};
+
+// 隕石（大技）：予兆→着弾の2段。着弾の瞬間に範囲ダメージ。
+struct Meteor
+{
+    V2 pos{};
+    float warnT = 0.0f;     // 落下予兆（着弾位置表示）の残り
+    float impactT = 0.0f;   // 着弾エフェクト/判定の残り
+    float radius = 1.7f;
+    bool impacted = false;  // 着弾ダメージ適用済み
 };
 
 // 通常ボスと隠しボスで共通利用する状態です。
@@ -250,7 +279,47 @@ struct Boss
     float flyAngle = 0.0f;      // 周回の現在角
     float flyAngleAcc = 0.0f;   // 周回した累積角（一周判定用）
     V2 flyStrikePos{};          // 着弾円の中心
+    // 分身：本体＋分身が反射可能な弾をまとめて撃つ。
+    float cloneCd = 9.0f;
+    float cloneWarnT = 0.0f;    // 出現予兆中
+    float cloneActiveT = 0.0f;  // 分身が残っている時間（演出）
+    int cloneCount = 0;         // 出している分身数
+    V2 clonePos[BossCloneMax]{};// 分身の位置
+    // 分裂：HP1/4ほどの分身を出し、一定時間or撃破まで反射可能弾を撃たせる。
+    float splitCd = 8.0f;
+    // 扇状斬撃：壁で3回跳ね返り巨大化する斬撃を扇状に飛ばす。
+    float fanSlashCd = 9.0f;
+    // 隕石落下（大技）：一定時間ランダム位置に隕石を落とし続ける。
+    float meteorCd = 13.0f;
+    float meteorT = 0.0f;       // 降らせ続けている残り時間
+    float meteorSpawnCd = 0.0f; // 次の落下までの残り
+    // 突進追走（大技・無敵なし）：高速で走り回り、接触で確定つかみ→引きずり。
+    float rushCd = 14.0f;
+    float rushT = 0.0f;         // 走り回っている残り時間
+    float rushDragT = 0.0f;     // 引きずり中の残り
+    int   rushGrabTarget = -1;  // 引きずり中のプレイヤーindex（-1なし）
+    float rushGrabAngle = 0.0f; // 引きずり時のボスからの相対角
+    // チャージ衝撃波：チャージ後にフィールド1/2の範囲円へ衝撃波。遠いほど高ダメージ。
+    float shockCd = 11.0f;
+    float shockChargeT = 0.0f;          // チャージ（予兆）中の残り
+    float shockActiveT = 0.0f;          // 衝撃波の展開中の残り
+    float shockRadius = 0.0f;           // 現在のリング半径（描画／判定用）
+    bool  shockHitPlayer[MaxPlayers]{}; // この衝撃波で各プレイヤーに当てたか
+    // タレット：合間に設置する反射可能な砲台。
+    float turretSpawnCd = 4.0f;
+    float turretFireT[BossTurretMax]{};   // 各タレットの次発射までの残り
+    float turretHp[BossTurretMax]{};      // 各タレットHP（0以下で消滅）
+    V2 turretPos[BossTurretMax]{};        // 各タレット位置
+    bool turretActive[BossTurretMax]{};   // 有効フラグ
+    int turretTier[BossTurretMax]{};      // 強さ段階（0:通常 1:強化 2:ビーム）
     BossType bossType = BossType::Demon;
+    // 技セット（SpawnBossでランダム付与）。つかみは全ボス共通で常時所持なのでここには持たない。
+    bool kitTurret = false;     // タレット呼び寄せ（既存）
+    bool kitBeam = false;       // レーザー砲＝貫通ビーム（既存）
+    bool kitSplit = false;      // 分裂（HP1/4の分身）※実装予定
+    bool kitFanSlash = false;   // 扇状斬撃（壁3回反射で巨大化）※実装予定
+    bool kitShockwave = false;  // チャージ衝撃波（遠いほど高ダメージ）※実装予定
+    int  bigMove = 0;           // BossBigMove（このボスが持つ唯一の大技）
     bool active = false;
 };
 
@@ -304,6 +373,9 @@ struct Shot
     float homingStrength = 0.0f;
     float yoyoRetargetT = 0.0f;
     float warpCd = 0.0f;
+    float reflectCd = 0.0f;     // チョコ増殖反射：ビーム巻き取りの再発生待ち
+    int chainJumps = 0;         // チーズ連鎖反射：残りの飛び移り回数（ボス/タレット/分身へホップ）
+    bool fanSlash = false;      // ボスの扇状斬撃：壁で跳ねるほど巨大化＆強化、本体/プレイヤー接触で消滅
     CharacterType sourceCharacter = CharacterType::Shortcake;
     bool enemy = false;
     bool dead = false;

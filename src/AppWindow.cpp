@@ -235,46 +235,9 @@ LRESULT SweetsApp::HandleMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_LBUTTONDOWN:
         mouseX_ = static_cast<float>(GET_X_LPARAM(lp));
         mouseY_ = static_cast<float>(GET_Y_LPARAM(lp));
-        if (HandleDebugClick(mouseX_, mouseY_))
-        {
-            SetCapture(hwnd);
-            return 0;
-        }
-        if (screen_ == Screen::Paused && HandlePauseClick(mouseX_, mouseY_))
-        {
-            SetCapture(hwnd);
-            return 0;
-        }
-        if (screen_ == Screen::Settings && HandleSettingsClick(mouseX_, mouseY_))
-        {
-            SetCapture(hwnd);
-            return 0;
-        }
-        if (screen_ == Screen::Title && SelectTitleMenuAt(mouseX_, mouseY_))
-        {
-            return 0;
-        }
-        if (screen_ == Screen::CharacterSelect && SelectCoopSlotAt(mouseX_, mouseY_))
-        {
-            return 0;
-        }
-        if (screen_ == Screen::CharacterSelect && SelectLoadoutAt(mouseX_, mouseY_))
-        {
-            return 0;
-        }
-        if (screen_ == Screen::DifficultySelect && SelectDifficultyAt(mouseX_, mouseY_))
-        {
-            return 0;
-        }
-        if (screen_ == Screen::Credits && SelectCreditsAt(mouseX_, mouseY_))
-        {
-            return 0;
-        }
-        if (screen_ == Screen::GameOver && SelectGameOverAt(mouseX_, mouseY_))
-        {
-            return 0;
-        }
-        if ((screen_ == Screen::Clear || screen_ == Screen::CompleteClear) && SelectClearAt(mouseX_, mouseY_))
+        // メニュー系のクリック判定はマウス/パッド共通の HandleScreenClick に集約。
+        // どのメニューも消費しなければ、ゲーム中の反射シールド入力として扱う。
+        if (HandleScreenClick(mouseX_, mouseY_))
         {
             return 0;
         }

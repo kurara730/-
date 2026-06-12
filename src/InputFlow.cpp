@@ -130,6 +130,16 @@ void SweetsApp::OnKeyDown(WPARAM key)
         return;
     }
 
+    if (screen_ == Screen::CustomBoss)
+    {
+        if (key == VK_ESCAPE || key == VK_BACK)
+        {
+            screen_ = Screen::Title;
+            return;
+        }
+        return;
+    }
+
     if (screen_ == Screen::DifficultySelect)
     {
         if (key == VK_ESCAPE || key == VK_BACK)
@@ -182,9 +192,27 @@ void SweetsApp::OnKeyDown(WPARAM key)
     }
     if (screen_ == Screen::Playing || screen_ == Screen::HiddenBoss)
     {
-        if (key == 'Q') UseUltimate();
+        if (key == 'E') UseUltimate();
         if (key == 'R') RestartCurrentRun();
         if (key == 'T') SetAimMode(static_cast<AimMode>((static_cast<int>(aimMode_) + 1) % 3), true);
+    }
+    // === デバッグ：ボスラッシュ中、数字キーで指定した技を即発動 ===
+    // キットフラグも立てるので、その後のランダム選択でも出るようになる。
+    if (screen_ == Screen::Playing && gameMode_ == GameMode::BossOnlyDebug && boss_.active)
+    {
+        switch (key)
+        {
+        case '1': boss_.kitBeam = true;     boss_.beamCd = 0.0f;        message_ = L"[DBG] レーザー砲"; messageT_ = 1.0f; break;
+        case '2': boss_.kitTurret = true;   boss_.turretSpawnCd = 0.0f; message_ = L"[DBG] タレット";   messageT_ = 1.0f; break;
+        case '3': boss_.kitSplit = true;    boss_.splitCd = 0.0f;       message_ = L"[DBG] 分裂";       messageT_ = 1.0f; break;
+        case '4': boss_.kitFanSlash = true; boss_.fanSlashCd = 0.0f;    message_ = L"[DBG] 扇状斬撃";   messageT_ = 1.0f; break;
+        case '5': boss_.kitShockwave = true; boss_.shockCd = 0.0f;      message_ = L"[DBG] チャージ衝撃波"; messageT_ = 1.0f; break;
+        case '6': boss_.bigMove = static_cast<int>(BossBigMove::MegaBeam); boss_.megaBeamCd = 0.0f; message_ = L"[DBG] 大技:極太薙ぎ払い"; messageT_ = 1.0f; break;
+        case '7': boss_.bigMove = static_cast<int>(BossBigMove::Meteor); boss_.meteorCd = 0.0f;     message_ = L"[DBG] 大技:隕石"; messageT_ = 1.0f; break;
+        case '8': boss_.bigMove = static_cast<int>(BossBigMove::InvincibleChase); boss_.rushCd = 0.0f; message_ = L"[DBG] 大技:突進"; messageT_ = 1.0f; break;
+        case '9': boss_.grabCd = 0.0f;      message_ = L"[DBG] つかみ";     messageT_ = 1.0f; break;
+        default: break;
+        }
     }
 }
 
@@ -567,7 +595,7 @@ bool SweetsApp::HandleSettingsClick(float sx, float sy)
         return false;
     }
 
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 5; ++i)
     {
         const UiRect& rect = layout.volumeSliders[i];
         if (PointInRect(sx, sy, rect.left, rect.top, rect.right, rect.bottom))
@@ -595,12 +623,105 @@ bool SweetsApp::HandleSettingsClick(float sx, float sy)
         SetFullscreenFromSettings(!fullscreen_);
         return true;
     }
+
+    const UiRect& dmgRect = layout.damageNumberToggle;
+    if (PointInRect(sx, sy, dmgRect.left, dmgRect.top, dmgRect.right, dmgRect.bottom))
+    {
+        showDamageNumbers_ = !showDamageNumbers_;
+        SaveSettings();
+        return true;
+    }
     return true;
 }
 
 void SweetsApp::SetFullscreenFromSettings(bool enabled)
 {
     SetFullscreen(enabled, true);
+}
+
+// カスタムボス設定画面のクリック処理。レイアウトは BuildCustomBossLayout() を共有。
+bool SweetsApp::HandleCustomBossClick(float sx, float sy)
+{
+    const CustomBossLayout layout = BuildCustomBossLayout();
+
+    // 通常技トグル。
+    for (int i = 0; i < 5; ++i)
+    {
+        const UiRect& r = layout.normalToggles[i];
+        if (PointInRect(sx, sy, r.left, r.top, r.right, r.bottom))
+        {
+            customKitNormals_[i] = !customKitNormals_[i];
+            return true;
+        }
+    }
+    // 大技（3択）。
+    for (int i = 0; i < 3; ++i)
+    {
+        const UiRect& r = layout.bigButtons[i];
+        if (PointInRect(sx, sy, r.left, r.top, r.right, r.bottom))
+        {
+            customBigMove_ = i;
+            return true;
+        }
+    }
+    // HPスライダー（クリック位置で設定）。
+    if (PointInRect(sx, sy, layout.hpSlider.left, layout.hpSlider.top, layout.hpSlider.right, layout.hpSlider.bottom))
+    {
+        const float v = ClampFloat((sx - layout.hpSliderLeft) / (layout.hpSliderRight - layout.hpSliderLeft), 0.0f, 1.0f);
+        customHpScale_ = CustomBossHpScaleMin + v * (CustomBossHpScaleMax - CustomBossHpScaleMin);
+        return true;
+    }
+    // キャラ選択（サイクル）。
+    if (PointInRect(sx, sy, layout.charButton.left, layout.charButton.top, layout.charButton.right, layout.charButton.bottom))
+    {
+        loadoutIndex_ = (loadoutIndex_ + 1) % static_cast<int>(Loadouts.size());
+        player_.weapon = Loadouts[loadoutIndex_].weapon;
+        player_.character = Loadouts[loadoutIndex_].character;
+        return true;
+    }
+    // プリセット呼出。
+    for (int i = 0; i < 3; ++i)
+    {
+        const UiRect& r = layout.presetLoad[i];
+        if (PointInRect(sx, sy, r.left, r.top, r.right, r.bottom))
+        {
+            if (customPresets_[i].used)
+            {
+                for (int k = 0; k < 5; ++k) customKitNormals_[k] = customPresets_[i].normals[k];
+                customBigMove_ = customPresets_[i].bigMove;
+                customHpScale_ = customPresets_[i].hpScale;
+                message_ = L"プリセット" + std::to_wstring(i + 1) + L" 呼出";
+                messageT_ = 1.2f;
+            }
+            return true;
+        }
+    }
+    // プリセット保存。
+    for (int i = 0; i < 3; ++i)
+    {
+        const UiRect& r = layout.presetSave[i];
+        if (PointInRect(sx, sy, r.left, r.top, r.right, r.bottom))
+        {
+            customPresets_[i].used = true;
+            for (int k = 0; k < 5; ++k) customPresets_[i].normals[k] = customKitNormals_[k];
+            customPresets_[i].bigMove = customBigMove_;
+            customPresets_[i].hpScale = customHpScale_;
+            SaveSettings();
+            message_ = L"プリセット" + std::to_wstring(i + 1) + L" 保存";
+            messageT_ = 1.2f;
+            return true;
+        }
+    }
+    // 戦う。
+    const UiRect& f = layout.fightButton;
+    if (PointInRect(sx, sy, f.left, f.top, f.right, f.bottom))
+    {
+        pendingGameMode_ = GameMode::CustomBoss;
+        difficultyIndex_ = static_cast<int>(Difficulty::Normal);
+        StartGameWithDifficulty(false);
+        return true;
+    }
+    return true; // パネル内クリックは消費
 }
 
 float* SweetsApp::MutableVolumeSliderValue(int index)
@@ -611,6 +732,7 @@ float* SweetsApp::MutableVolumeSliderValue(int index)
     case 1: return &bgmVolume_;
     case 2: return &seVolume_;
     case 3: return &uiVolume_;
+    case 4: return &shakeScale_;
     default: return nullptr;
     }
 }
@@ -623,6 +745,7 @@ float SweetsApp::VolumeSliderValue(int index) const
     case 1: return bgmVolume_;
     case 2: return seVolume_;
     case 3: return uiVolume_;
+    case 4: return shakeScale_;
     default: return 0.0f;
     }
 }
@@ -664,8 +787,8 @@ void SweetsApp::RestartCurrentRun()
 
 void SweetsApp::StartSelectedTitleItem()
 {
-    const TitleMenuItem item = static_cast<TitleMenuItem>(titleMenuIndex_);
-    if (item == TitleMenuItem::Settings)
+    // メニュー：0=ボス戦, 1=カスタムボス, 2=Credits, 3=設定
+    if (titleMenuIndex_ == 3)
     {
         settingsReturnScreen_ = Screen::Title;
         pauseMenuIndex_ = 2;
@@ -673,13 +796,19 @@ void SweetsApp::StartSelectedTitleItem()
         screen_ = Screen::Settings;
         return;
     }
-    if (item == TitleMenuItem::Credits)
+    if (titleMenuIndex_ == 2)
     {
         screen_ = Screen::Credits;
         return;
     }
-
-    pendingGameMode_ = item == TitleMenuItem::Endless ? GameMode::Endless : GameMode::Story;
+    if (titleMenuIndex_ == 1)
+    {
+        // カスタムボス：技セット設定画面へ。
+        screen_ = Screen::CustomBoss;
+        return;
+    }
+    // 0 = ボス戦：キャラ選択へ（選択後すぐボス戦開始）
+    pendingGameMode_ = GameMode::BossOnlyDebug;
     screen_ = Screen::CharacterSelect;
 }
 
@@ -701,7 +830,10 @@ bool SweetsApp::SelectLoadoutAt(float sx, float sy)
             loadoutIndex_ = i;
             player_.weapon = Loadouts[loadoutIndex_].weapon;
             player_.character = Loadouts[loadoutIndex_].character;
-            screen_ = Screen::DifficultySelect;
+            // 難易度選択は廃止。キャラを選んだら即ボス戦を開始（全キャラ選択可）。
+            pendingGameMode_ = GameMode::BossOnlyDebug;
+            difficultyIndex_ = static_cast<int>(Difficulty::Normal);
+            StartGameWithDifficulty(false);
             return true;
         }
     }
@@ -756,7 +888,7 @@ bool SweetsApp::SelectTitleMenuAt(float sx, float sy)
     const float gap = 12.0f;
     const float startX = 42.0f;
     const float top = std::max(112.0f, static_cast<float>(height_) * 0.18f);
-    for (int i = 0; i < 4; ++i)
+    for (int i = 0; i < 4; ++i) // ボス戦 / カスタムボス / Credits / 設定
     {
         const float y = top + i * (itemH + gap);
         if (sx >= startX && sx <= startX + itemW && sy >= y && sy <= y + itemH)

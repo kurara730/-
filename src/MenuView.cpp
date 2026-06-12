@@ -192,6 +192,71 @@ void SweetsApp::DrawHud()
             D2D1::RectF(l, t, r, t + 22.0f), textBrush_.Get());
     };
 
+    // === アイテムの残り時間ゲージ（右上）===
+    if (screen_ == Screen::Playing || screen_ == Screen::Paused)
+    {
+        const Player& ip = players_[0];
+        const float gx = static_cast<float>(width_) - 236.0f;
+        const float gw = 200.0f;
+        float gy = 56.0f;
+        auto timedGauge = [&](const wchar_t* name, float rem, float total, D2D1::ColorF c)
+        {
+            if (rem <= 0.0f || total <= 0.0f) return;
+            hudText(name, gx, gy - 2.0f, gx + gw, D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.95f));
+            fillBar(gx, gy + 17.0f, gw, 8.0f, rem / total, D2D1::ColorF(0.20f, 0.10f, 0.15f, 0.9f), c);
+            gy += 34.0f;
+        };
+        timedGauge(L"反射板巨大化", ip.itemShieldEnlargeT, ItemShieldEnlargeTime, D2D1::ColorF(0.45f, 0.75f, 1.0f, 0.95f));
+        timedGauge(L"ブリンク強化", ip.itemBlinkBoostT, ItemBlinkBoostTime, D2D1::ColorF(1.0f, 0.95f, 0.80f, 0.95f));
+        timedGauge(L"マグネット", ip.itemMagnetT, ItemMagnetTime, D2D1::ColorF(1.0f, 0.75f, 0.30f, 0.95f));
+        timedGauge(L"反射バフ x1.1", ip.itemReflectBuffT, ItemChargeBlinkBuffTime, D2D1::ColorF(0.70f, 0.45f, 1.0f, 0.95f));
+        timedGauge(L"ネガポジ", negaposiT_, ItemNegaPosiTime, D2D1::ColorF(1.0f, 0.30f, 0.50f, 0.95f));
+        auto heldLabel = [&](const std::wstring& s, D2D1::ColorF c)
+        {
+            hudText(s, gx, gy - 2.0f, gx + gw, c);
+            gy += 24.0f;
+        };
+        if (ip.chargeBlinkStacks > 0) heldLabel(L"色変化ブリンク x" + std::to_wstring(ip.chargeBlinkStacks), D2D1::ColorF(0.8f, 0.6f, 1.0f, 0.95f));
+        if (ip.hasOverloadCore) heldLabel(L"◆ オーバーロードコア", D2D1::ColorF(1.0f, 0.4f, 0.35f, 0.95f));
+        if (ip.hasPhoenix) heldLabel(L"羽 フェニックスの羽", D2D1::ColorF(1.0f, 0.8f, 0.3f, 0.95f));
+    }
+
+    // === アイテム取得テロップ（中央上の目立つバナー）===
+    if ((screen_ == Screen::Playing || screen_ == Screen::Paused) && itemTelopT_ > 0.0f && !itemTelopName_.empty())
+    {
+        const float elapsed = itemTelopLife_ - itemTelopT_;
+        float a = 1.0f;
+        if (elapsed < 0.22f) a = elapsed / 0.22f;            // フェードイン
+        else if (itemTelopT_ < 0.7f) a = itemTelopT_ / 0.7f; // フェードアウト
+        a = ClampFloat(a, 0.0f, 1.0f);
+        const float bw = 540.0f;
+        const float bh = 78.0f;
+        const float bx = (static_cast<float>(width_) - bw) * 0.5f;
+        const float by = static_cast<float>(height_) - 168.0f + (1.0f - a) * 16.0f; // 画面下に表示・少し下からスライドイン
+        const D2D1_RECT_F box = D2D1::RectF(bx, by, bx + bw, by + bh);
+        const Color ic = itemTelopColor_;
+        // 背景パネル＋カラー枠＋左アクセントバー。
+        textBrush_->SetColor(D2D1::ColorF(0.06f, 0.03f, 0.05f, 0.82f * a));
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(box, 10.0f, 10.0f), textBrush_.Get());
+        textBrush_->SetColor(D2D1::ColorF(ic.r, ic.g, ic.b, 0.95f * a));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(box, 10.0f, 10.0f), textBrush_.Get(), 2.6f);
+        d2dContext_->FillRectangle(D2D1::RectF(bx, by + 10.0f, bx + 8.0f, by + bh - 10.0f), textBrush_.Get());
+        // 「アイテム入手」ラベル＋名前＋効果。
+        textBrush_->SetColor(D2D1::ColorF(ic.r, ic.g, ic.b, 0.9f * a));
+        smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        d2dContext_->DrawTextW(L"ITEM GET", 8, smallFormat_.Get(),
+            D2D1::RectF(bx, by + 6.0f, bx + bw, by + 26.0f), textBrush_.Get());
+        hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.96f, 0.88f, a));
+        d2dContext_->DrawTextW(itemTelopName_.c_str(), static_cast<UINT32>(itemTelopName_.size()), hudFormat_.Get(),
+            D2D1::RectF(bx, by + 22.0f, bx + bw, by + 52.0f), textBrush_.Get());
+        textBrush_->SetColor(D2D1::ColorF(0.92f, 0.88f, 0.82f, 0.92f * a));
+        d2dContext_->DrawTextW(itemTelopDesc_.c_str(), static_cast<UINT32>(itemTelopDesc_.size()), smallFormat_.Get(),
+            D2D1::RectF(bx, by + 52.0f, bx + bw, by + 74.0f), textBrush_.Get());
+        hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    }
+
     for (int i = 0; i < MaxPlayers; ++i)
     {
         const Player& p = players_[i];
@@ -252,6 +317,13 @@ void SweetsApp::DrawHud()
                     : D2D1::ColorF(0.30f, 0.55f, 0.72f, 0.95f); // 回復中：暗いシアン
                 fillBar(bx, top + 5.0f, 22.0f, 14.0f, pct, barBg, fg);
             }
+            // シールドスタミナ（構えで減り、下ろすと回復。切れ中は赤）。
+            hudText(L"シールド", 762.0f, top + 3.0f, 800.0f, D2D1::ColorF(0.80f, 0.95f, 1.0f, 0.95f));
+            const float stamPct = ClampFloat(p.shieldStamina / ShieldStaminaMax, 0.0f, 1.0f);
+            const D2D1::ColorF stamFg = p.shieldExhausted
+                ? D2D1::ColorF(0.95f, 0.35f, 0.35f, 0.95f)   // 切れ中：赤
+                : D2D1::ColorF(0.45f, 0.85f, 1.0f, 0.96f);   // 通常：水色
+            fillBar(800.0f, top + 5.0f, 90.0f, 14.0f, stamPct, barBg, stamFg);
         }
 
         // ショートのヒートゲージ（自機の頭上。撃ち続けると伸び、レッドゾーンで最大火力、振り切るとオーバーヒート）
@@ -369,7 +441,7 @@ void SweetsApp::DrawHud()
             textBrush_->SetColor(D2D1::ColorF(1.0f, 0.95f, 0.85f, 0.95f));
             d2dContext_->DrawTextW(gaugeText.c_str(), static_cast<UINT32>(gaugeText.size()), smallFormat_.Get(), D2D1::RectF(left + bw - 70.0f, top + 22.0f, left + bw, top + 46.0f), textBrush_.Get());
         }
-        // ブレイクゲージ（反射ダメージの蓄積）。HPバーの直下に水色で薄く表示。満タン/ブレイク中は強調。
+        // 崩し（体幹）ゲージ。反射の蓄積でHPバー直下に水色表示。満タン/崩し中は強調。
         if (boss_.bossType != BossType::HiddenBoss && boss_.breakGaugeMax > 0.0f)
         {
             const float by = top + 15.0f;
@@ -384,7 +456,7 @@ void SweetsApp::DrawHud()
                 const float blink = 0.6f + 0.4f * std::sin(gameTime_ * 12.0f);
                 textBrush_->SetColor(D2D1::ColorF(1.0f, 0.85f, 0.30f, ClampFloat(blink, 0.0f, 1.0f)));
                 d2dContext_->FillRectangle(D2D1::RectF(left, by, left + bw, by + bhh), textBrush_.Get());
-                const wchar_t* bt = L"BREAK!";
+                const wchar_t* bt = L"崩し!";
                 textBrush_->SetColor(D2D1::ColorF(1.0f, 0.95f, 0.55f, 1.0f));
                 d2dContext_->DrawTextW(bt, static_cast<UINT32>(wcslen(bt)), smallFormat_.Get(), D2D1::RectF(left + bw * 0.5f - 40.0f, top + 22.0f, left + bw * 0.5f + 40.0f, top + 46.0f), textBrush_.Get());
             }
@@ -427,6 +499,28 @@ void SweetsApp::DrawHud()
                 d2dContext_->DrawTextW(lockText.c_str(), static_cast<UINT32>(lockText.size()), smallFormat_.Get(),
                     D2D1::RectF(left, top + 38.0f, left + bw, top + 62.0f), textBrush_.Get());
             }
+        }
+        // デバッグ（ボスラッシュ）：このボスの技セットと、技を即発動できるキー一覧を表示。
+        if (gameMode_ == GameMode::BossOnlyDebug)
+        {
+            std::wostringstream dbg;
+            dbg << L"[技] ";
+            if (boss_.kitTurret) dbg << L"タレット ";
+            if (boss_.kitBeam) dbg << L"ビーム ";
+            if (boss_.kitSplit) dbg << L"分裂 ";
+            if (boss_.kitFanSlash) dbg << L"扇 ";
+            if (boss_.kitShockwave) dbg << L"衝撃波 ";
+            const wchar_t* big = boss_.bigMove == static_cast<int>(BossBigMove::MegaBeam) ? L"薙払"
+                : (boss_.bigMove == static_cast<int>(BossBigMove::Meteor) ? L"隕石" : L"突進");
+            dbg << L"/ 大技:" << big;
+            const std::wstring kitText = dbg.str();
+            textBrush_->SetColor(D2D1::ColorF(0.65f, 0.95f, 0.78f, 0.95f));
+            d2dContext_->DrawTextW(kitText.c_str(), static_cast<UINT32>(kitText.size()), smallFormat_.Get(),
+                D2D1::RectF(left, top + 44.0f, left + bw, top + 66.0f), textBrush_.Get());
+            const wchar_t* keyHint = L"DBG発動: 1ビーム 2タレット 3分裂 4扇 5衝撃波 6薙払 7隕石 8突進 9つかみ";
+            textBrush_->SetColor(D2D1::ColorF(0.85f, 0.85f, 0.85f, 0.85f));
+            d2dContext_->DrawTextW(keyHint, static_cast<UINT32>(wcslen(keyHint)), smallFormat_.Get(),
+                D2D1::RectF(left, top + 64.0f, left + bw + 200.0f, top + 86.0f), textBrush_.Get());
         }
         // ブレイクコンボ表示（ブレイク中のみ）。ヒットを重ねるほど倍率が上がる。
         if (boss_.breakT > 0.0f && breakCombo_ > 0)
@@ -474,8 +568,36 @@ void SweetsApp::DrawHud()
     }
     if (!damageNumbers_.empty()) smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 
+    // 自機付近：ジャスト回避カウント（常時）とネガポジ状態を小さく表示。
+    if ((screen_ == Screen::Playing || screen_ == Screen::HiddenBoss) && !player_.downed)
+    {
+        const V2 ps = WorldToScreen(player_.pos);
+        smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        if (negaposiT_ > 0.0f)
+        {
+            wchar_t nb[64];
+            swprintf_s(nb, L"NEGA/POSI %.1f  蓄積 %d", negaposiT_, static_cast<int>(negaposiAccum_));
+            const float gl = 0.6f + 0.4f * std::sin(gameTime_ * 10.0f);
+            textBrush_->SetColor(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.6f));
+            d2dContext_->DrawTextW(nb, static_cast<UINT32>(wcslen(nb)), smallFormat_.Get(), D2D1::RectF(ps.x - 109.0f, ps.z - 61.0f, ps.x + 111.0f, ps.z - 41.0f), textBrush_.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
+            textBrush_->SetColor(D2D1::ColorF(0.88f, 0.6f, 1.0f, ClampFloat(gl, 0.0f, 1.0f)));
+            d2dContext_->DrawTextW(nb, static_cast<UINT32>(wcslen(nb)), smallFormat_.Get(), D2D1::RectF(ps.x - 110.0f, ps.z - 62.0f, ps.x + 110.0f, ps.z - 42.0f), textBrush_.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
+        }
+        else
+        {
+            wchar_t jb[32];
+            swprintf_s(jb, L"反射 %d/%d", reflectCount_, NegaPosiReflectReq);
+            const bool nearReady = reflectCount_ >= NegaPosiReflectReq - 1;
+            textBrush_->SetColor(D2D1::ColorF(0.0f, 0.0f, 0.0f, 0.55f));
+            d2dContext_->DrawTextW(jb, static_cast<UINT32>(wcslen(jb)), smallFormat_.Get(), D2D1::RectF(ps.x - 59.0f, ps.z - 57.0f, ps.x + 61.0f, ps.z - 39.0f), textBrush_.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
+            textBrush_->SetColor(nearReady ? D2D1::ColorF(1.0f, 0.7f, 0.9f, 0.95f) : D2D1::ColorF(1.0f, 0.9f, 0.45f, 0.85f));
+            d2dContext_->DrawTextW(jb, static_cast<UINT32>(wcslen(jb)), smallFormat_.Get(), D2D1::RectF(ps.x - 60.0f, ps.z - 58.0f, ps.x + 60.0f, ps.z - 40.0f), textBrush_.Get(), D2D1_DRAW_TEXT_OPTIONS_NONE);
+        }
+        smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    }
+
     textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.88f));
-    const wchar_t* help = L"WASD/矢印: 移動  |  左クリック: 通常弾  |  Space: ブリンク回避  |  右クリック長押し: チャージ  |  Q: 必殺  |  P: 一時停止";
+    const wchar_t* help = L"WASD/矢印: 移動  |  左クリック: 反射シールド  |  右クリック: リフレクションコア設置(チャージ満タンで)  |  Space: ブリンク回避  |  E: 必殺  |  P: 一時停止";
     d2dContext_->DrawTextW(help, static_cast<UINT32>(wcslen(help)), smallFormat_.Get(),
         D2D1::RectF(18.0f, static_cast<float>(height_) - 34.0f, static_cast<float>(width_) - 18.0f, static_cast<float>(height_) - 8.0f), textBrush_.Get());
 
@@ -561,18 +683,19 @@ void SweetsApp::DrawHud()
         d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), titleFormat_.Get(),
             D2D1::RectF(38.0f, 34.0f, dividerX - 22.0f, 92.0f), textBrush_.Get());
 
-        const std::array<const wchar_t*, 4> items{ L"Story", L"Endless", L"Credits", L"設定 (音量)" };
+        const std::array<const wchar_t*, 4> items{ L"ボス戦", L"カスタムボス", L"Credits", L"設定 (音量)" };
         const float itemW = 248.0f;
         const float itemH = 58.0f;
         const float gap = 12.0f;
         const float menuX = 42.0f;
         const float menuTop = std::max(112.0f, static_cast<float>(height_) * 0.18f);
-        for (int i = 0; i < 4; ++i)
+        for (int i = 0; i < static_cast<int>(items.size()); ++i)
         {
             const float y = menuTop + i * (itemH + gap);
             const D2D1_RECT_F rect = D2D1::RectF(menuX, y, menuX + itemW, y + itemH);
             const bool hover = PointInRect(mouseX_, mouseY_, rect.left, rect.top, rect.right, rect.bottom);
-            const bool active = hover;
+            // マウスのホバーに加え、コントローラの上下選択（titleMenuIndex_）もハイライトする。
+            const bool active = hover || i == titleMenuIndex_;
             if (active)
             {
                 textBrush_->SetColor(OldSelectFill(true));
@@ -611,6 +734,10 @@ void SweetsApp::DrawHud()
     if (screen_ == Screen::CharacterSelect)
     {
         DrawCharacterSelect();
+    }
+    else if (screen_ == Screen::CustomBoss)
+    {
+        DrawCustomBossMenu();
     }
     else if (screen_ == Screen::Credits)
     {
@@ -918,8 +1045,8 @@ void SweetsApp::DrawSettingsMenu()
 
     hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
-    const std::array<const wchar_t*, 4> labels{ L"全体", L"BGM", L"効果音", L"UI" };
-    for (int i = 0; i < 4; ++i)
+    const std::array<const wchar_t*, 5> labels{ L"全体", L"BGM", L"効果音", L"UI", L"画面振動" };
+    for (int i = 0; i < 5; ++i)
     {
         const float y = top + 110.0f + i * 44.0f;
         const UiRect& hit = layout.volumeSliders[i];
@@ -944,7 +1071,7 @@ void SweetsApp::DrawSettingsMenu()
     }
 
     // 攻撃方向(照準モード)。マウスクリックで選択(ゲーム中は T キーでも切替可)。
-    const float aimTop = top + 110.0f + 4 * 44.0f + 8.0f;
+    const float aimTop = top + 110.0f + 5 * 44.0f + 8.0f;
     textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.92f));
     const wchar_t* aimLabel = L"自機の攻撃方向";
     d2dContext_->DrawTextW(aimLabel, static_cast<UINT32>(wcslen(aimLabel)), smallFormat_.Get(),
@@ -993,11 +1120,189 @@ void SweetsApp::DrawSettingsMenu()
     d2dContext_->DrawTextW(fullscreenText, static_cast<UINT32>(wcslen(fullscreenText)), smallFormat_.Get(),
         D2D1::RectF(fullscreenRect.left, fullscreenRect.top + 7.0f, fullscreenRect.right, fullscreenRect.bottom), textBrush_.Get());
 
+    // ダメージ数値表示のON/OFFトグル。
+    const UiRect& dmgHit = layout.damageNumberToggle;
+    const D2D1_RECT_F dmgRect = D2D1::RectF(dmgHit.left, dmgHit.top, dmgHit.right, dmgHit.bottom);
+    const bool dmgHover = PointInRect(mouseX_, mouseY_, dmgHit.left, dmgHit.top, dmgHit.right, dmgHit.bottom);
+    const bool dmgActive = dmgHover || showDamageNumbers_;
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.92f));
+    const wchar_t* dmgLabel = L"ダメージ数値";
+    d2dContext_->DrawTextW(dmgLabel, static_cast<UINT32>(wcslen(dmgLabel)), smallFormat_.Get(),
+        D2D1::RectF(left + 38.0f, dmgHit.top + 6.0f, left + 180.0f, dmgHit.bottom), textBrush_.Get());
+    textBrush_->SetColor(OldSelectFill(dmgActive));
+    d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(dmgRect, 6.0f, 6.0f), textBrush_.Get());
+    textBrush_->SetColor(OldSelectStroke(dmgActive));
+    d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(dmgRect, 6.0f, 6.0f), textBrush_.Get(), dmgActive ? 2.2f : 1.0f);
+    const wchar_t* dmgText = showDamageNumbers_ ? L"ON" : L"OFF";
+    textBrush_->SetColor(OldSelectText(dmgActive));
+    d2dContext_->DrawTextW(dmgText, static_cast<UINT32>(wcslen(dmgText)), smallFormat_.Get(),
+        D2D1::RectF(dmgRect.left, dmgRect.top + 7.0f, dmgRect.right, dmgRect.bottom), textBrush_.Get());
+
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
     textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f));
     const wchar_t* hint = L"スライダーと攻撃方向をクリックで操作。Esc / Backspaceで戻る";
     d2dContext_->DrawTextW(hint, static_cast<UINT32>(wcslen(hint)), smallFormat_.Get(),
         D2D1::RectF(left, top + panelH - 40.0f, left + panelW, top + panelH - 12.0f), textBrush_.Get());
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+}
+
+// カスタムボス設定画面。通常技ON/OFF・大技1択・HPスライダー・キャラ・プリセット・戦う。
+// レイアウトは BuildCustomBossLayout() を共有して Draw とクリックで一致させる。
+void SweetsApp::DrawCustomBossMenu()
+{
+    textBrush_->SetColor(D2D1::ColorF(0.05f, 0.02f, 0.04f, 1.0f));
+    d2dContext_->FillRectangle(D2D1::RectF(0, 0, static_cast<float>(width_), static_cast<float>(height_)), textBrush_.Get());
+
+    const CustomBossLayout layout = BuildCustomBossLayout();
+    const float left = layout.panel.left;
+    const float top = layout.panel.top;
+    const float panelW = layout.panel.right - layout.panel.left;
+    const float panelH = layout.panel.bottom - layout.panel.top;
+    const D2D1_RECT_F panel = D2D1::RectF(layout.panel.left, layout.panel.top, layout.panel.right, layout.panel.bottom);
+    textBrush_->SetColor(D2D1::ColorF(0.10f, 0.045f, 0.075f, 0.96f));
+    d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(panel, 8.0f, 8.0f), textBrush_.Get());
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, 0.95f));
+    d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(panel, 8.0f, 8.0f), textBrush_.Get(), 2.0f);
+
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.86f, 0.36f, 1.0f));
+    const wchar_t* title = L"カスタムボス";
+    d2dContext_->DrawTextW(title, static_cast<UINT32>(wcslen(title)), hudFormat_.Get(),
+        D2D1::RectF(left, top + 14.0f, left + panelW, top + 50.0f), textBrush_.Get());
+    hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    textBrush_->SetColor(D2D1::ColorF(0.65f, 0.95f, 0.78f, 1.0f));
+    d2dContext_->DrawTextW(L"通常技 (好きなだけ)", 11, smallFormat_.Get(),
+        D2D1::RectF(left + 40.0f, layout.normalToggles[0].top - 22.0f, left + panelW - 40.0f, layout.normalToggles[0].top), textBrush_.Get());
+
+    const std::array<const wchar_t*, 5> normals{ L"タレット", L"レーザー砲", L"分裂", L"扇状斬撃", L"チャージ衝撃波" };
+    for (int i = 0; i < 5; ++i)
+    {
+        const UiRect& r = layout.normalToggles[i];
+        const D2D1_RECT_F rect = D2D1::RectF(r.left, r.top, r.right, r.bottom);
+        const bool on = customKitNormals_[i];
+        const bool hover = PointInRect(mouseX_, mouseY_, r.left, r.top, r.right, r.bottom);
+        textBrush_->SetColor(OldSelectFill(on || hover));
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get());
+        textBrush_->SetColor(OldSelectStroke(on || hover));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get(), on ? 2.4f : 1.0f);
+        textBrush_->SetColor(OldSelectText(on || hover));
+        d2dContext_->DrawTextW(normals[i], static_cast<UINT32>(wcslen(normals[i])), smallFormat_.Get(),
+            D2D1::RectF(rect.left + 16.0f, rect.top + 6.0f, rect.right - 60.0f, rect.bottom), textBrush_.Get());
+        const wchar_t* state = on ? L"ON" : L"OFF";
+        d2dContext_->DrawTextW(state, static_cast<UINT32>(wcslen(state)), smallFormat_.Get(),
+            D2D1::RectF(rect.right - 52.0f, rect.top + 6.0f, rect.right - 12.0f, rect.bottom), textBrush_.Get());
+    }
+
+    // 大技
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.6f, 0.45f, 1.0f));
+    d2dContext_->DrawTextW(L"大技 (1つ)", 7, smallFormat_.Get(),
+        D2D1::RectF(left + 40.0f, layout.bigButtons[0].top - 22.0f, left + panelW - 40.0f, layout.bigButtons[0].top), textBrush_.Get());
+    const std::array<const wchar_t*, 3> bigs{ L"極太薙ぎ払い", L"隕石", L"突進" };
+    for (int i = 0; i < 3; ++i)
+    {
+        const UiRect& r = layout.bigButtons[i];
+        const D2D1_RECT_F rect = D2D1::RectF(r.left, r.top, r.right, r.bottom);
+        const bool sel = customBigMove_ == i;
+        const bool hover = PointInRect(mouseX_, mouseY_, r.left, r.top, r.right, r.bottom);
+        textBrush_->SetColor(OldSelectFill(sel || hover));
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get());
+        textBrush_->SetColor(OldSelectStroke(sel || hover));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get(), sel ? 2.4f : 1.0f);
+        textBrush_->SetColor(OldSelectText(sel || hover));
+        d2dContext_->DrawTextW(bigs[i], static_cast<UINT32>(wcslen(bigs[i])), smallFormat_.Get(),
+            D2D1::RectF(rect.left + 6.0f, rect.top + 8.0f, rect.right, rect.bottom), textBrush_.Get());
+    }
+
+    // HPスライダー
+    {
+        const float y = layout.hpSliderY;
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.92f));
+        d2dContext_->DrawTextW(L"ボスHP", 5, smallFormat_.Get(),
+            D2D1::RectF(left + 40.0f, y - 10.0f, layout.hpSliderLeft - 8.0f, y + 14.0f), textBrush_.Get());
+        textBrush_->SetColor(D2D1::ColorF(0.24f, 0.11f, 0.17f, 0.94f));
+        d2dContext_->FillRectangle(D2D1::RectF(layout.hpSliderLeft, y, layout.hpSliderRight, y + 8.0f), textBrush_.Get());
+        const float v = ClampFloat((customHpScale_ - CustomBossHpScaleMin) / (CustomBossHpScaleMax - CustomBossHpScaleMin), 0.0f, 1.0f);
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.55f, 0.45f, 0.95f));
+        d2dContext_->FillRectangle(D2D1::RectF(layout.hpSliderLeft, y, layout.hpSliderLeft + (layout.hpSliderRight - layout.hpSliderLeft) * v, y + 8.0f), textBrush_.Get());
+        const float knob = layout.hpSliderLeft + (layout.hpSliderRight - layout.hpSliderLeft) * v;
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.82f, 0.28f, 1.0f));
+        d2dContext_->FillEllipse(D2D1::Ellipse(D2D1::Point2F(knob, y + 4.0f), 7.0f, 7.0f), textBrush_.Get());
+        std::wostringstream hp; hp.precision(1); hp << std::fixed << L"x" << customHpScale_;
+        const std::wstring hpText = hp.str();
+        d2dContext_->DrawTextW(hpText.c_str(), static_cast<UINT32>(hpText.size()), smallFormat_.Get(),
+            D2D1::RectF(layout.hpSliderRight + 10.0f, y - 10.0f, left + panelW - 8.0f, y + 14.0f), textBrush_.Get());
+    }
+
+    // キャラ
+    const wchar_t* charNames[4] = { L"ショート(威力)", L"チョコ(増殖)", L"チーズ(連鎖)", L"ロール(渦)" };
+    const int charIdx = static_cast<int>(Loadouts[std::max(0, std::min(loadoutIndex_, static_cast<int>(Loadouts.size()) - 1))].character);
+    {
+        const UiRect& r = layout.charButton;
+        const D2D1_RECT_F rect = D2D1::RectF(r.left, r.top, r.right, r.bottom);
+        const bool hover = PointInRect(mouseX_, mouseY_, r.left, r.top, r.right, r.bottom);
+        textBrush_->SetColor(OldSelectFill(hover));
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get());
+        textBrush_->SetColor(OldSelectStroke(hover));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 6.0f, 6.0f), textBrush_.Get(), 1.4f);
+        textBrush_->SetColor(OldSelectText(hover));
+        std::wstring charText = std::wstring(L"キャラ: ") + charNames[std::max(0, std::min(charIdx, 3))] + L"  (クリックで変更)";
+        d2dContext_->DrawTextW(charText.c_str(), static_cast<UINT32>(charText.size()), smallFormat_.Get(),
+            D2D1::RectF(rect.left + 16.0f, rect.top + 6.0f, rect.right, rect.bottom), textBrush_.Get());
+    }
+
+    // プリセット（呼出/保存）
+    textBrush_->SetColor(D2D1::ColorF(0.7f, 0.85f, 1.0f, 0.95f));
+    d2dContext_->DrawTextW(L"プリセット", 5, smallFormat_.Get(),
+        D2D1::RectF(left + 40.0f, layout.presetLoad[0].top - 22.0f, left + panelW - 40.0f, layout.presetLoad[0].top), textBrush_.Get());
+    for (int i = 0; i < 3; ++i)
+    {
+        const UiRect& lr = layout.presetLoad[i];
+        const D2D1_RECT_F lrect = D2D1::RectF(lr.left, lr.top, lr.right, lr.bottom);
+        const bool lhover = PointInRect(mouseX_, mouseY_, lr.left, lr.top, lr.right, lr.bottom);
+        const bool used = customPresets_[i].used;
+        textBrush_->SetColor(OldSelectFill(lhover));
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(lrect, 6.0f, 6.0f), textBrush_.Get());
+        textBrush_->SetColor(OldSelectStroke(lhover));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(lrect, 6.0f, 6.0f), textBrush_.Get(), used ? 2.0f : 1.0f);
+        textBrush_->SetColor(used ? OldSelectText(lhover) : D2D1::ColorF(0.6f, 0.55f, 0.58f, 0.8f));
+        std::wstring lt = std::wstring(L"呼出 ") + std::to_wstring(i + 1) + (used ? L"" : L" (空)");
+        d2dContext_->DrawTextW(lt.c_str(), static_cast<UINT32>(lt.size()), smallFormat_.Get(),
+            D2D1::RectF(lrect.left + 10.0f, lrect.top + 5.0f, lrect.right, lrect.bottom), textBrush_.Get());
+
+        const UiRect& sr = layout.presetSave[i];
+        const D2D1_RECT_F srect = D2D1::RectF(sr.left, sr.top, sr.right, sr.bottom);
+        const bool shover = PointInRect(mouseX_, mouseY_, sr.left, sr.top, sr.right, sr.bottom);
+        textBrush_->SetColor(shover ? D2D1::ColorF(0.30f, 0.55f, 0.85f, 0.95f) : D2D1::ColorF(0.18f, 0.30f, 0.50f, 0.9f));
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(srect, 6.0f, 6.0f), textBrush_.Get());
+        textBrush_->SetColor(D2D1::ColorF(0.85f, 0.92f, 1.0f, 0.95f));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(srect, 6.0f, 6.0f), textBrush_.Get(), 1.0f);
+        std::wstring st = std::wstring(L"保存 ") + std::to_wstring(i + 1);
+        d2dContext_->DrawTextW(st.c_str(), static_cast<UINT32>(st.size()), smallFormat_.Get(),
+            D2D1::RectF(srect.left + 10.0f, srect.top + 4.0f, srect.right, srect.bottom), textBrush_.Get());
+    }
+
+    // 戦う
+    {
+        const UiRect& r = layout.fightButton;
+        const D2D1_RECT_F rect = D2D1::RectF(r.left, r.top, r.right, r.bottom);
+        const bool hover = PointInRect(mouseX_, mouseY_, r.left, r.top, r.right, r.bottom);
+        textBrush_->SetColor(hover ? D2D1::ColorF(1.0f, 0.45f, 0.3f, 1.0f) : D2D1::ColorF(0.85f, 0.30f, 0.22f, 0.95f));
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get());
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.95f, 0.85f, 1.0f));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(rect, 8.0f, 8.0f), textBrush_.Get(), 2.0f);
+        hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        d2dContext_->DrawTextW(L"戦う", 2, hudFormat_.Get(),
+            D2D1::RectF(rect.left, rect.top + 3.0f, rect.right, rect.bottom), textBrush_.Get());
+        hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    }
+
+    smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+    textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f));
+    const wchar_t* hint2 = L"技を選び「戦う」。プリセットで保存/呼出。Esc / Backspaceで戻る";
+    d2dContext_->DrawTextW(hint2, static_cast<UINT32>(wcslen(hint2)), smallFormat_.Get(),
+        D2D1::RectF(left, top + panelH - 28.0f, left + panelW, top + panelH - 8.0f), textBrush_.Get());
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 }
 

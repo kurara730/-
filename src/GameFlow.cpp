@@ -68,6 +68,7 @@ void SweetsApp::ResetGame()
     enemies_.reserve(256);
     enemySerial_ = 0;
     shots_.clear();
+    meteors_.clear();
     slashes_.clear();
     pickups_.clear();
     particles_.clear();
@@ -75,6 +76,7 @@ void SweetsApp::ResetGame()
     swordEffectVisuals_.clear();
     obstacles_.clear();
     wave_ = 1;
+    gauntletIndex_ = 0;     // ボスラッシュのカウントを最初から
     score_ = 0;
     reflectKills_ = 0;
     gameTime_ = 0.0f;
@@ -87,9 +89,20 @@ void SweetsApp::ResetGame()
     justZoomLife_ = 0.0f;
     shakeT_ = 0.0f;
     shakeMag_ = 0.0f;
+    reflectCount_ = 0;
+    beamWasReflecting_ = false;
+    negaposiT_ = 0.0f;
+    negaposiAccum_ = 0.0f;
+    negaposiCount_ = 0;
     player_.blinkCharges = BlinkMaxCharges;
     player_.blinkRechargeT = 0.0f;
-    for (auto& pl : players_) pl.grabbedT = 0.0f;
+    // ゲーム開始時の入力エッジを初期化する。パッドのAボタン（決定＝ブリンク兼用）や
+    // スペースを押したまま開始しても、開始直後にブリンクが暴発しないようにする。
+    prevSpace_ = true;
+    prevMouseLeft_ = mouseLeft_;
+    for (auto& pl : players_) { pl.grabbedT = 0.0f; pl.coreCharge = 0.0f; pl.reflectShieldT = 0.0f; pl.reflectShieldCd = 0.0f; pl.shieldStamina = ShieldStaminaMax; pl.shieldExhausted = false; pl.reflectPerfectT = 0.0f; pl.rollVortexStock = 0;
+        pl.itemShieldEnlargeT = 0.0f; pl.itemBlinkBoostT = 0.0f; pl.itemMagnetT = 0.0f; pl.itemReflectBuffT = 0.0f;
+        pl.chargeBlinkStacks = 0; pl.hasOverloadCore = false; pl.hasPhoenix = false; pl.reflectSizeMul = 1.0f; pl.reflectDmgMul = 1.0f; }
     clearTimer_ = 0.0f;
     hiddenIntroT_ = 0.0f;
     hiddenBossT_ = 0.0f;
@@ -125,6 +138,9 @@ void SweetsApp::ResetGame()
     pendingHiddenBoss_ = false;
     message_ = L"";
     messageT_ = 0.0f;
+    itemTelopT_ = 0.0f;
+    itemTelopName_.clear();
+    itemTelopDesc_.clear();
     screenFlashT_ = 0.0f;
     combatNotices_.clear();
     damageNumbers_.clear();
@@ -187,9 +203,10 @@ void SweetsApp::StartWave()
 {
     waveStarted_ = true;
     // デバッグステージは常にボスウェーブ（雑魚なし・ボス即出現）。
-    bossWave_ = (wave_ % 3 == 0) || gameMode_ == GameMode::BossOnlyDebug;
+    bossWave_ = (wave_ % 3 == 0) || gameMode_ == GameMode::BossOnlyDebug || gameMode_ == GameMode::CustomBoss;
     enemies_.clear();
     shots_.clear();
+    meteors_.clear();
     slashes_.clear();
     boss_ = {};
     BuildStage();
@@ -234,6 +251,35 @@ void SweetsApp::ClearWave()
             }
         }
     }
+    // カスタムボス：単体戦。倒したらクリア。
+    if (gameMode_ == GameMode::CustomBoss)
+    {
+        message_ = L"カスタムボス撃破!";
+        messageT_ = 6.0f;
+        clearTimer_ = 0.0f;
+        screen_ = Screen::Clear;
+        return;
+    }
+    // ボスラッシュ（連続戦）：GauntletBossCount体倒すとクリア。未達なら次のボスを出す。
+    if (gameMode_ == GameMode::BossOnlyDebug)
+    {
+        if (gauntletIndex_ >= GauntletBossCount)
+        {
+            SaveProgress();
+            AddScore(50000, &player_);
+            message_ = L"ボスラッシュ制覇!";
+            messageT_ = 6.0f;
+            clearTimer_ = 0.0f;
+            screen_ = Screen::Clear;
+            return;
+        }
+        // 次のボスへ。wave_ を進めて見た目・耐久を変え、ステージを作り直す。
+        wave_ += 3;
+        StartWave();
+        message_ = std::wstring(L"BOSS ") + std::to_wstring(gauntletIndex_ + 1) + L" / " + std::to_wstring(GauntletBossCount);
+        messageT_ = 2.2f;
+        return;
+    }
     if (wave_ >= FinalWave && gameMode_ == GameMode::Story)
     {
         pendingHiddenBoss_ = difficulty_ == Difficulty::Lunatic && !hiddenBossPractice_;
@@ -259,22 +305,45 @@ void SweetsApp::ClearWave()
 // 表示は GameplayView.cpp 側で形も変え、敵と見分けやすくしています。
 void SweetsApp::SpawnPickupAt(V2 pos)
 {
+    // 反射ゲーム向けの新アイテムをレア度の重み付きで抽選する。
+    // 通常＝出やすい / レア＝たまに / 激レア＝ごく稀。重み0にすれば出現しない。
+    struct Weighted { PickupType type; int weight; };
+    static const Weighted table[] = {
+        { PickupType::HealKit,        100 }, // 通常
+        { PickupType::ShieldEnlarge,  100 },
+        { PickupType::BlinkBoost,     100 },
+        { PickupType::ReflectMagnet,  100 },
+        { PickupType::ChargeBlink,    100 },
+        { PickupType::NegaPosiCandy,   22 }, // レア
+        { PickupType::OverloadCore,    22 },
+        { PickupType::PhoenixFeather,   5 }, // 激レア
+    };
+    int total = 0;
+    for (const auto& w : table) total += w.weight;
+    if (total <= 0) return;
+    int roll = RandInt(0, total - 1);
+    PickupType chosen = table[0].type;
+    for (const auto& w : table)
+    {
+        if (roll < w.weight) { chosen = w.type; break; }
+        roll -= w.weight;
+    }
+
     Pickup p{};
     p.pos = pos;
     ClampInside(p.pos, 1.0f);
-    p.type = RandInt(0, 9);
-    p.pickupType = static_cast<PickupType>(p.type);
+    p.pickupType = chosen;
+    p.type = static_cast<int>(p.pickupType);
     switch (p.pickupType)
     {
-    case PickupType::Attack: p.color = Berry; break;
-    case PickupType::Slow: p.color = Sky; break;
-    case PickupType::Invincible: p.color = Cream; break;
-    case PickupType::Magnet: p.color = Mint; break;
-    case PickupType::BombDamage: p.color = Red; break;
-    case PickupType::Heal: p.color = Mint; break;
-    case PickupType::UltFull: p.color = Grape; break;
-    case PickupType::Spread: p.color = Gold; break;
-    case PickupType::Speed: p.color = Sky; break;
+    case PickupType::HealKit: p.color = Mint; break;
+    case PickupType::ShieldEnlarge: p.color = Sky; break;
+    case PickupType::BlinkBoost: p.color = Cream; break;
+    case PickupType::ReflectMagnet: p.color = Gold; break;
+    case PickupType::ChargeBlink: p.color = Grape; break;
+    case PickupType::NegaPosiCandy: p.color = Berry; break;
+    case PickupType::OverloadCore: p.color = Red; break;
+    case PickupType::PhoenixFeather: p.color = Gold; break;
     default: p.color = Sky; break;
     }
     SyncPickup3D(p);
@@ -290,6 +359,9 @@ void SweetsApp::SpawnPickup()
 // screen_ ごとに必要な処理だけを動かすことで、メニュー背景でゲームが進まないようにしています。
 void SweetsApp::Update(float dt)
 {
+    // コントローラ入力は画面更新の前に取り込み、ゲーム中の移動/攻撃フラグやメニュー操作へ反映する。
+    UpdateGamepad(dt);
+
     if (screen_ == Screen::BootLoading)
     {
         UpdateBootLoading(dt);
@@ -478,12 +550,22 @@ void SweetsApp::UpdateAudioForScreen()
     case Screen::Title:
     case Screen::CharacterSelect:
     case Screen::DifficultySelect:
+    case Screen::CustomBoss:
     case Screen::Credits:
         audio_.PlayLoop(MusicTrack::Title, L"assets/audio/333_BPM177.mp3");
         break;
     case Screen::Playing:
     case Screen::Paused:
-        audio_.PlayLoop(MusicTrack::Gameplay, L"assets/audio/233_BPM163.mp3");
+        // キャラ選択から進んだ先のボス戦BGM。東方イメージの楽曲を置けば差し替わる。
+        // 無ければ従来曲にフォールバックするので、ファイル未設置でも無音にならない。
+        if (AssetExists(L"assets/audio/boss_touhou.mp3"))
+        {
+            audio_.PlayLoop(MusicTrack::Gameplay, L"assets/audio/boss_touhou.mp3");
+        }
+        else
+        {
+            audio_.PlayLoop(MusicTrack::Gameplay, L"assets/audio/233_BPM163.mp3");
+        }
         break;
     case Screen::GameOver:
         audio_.PlayLoop(MusicTrack::GameOver, L"assets/audio/ruins.mp3");
@@ -571,7 +653,33 @@ void SweetsApp::UpdatePlaying(float dt)
 
     gameTime_ += dt;
     if (messageT_ > 0.0f) messageT_ -= dt;
+    if (itemTelopT_ > 0.0f) itemTelopT_ -= dt;
     if (slowT_ > 0.0f) slowT_ -= dt;
+    // ネガポジ：残り時間を減らし、終了時に蓄積ダメージをまとめてボスへお返しする。
+    if (negaposiT_ > 0.0f)
+    {
+        negaposiT_ -= dt;
+        if (negaposiT_ <= 0.0f)
+        {
+            negaposiT_ = 0.0f; // 先に0にしてからお返し（DamageBossが反転で回復にならないように）
+            const float mul = NegaPosiPaybackBase + static_cast<float>(std::max(0, negaposiCount_ - 1)) * NegaPosiPaybackPerCount;
+            const float payback = negaposiAccum_ * mul;
+            negaposiAccum_ = 0.0f;
+            if (boss_.active && payback > 0.0f)
+            {
+                DamageBoss(payback, BossDamageKind::ReflectedShot, true, 0);
+                Burst(boss_.pos, Sky, 90);
+                screenFlashT_ = 0.3f;
+                screenFlashLife_ = screenFlashT_;
+                screenFlashColor_ = Sky;
+                shakeMag_ = 0.8f; shakeLife_ = 0.45f; shakeT_ = shakeLife_;
+                message_ = L"お返し! " + std::to_wstring(static_cast<int>(payback)) + L" (x" +
+                    std::to_wstring(static_cast<int>(mul * 10) / 10) + L"." + std::to_wstring(static_cast<int>(mul * 10) % 10) + L")";
+                messageT_ = std::max(messageT_, 2.0f);
+                audio_.PlaySoundEffect(SoundEffect::UltimateSlash);
+            }
+        }
+    }
     if (player_.inv > 0.0f) player_.inv -= dt;
     if (player_.shieldT > 0.0f) player_.shieldT -= dt;
     if (player_.bombT > 0.0f) player_.bombT -= dt;
@@ -590,6 +698,8 @@ void SweetsApp::UpdatePlaying(float dt)
     UpdateCoopPlayers(dt);
     UpdateEnemies(dt);
     UpdateBoss(dt);
+    UpdateMeteors(dt);       // 隕石（大技）の予兆→着弾
+    UpdateReflectShield(dt); // 左クリックの反射シールド（UpdateShotsの前に反射を確定）
     UpdateShots(dt);
     ReleaseCaughtIfNoBomb();
     UpdatePickups(dt);

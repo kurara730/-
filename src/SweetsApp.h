@@ -99,6 +99,11 @@ private:
     Player* FindNearestPlayer(V2 pos);
     const Player* FindNearestPlayer(V2 pos) const;
     V2 FindNearestEnemyOrBoss(V2 pos) const;
+    // チーズ連鎖反射：from から最も近い「ボス側の的」（ボス本体/起動中タレット/分身）を返す。
+    // exclude 付近（直前にヒットした的）は除外。見つかれば true。
+    bool FindNearestChainTarget(V2 from, V2 exclude, V2& out) const;
+    // チーズ連鎖反射：ヒットした的(hitPos)から次の的へ弾を飛ばす。ホップしたら true。
+    bool TryChainHop(Shot& s, V2 hitPos);
 
     // --- 照準と 2D/3D ルール ---
     // 攻撃方向はカーソル、移動方向、近い敵オートのいずれかで決まります。
@@ -107,6 +112,7 @@ private:
     V2 ResolvePlayerAimPoint(const Player& p, int ownerIndex, V2 cursorPoint, float range) const;
     // チョコウォールを最大 maxWalls 枚に保つ。超える場合は一番古い壁の ttl を 0 にして既存の除去パスへ任せる（FIFO）。
     void EnforceChocoWallLimit(size_t maxWalls);
+    void EnforceReflectionCoreLimit(size_t maxCores); // 恒久コアの最大数を保つ（古い順に撤去）
     // 指定位置が「危険」かを判定（ジャスト回避用）。迫る敵弾・ボスの照射ビーム・ダメージ床・地中噴出など。
     bool IsBlinkJustDodge(V2 pos) const;
     bool Use3DRules() const;
@@ -155,6 +161,8 @@ private:
     void UpdatePlayer(float dt);
     void UpdateEnemies(float dt);
     void UpdateBoss(float dt);
+    void UpdateBossTurrets(float dt); // タレットはボスのダウン中も常時稼働
+    void UpdateMeteors(float dt);     // 隕石（大技）の予兆→着弾処理
     void UpdateShots(float dt);
     void ReleaseCaughtIfNoBomb();
     void UpdatePickups(float dt);
@@ -169,6 +177,8 @@ private:
     void DamageBoss(float dmg, BossDamageKind kind, bool reflected, int ownerIndex);
     bool DamageBossArm(int index, float dmg); // 腕（赤）にダメージ。HPが尽きると一定時間消滅。命中したらtrue
     void SpawnDamageNumber(V2 pos, float value, Color color, bool crit); // ダメージ数値を湧かせる
+    void RegisterReflectSuccess(); // リフレクションコアの反射成功を記録し、規定回数でネガポジへ突入
+    void UpdateReflectShield(float dt); // 左クリックの反射シールド：前方の攻撃を反射（キャラ別効果）
     void Burst(V2 p, Color c, int count);
     void PlayCombatEffect(const std::wstring& id, V2 position, float y, float rotationY, float scale, Color fallbackColor, int fallbackCount);
     void ReflectEnemyShotsNear(V2 center, float radius, int ownerIndex, CharacterType source, Color color, float power);
@@ -233,6 +243,10 @@ private:
     float GameplayViewHalfHeight() const;
 
     void OnKeyDown(WPARAM key);
+    // コントローラ入力の毎フレーム処理。1P操作（移動/攻撃/必殺/ポーズ）とメニュー操作を行います。
+    void UpdateGamepad(float dt);
+    // 画面状態に応じたクリック（決定）処理。マウス左クリックとパッドのAボタンで共通利用します。
+    bool HandleScreenClick(float sx, float sy);
     bool HandleDebugKey(WPARAM key);
     bool HandleDebugClick(float sx, float sy);
     bool HandleDebugDrag(float sx, float sy);
@@ -244,6 +258,9 @@ private:
     float DebugFxDisplayValue(int index) const;
     void RestartCurrentRun();
     void StartSelectedTitleItem();
+    void DrawCustomBossMenu();              // カスタムボス設定画面の描画
+    bool HandleCustomBossClick(float sx, float sy); // カスタムボス設定画面のクリック処理
+    CustomBossLayout BuildCustomBossLayout() const; // 設定画面のレイアウト（Draw/Click共有）
     void ActivatePauseMenuItem();
     bool HandlePauseClick(float sx, float sy);
     bool HandlePauseDrag(float sx, float sy);
@@ -362,10 +379,26 @@ private:
     float shakeT_ = 0.0f;        // 画面シェイク残り（実時間）
     float shakeLife_ = 0.01f;    // シェイク全体の長さ（補間用）
     float shakeMag_ = 0.0f;      // シェイクの強さ（ワールド単位）
+    int reflectCount_ = 0;       // ネガポジ突入までのリフレクションコア反射成功回数
+    bool beamWasReflecting_ = false; // 直前フレームでビームを反射していたか（1ビーム1カウント用）
+    float negaposiT_ = 0.0f;     // ネガポジ残り時間（>0で発動中＝世界反転）
+    float negaposiAccum_ = 0.0f; // ネガポジ中に受けたダメージの蓄積（終了時にお返し）
+    int negaposiCount_ = 0;      // ネガポジに入った累計回数（お返し倍率の元）
     bool mouseRight_ = false;
     bool mouseRightReleased_ = false;
     float mouseX_ = 640.0f;
     float mouseY_ = 400.0f;
+
+    // コントローラ（XInput #0）入力状態。1P操作とメニュー操作の両方に使います。
+    // 毎フレーム UpdateGamepad で更新し、ゲーム中の移動/攻撃は UpdatePlayer がここを参照します。
+    bool padConnected_ = false;       // コントローラ接続中か（未接続ならゲームへ影響しない）
+    unsigned short padPrevButtons_ = 0; // 直前フレームのボタン状態（押した瞬間の検出用）
+    V2 padMove_{};                    // 左スティック＋十字キーの移動入力（WASD相当）
+    V2 padAim_{};                     // 右スティックの照準入力（倒している時だけ向きを上書き）
+    bool padFocus_ = false;           // LB:集中移動（Shift相当）
+    bool padPrimaryHeld_ = false;     // RT/RB:反射シールド（左クリック長押し相当）
+    bool padBlinkHeld_ = false;       // A:ブリンク（スペース相当。エッジ検出は prevSpace_ を共用）
+    int padNavPrevY_ = 0;             // メニュー上下ナビの直前フレーム方向（-1/0/+1。押した瞬間検出用）
 
     Screen screen_ = Screen::BootLoading;
     Screen settingsReturnScreen_ = Screen::Title; // 音量設定画面から戻る先(タイトル or ポーズ)
@@ -374,6 +407,7 @@ private:
     Boss boss_;
     std::vector<Enemy> enemies_;
     std::vector<Shot> shots_;
+    std::vector<Meteor> meteors_;       // 隕石（大技）
     std::vector<Slash> slashes_;
     std::vector<Pickup> pickups_;
     std::vector<Obstacle> obstacles_;
@@ -428,6 +462,12 @@ private:
     bool eventVideoSkippable_ = true;
     bool bossWave_ = false;
     bool waveStarted_ = false;
+    int gauntletIndex_ = 0;     // ボスラッシュで今何体目か（0始まり）。GauntletBossCount体倒すとクリア。
+    // カスタムボス：プレイヤーが選んだ技セット（0:タレット 1:ビーム 2:分裂 3:扇 4:衝撃波）と大技。
+    bool customKitNormals_[5] = { true, true, false, false, false };
+    int  customBigMove_ = 0;    // BossBigMove（0:薙払 1:隕石 2:突進）
+    float customHpScale_ = 1.0f; // カスタムボスのHP倍率
+    CustomBossPreset customPresets_[3]; // プリセット3枠
     StageType stage_ = StageType::Donut;
     FieldShape fieldShape_ = FieldShape::Circle;
     float stageTimer_ = 0.0f;
@@ -481,10 +521,18 @@ private:
     float bgmVolume_ = 1.0f;
     float seVolume_ = 1.0f;
     float uiVolume_ = 1.0f;
+    float shakeScale_ = 1.0f;   // 画面振動の強さ（設定。0=なし〜1=標準）
+    bool showDamageNumbers_ = true; // ダメージ数値表示（設定でON/OFF）
     uint64_t titleVideoSerial_ = 0;
     uint64_t eventVideoSerial_ = 0;
     Screen eventVideoNextScreen_ = Screen::Title;
     std::wstring message_;
+    // アイテム取得テロップ（目立つバナー）。名前と効果を分けて表示する。
+    std::wstring itemTelopName_;
+    std::wstring itemTelopDesc_;
+    float itemTelopT_ = 0.0f;
+    float itemTelopLife_ = 0.0f;
+    Color itemTelopColor_ = Cream;
     std::wstring lastLoadStep_ = L"Boot";
     std::wstring lastLoadWarning_;
 

@@ -345,6 +345,18 @@ void SweetsApp::SpawnBoss()
     boss_.burrowCd = BossBurrowCooldownMin + Rand(0.0f, BossBurrowCooldownVar);
     boss_.megaBeamCd = BossMegaBeamCooldownMin + Rand(0.0f, BossMegaBeamCooldownVar);
     boss_.grabCd = BossGrabCooldownMin + Rand(0.0f, BossGrabCooldownVar);
+    boss_.cloneCd = BossCloneCooldownMin + Rand(0.0f, BossCloneCooldownVar);
+    boss_.cloneWarnT = boss_.cloneActiveT = 0.0f; boss_.cloneCount = 0;
+    boss_.splitCd = BossSplitCooldownMin + Rand(0.0f, BossSplitCooldownVar);
+    boss_.fanSlashCd = BossFanSlashCooldownMin + Rand(0.0f, BossFanSlashCooldownVar);
+    boss_.shockCd = BossShockwaveCooldownMin + Rand(0.0f, BossShockwaveCooldownVar);
+    boss_.shockChargeT = boss_.shockActiveT = boss_.shockRadius = 0.0f;
+    boss_.meteorCd = BossMeteorCooldownMin + Rand(0.0f, BossMeteorCooldownVar);
+    boss_.meteorT = boss_.meteorSpawnCd = 0.0f;
+    boss_.rushCd = BossRushCooldownMin + Rand(0.0f, BossRushCooldownVar);
+    boss_.rushT = boss_.rushDragT = 0.0f; boss_.rushGrabTarget = -1;
+    boss_.turretSpawnCd = BossTurretSpawnInterval;
+    for (int i = 0; i < BossTurretMax; ++i) { boss_.turretActive[i] = false; boss_.turretHp[i] = 0.0f; boss_.turretFireT[i] = 0.0f; boss_.turretTier[i] = 0; }
     boss_.breakGauge = 0.0f;
     boss_.breakGaugeMax = BossBreakGaugeMax;
     boss_.breakT = 0.0f;
@@ -352,9 +364,14 @@ void SweetsApp::SpawnBoss()
     boss_.armAngle = Rand(0.0f, TwoPi);
     boss_.armWanderTarget = Rand(0.0f, TwoPi);
     boss_.armWanderCd = Rand(1.5f, 3.0f);
-    if (gameMode_ == GameMode::BossOnlyDebug)
+    if (gameMode_ == GameMode::BossOnlyDebug || gameMode_ == GameMode::CustomBoss)
     {
-        boss_.maxHp *= 2.0f; // デバッグ用：耐久を2倍にして技を試しやすく
+        boss_.maxHp *= 2.0f; // ボス単体戦：耐久を2倍にして歯ごたえを出す
+        boss_.hp = boss_.maxHp;
+    }
+    if (gameMode_ == GameMode::CustomBoss)
+    {
+        boss_.maxHp *= customHpScale_; // カスタム設定のHP倍率
         boss_.hp = boss_.maxHp;
     }
     for (int i = 0; i < 2; ++i)
@@ -367,11 +384,74 @@ void SweetsApp::SpawnBoss()
     {
         // デバッグステージは各技をすぐ・短い間隔で確認できるよう初期CDを短縮。
         boss_.beamCd = 3.0f;
-        boss_.sweepCd = 2.0f;
-        boss_.burrowCd = 5.0f;
         boss_.megaBeamCd = 7.0f;
         boss_.grabCd = 4.0f;
+        boss_.cloneCd = 5.0f;
+        boss_.splitCd = 5.0f;
+        boss_.fanSlashCd = 4.0f;
+        boss_.shockCd = 5.0f;
+        boss_.meteorCd = 6.0f;
+        boss_.rushCd = 6.0f;
+        boss_.turretSpawnCd = 2.0f;
     }
+    // === 技セットの付与 ===
+    // ボスラッシュ（BossOnlyDebug）では各ボスが通常技2＋大技1をランダムに持つ。
+    // それ以外のモードは従来通り全技所持（kit ゲートを実質無効化）。
+    if (gameMode_ == GameMode::BossOnlyDebug)
+    {
+        boss_.kitTurret = boss_.kitBeam = boss_.kitSplit = boss_.kitFanSlash = boss_.kitShockwave = false;
+        // 実装済みの通常技プール（実装が増えたらここに番号を足す）。0:タレット 1:ビーム 2:分裂 3:扇状斬撃 4:衝撃波
+        int normals[5]; int nNormals = 0;
+        normals[nNormals++] = 0; // タレット
+        normals[nNormals++] = 1; // レーザー砲（貫通ビーム）
+        normals[nNormals++] = 2; // 分裂
+        normals[nNormals++] = 3; // 扇状斬撃
+        normals[nNormals++] = 4; // チャージ衝撃波
+        // 簡易シャッフル（Fisher-Yates）
+        for (int i = nNormals - 1; i > 0; --i)
+        {
+            int j = static_cast<int>(Rand(0.0f, static_cast<float>(i + 1)));
+            if (j > i) j = i;
+            std::swap(normals[i], normals[j]);
+        }
+        const int pick = nNormals < 2 ? nNormals : 2;
+        for (int k = 0; k < pick; ++k)
+        {
+            switch (normals[k])
+            {
+            case 0: boss_.kitTurret = true; break;
+            case 1: boss_.kitBeam = true; break;
+            case 2: boss_.kitSplit = true; break;
+            case 3: boss_.kitFanSlash = true; break;
+            case 4: boss_.kitShockwave = true; break;
+            }
+        }
+        // 大技：実装済みプール。3体ラッシュで被らないよう gauntletIndex_ でずらす（3種=各体別）。
+        int bigs[3]; int nBigs = 0;
+        bigs[nBigs++] = static_cast<int>(BossBigMove::MegaBeam);
+        bigs[nBigs++] = static_cast<int>(BossBigMove::Meteor);
+        bigs[nBigs++] = static_cast<int>(BossBigMove::InvincibleChase);
+        boss_.bigMove = bigs[gauntletIndex_ % nBigs];
+        // 見た目もラッシュの体ごとに変える。
+        boss_.type = gauntletIndex_ % 6;
+        boss_.bossType = static_cast<BossType>(boss_.type);
+    }
+    else if (gameMode_ == GameMode::CustomBoss)
+    {
+        // カスタムボス：プレイヤーが設定画面で選んだ技セットをそのまま付与。
+        boss_.kitTurret    = customKitNormals_[0];
+        boss_.kitBeam      = customKitNormals_[1];
+        boss_.kitSplit     = customKitNormals_[2];
+        boss_.kitFanSlash  = customKitNormals_[3];
+        boss_.kitShockwave = customKitNormals_[4];
+        boss_.bigMove = customBigMove_;
+    }
+    else
+    {
+        boss_.kitTurret = boss_.kitBeam = boss_.kitSplit = boss_.kitFanSlash = boss_.kitShockwave = true;
+        boss_.bigMove = static_cast<int>(BossBigMove::MegaBeam);
+    }
+
     bossGimmick_ = {};
     bossGimmick_.type = boss_.bossType;
     bossGimmick_.nextPattern = PatternForBoss(boss_.bossType, 0);
@@ -395,6 +475,18 @@ void SweetsApp::UpdateEnemies(float dt)
         if (e.barrierT > 0.0f) e.barrierT -= dt;
         if (e.caught) { SyncEnemy3D(e); continue; } // 巻き込まれ中は行動停止（弾に固定）
 
+        // 寿命タイマー（ボス分裂の分身など）。0になったら消滅。
+        if (e.lifeT > 0.0f)
+        {
+            e.lifeT -= dt;
+            if (e.lifeT <= 0.0f)
+            {
+                e.dead = true;
+                Burst(e.pos, Sky, 24);
+                continue;
+            }
+        }
+
         // 敵は最も近い生存プレイヤーを狙います。協力プレイでもターゲットが分散します。
         Player* targetPlayer = FindNearestPlayer(e.pos);
         if (!targetPlayer) continue;
@@ -402,6 +494,31 @@ void SweetsApp::UpdateEnemies(float dt)
         const float d = RuleDistance(e.pos, e.height, targetPlayer->pos, PlayerBodyY);
         const V2 n = Normalize(toP);
         e.face = AngleOf(toP);
+
+        // ボス分裂の分身：中距離を保って追尾しつつ、反射可能弾を扇状に撃つミニボス。
+        if (e.bossSplit)
+        {
+            e.shootCd -= dt * slowMul;
+            V2 move{};
+            if (d > 6.5f) move = n;          // 遠ければ寄る
+            else if (d < 3.6f) move = n * -1.0f; // 近すぎれば離れる
+            e.vel = move * e.speed * slowMul;
+            e.pos += e.vel * dt;
+            ClampInside(e.pos, e.radius);
+            SyncEnemy3D(e);
+            if (e.shootCd <= 0.0f)
+            {
+                const int count = BossSplitBulletCount;
+                const float base = AngleOf(toP);
+                for (int i = 0; i < count; ++i)
+                {
+                    const float a = base + (count > 1 ? (static_cast<float>(i) / (count - 1) - 0.5f) * BossSplitBulletSpread : 0.0f);
+                    SpawnEnemyShot(e.pos + FromAngle(a) * (e.radius + 0.2f), a, BossSplitBulletSpeed + wave_ * 0.1f, e.atk * BossSplitDamageMul, 0.18f, Grape, 5.0f);
+                }
+                e.shootCd = BossSplitFireInterval * CurrentDifficulty().spawnIntervalMul;
+            }
+            continue; // 通常敵AIはスキップ
+        }
 
         if (e.type == EnemyType::Healer)
         {
@@ -533,6 +650,117 @@ void SweetsApp::UpdateEnemies(float dt)
 
 // 通常ボスの移動、予兆、弾幕を更新します。
 // 攻撃前に telegraphT を挟むことで、初見でも次の攻撃を読めるようにしています。
+// タレット（反射可能な砲台）の更新。ボスの攻撃中・ダウン中も常に動く＝合間に反射する的を供給。
+void SweetsApp::UpdateBossTurrets(float dt)
+{
+    if (!boss_.active) return;
+    Player* targetPlayer = FindNearestPlayer(boss_.pos);
+    if (!targetPlayer) return;
+    const float specialCdMul = (gameMode_ == GameMode::BossOnlyDebug) ? 0.3f : 1.0f;
+    int activeTurrets = 0;
+    for (int i = 0; i < BossTurretMax; ++i) if (boss_.turretActive[i]) ++activeTurrets;
+    boss_.turretSpawnCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+    // タレットを技セットに持つボスだけ新規設置（既存タレットの発射・破壊は常に処理）。
+    if (boss_.turretSpawnCd <= 0.0f && activeTurrets < BossTurretMax && boss_.kitTurret)
+    {
+        for (int i = 0; i < BossTurretMax; ++i)
+        {
+            if (boss_.turretActive[i]) continue;
+            const float a = Rand(0.0f, TwoPi);
+            V2 pos = targetPlayer->pos + FromAngle(a) * Rand(5.0f, 8.0f);
+            ClampInside(pos, BossTurretRadius + 0.4f);
+            // フェーズが進むほど強い砲台：phase1→tier0, phase2→tier1, phase3以降→tier2(ビーム)。
+            const int tier = (boss_.phase >= 3) ? 2 : (boss_.phase >= 2 ? 1 : 0);
+            boss_.turretPos[i] = pos;
+            boss_.turretTier[i] = tier;
+            boss_.turretHp[i] = BossTurretHp * (1.0f + 0.6f * static_cast<float>(tier)); // 上位tierは硬い
+            boss_.turretFireT[i] = Rand(0.6f, BossTurretFireInterval);
+            boss_.turretActive[i] = true;
+            Burst(pos, tier >= 2 ? Berry : Grape, 18);
+            break;
+        }
+        boss_.turretSpawnCd = BossTurretSpawnInterval * specialCdMul;
+    }
+    for (int i = 0; i < BossTurretMax; ++i)
+    {
+        if (!boss_.turretActive[i]) continue;
+        // 反射されたプレイヤー弾で破壊される。
+        for (auto& s : shots_)
+        {
+            if (s.dead || s.enemy) continue;
+            if (RuleDistance(s.pos, s.height, boss_.turretPos[i], 0.0f) < BossTurretRadius + s.radius)
+            {
+                boss_.turretHp[i] -= s.damage;
+                Burst(boss_.turretPos[i], Sky, 8);
+                if (s.chainJumps > 0 && TryChainHop(s, boss_.turretPos[i])) { /* 次の的へ連鎖（生存） */ }
+                else if (s.pierce <= 0) s.dead = true; else --s.pierce;
+            }
+        }
+        if (boss_.turretHp[i] <= 0.0f)
+        {
+            boss_.turretActive[i] = false;
+            Burst(boss_.turretPos[i], Cream, 30);
+            continue;
+        }
+        // 発射：プレイヤーへ反射可能弾。tierが高いほど速く・強く・連射（ビーム化）。
+        boss_.turretFireT[i] -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        if (boss_.turretFireT[i] <= 0.0f)
+        {
+            const int tier = boss_.turretTier[i];
+            const float a = AngleOf(targetPlayer->pos - boss_.turretPos[i]);
+            const float spd = BossTurretBulletSpeed * (1.0f + 0.25f * static_cast<float>(tier));
+            const float dmg = boss_.atk * BossTurretDamageMul * (1.0f + 0.25f * static_cast<float>(tier));
+            const Color col = (tier >= 2) ? Berry : Grape;
+            if (tier >= 2)
+            {
+                // ビームタレット：高速弾を一直線に連射（ストリーム＝ビーム風）。反射可能。
+                for (int k = 0; k < BossTurretBeamBurst; ++k)
+                {
+                    SpawnEnemyShot(boss_.turretPos[i] + FromAngle(a) * (0.3f * k), a, spd * 1.3f, dmg, 0.30f, col, 4.5f, 0.0f, 0.0f);
+                }
+                boss_.turretFireT[i] = BossTurretFireInterval * 0.9f;
+            }
+            else
+            {
+                SpawnEnemyShot(boss_.turretPos[i], a, spd, dmg, 0.30f, col, 4.5f, 0.0f, 0.0f);
+                boss_.turretFireT[i] = BossTurretFireInterval * (tier >= 1 ? 0.7f : 1.0f);
+            }
+        }
+    }
+}
+
+// 隕石（大技）の更新：予兆が終わった瞬間に範囲ダメージ→着弾エフェクトを残して消える。
+void SweetsApp::UpdateMeteors(float dt)
+{
+    for (auto& m : meteors_)
+    {
+        if (m.warnT > 0.0f)
+        {
+            m.warnT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+            if (m.warnT <= 0.0f)
+            {
+                m.warnT = 0.0f;
+                m.impacted = true;
+                for (auto& p : players_)
+                {
+                    if (!p.active || p.downed || p.inv > 0.0f) continue;
+                    if (Len(p.pos - m.pos) <= m.radius + p.radius)
+                        ResolvePlayerHit(p, boss_.atk * BossMeteorDamageMul, AngleOf(p.pos - m.pos));
+                }
+                Burst(m.pos, Red, 40);
+                Burst(m.pos, Gold, 18);
+                shakeMag_ = std::max(shakeMag_, 0.32f); shakeLife_ = std::max(shakeLife_, 0.18f); shakeT_ = shakeLife_;
+            }
+        }
+        else if (m.impactT > 0.0f)
+        {
+            m.impactT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        }
+    }
+    meteors_.erase(std::remove_if(meteors_.begin(), meteors_.end(),
+        [](const Meteor& m) { return m.impacted && m.impactT <= 0.0f; }), meteors_.end());
+}
+
 void SweetsApp::UpdateBoss(float dt)
 {
     if (!boss_.active) return;
@@ -551,19 +779,37 @@ void SweetsApp::UpdateBoss(float dt)
     if (bossGimmick_.gravityT > 0.0f) bossGimmick_.gravityT = std::max(0.0f, bossGimmick_.gravityT - dt);
     if (bossGimmick_.territoryT > 0.0f) bossGimmick_.territoryT = std::max(0.0f, bossGimmick_.territoryT - dt);
 
-    // ブレイク（崩し）中：動けない・攻撃しない。残り時間を減らすだけで他の処理は全てスキップ。
+    // タレットはボス本体が攻撃中でもダウン中でも常に稼働させる（合間＝反射でフィールド干渉する時間）。
+    UpdateBossTurrets(dt);
+
+    // 崩し中：停止せず弱点が露出する。その代わり行動が活発化し、被ダメージが増える（下のbreak判定で反映）。
     if (boss_.breakT > 0.0f)
     {
         boss_.breakT -= dt;
         if (boss_.breakT <= 0.0f)
         {
             boss_.breakT = 0.0f;
-            breakCombo_ = 0; // ブレイク終了でコンボは必ずリセット
-            Burst(boss_.pos, Cream, 40);
-            message_ = L"ブレイク終了";
+            breakCombo_ = 0; // 崩し終了でコンボは必ずリセット
+            Burst(boss_.pos, Cream, 30);
+            message_ = L"弱点が閉じた";
             messageT_ = std::max(messageT_, 0.8f);
         }
-        boss_.flash = std::max(boss_.flash, 0.08f); // 点滅で無防備をアピール
+        // 以降の通常処理（移動・攻撃）を継続＝活発に動く。
+    }
+    // 崩し（体幹）発動：反射で崩しゲージが満タンになったらボスを一定時間ダウンさせる。
+    if (boss_.breakT <= 0.0f && boss_.breakGaugeMax > 0.0f && boss_.breakGauge >= boss_.breakGaugeMax)
+    {
+        boss_.breakGauge = 0.0f;
+        boss_.breakGaugeMax *= BossBreakGaugeGrowth; // 崩すたびに次の必要量を増やす（だんだん崩しづらく）
+        boss_.breakT = BossBreakDuration;
+        breakCombo_ = 0;
+        boss_.beamWarnT = boss_.beamActiveT = 0.0f; boss_.beamReflectDist = 0.0f;
+        boss_.megaBeamWarnT = boss_.megaBeamActiveT = 0.0f;
+        Burst(boss_.pos, Gold, 80);
+        screenFlashT_ = 0.25f; screenFlashLife_ = screenFlashT_; screenFlashColor_ = Sky;
+        shakeMag_ = 0.6f; shakeLife_ = 0.4f; shakeT_ = shakeLife_;
+        message_ = L"弱点露出! (反撃が激化)"; messageT_ = std::max(messageT_, 2.0f);
+        audio_.PlaySoundEffect(SoundEffect::Reflect);
         SyncBoss3D(boss_);
         return;
     }
@@ -577,14 +823,20 @@ void SweetsApp::UpdateBoss(float dt)
     const bool intro = boss_.phaseIntroT > 0.0f;
     // 特殊攻撃（ビーム等）の予兆・実行中は本体を止める（方向を固定し、避け先を読みやすくする）
     const bool busy = boss_.beamWarnT > 0.0f || boss_.beamActiveT > 0.0f
-        || boss_.burrowWarnT > 0.0f || boss_.burrowSubT > 0.0f || boss_.burrowEruptT > 0.0f
         || boss_.megaBeamWarnT > 0.0f || boss_.megaBeamActiveT > 0.0f
+        || boss_.cloneWarnT > 0.0f
+        || boss_.shockChargeT > 0.0f || boss_.shockActiveT > 0.0f
+        || boss_.meteorT > 0.0f || boss_.rushT > 0.0f
         || boss_.grabReachWarnT > 0.0f || boss_.grabReachT > 0.0f || boss_.grabHoldT > 0.0f;
     // フェーズが上がるほど攻撃頻度（特殊技CD短縮）と移動速度が上がる＝行動が激化する。
+    const bool weakOpen = boss_.breakT > 0.0f; // 崩し中＝弱点露出＋行動活発化
     const float phaseAggro = 1.0f + static_cast<float>(boss_.phase - 1) * BossPhaseAggroPerPhase;
-    const float phaseSpeed = 1.0f + static_cast<float>(boss_.phase - 1) * BossPhaseSpeedPerPhase;
-    // デバッグステージでは新技を短い間隔で繰り返し確認できるようCDを縮める。フェーズでさらに短縮。
-    const float specialCdMul = ((gameMode_ == GameMode::BossOnlyDebug) ? 0.3f : 1.0f) / phaseAggro;
+    const float phaseSpeed = (1.0f + static_cast<float>(boss_.phase - 1) * BossPhaseSpeedPerPhase) * (weakOpen ? BossBreakSpeedMul : 1.0f);
+    // デバッグステージでは新技を短い間隔で繰り返し確認できるようCDを縮める。フェーズ・崩しでさらに短縮。
+    const float specialCdMul = ((gameMode_ == GameMode::BossOnlyDebug) ? 0.3f : 1.0f) / phaseAggro * (weakOpen ? BossBreakAggroCdMul : 1.0f);
+    // 大技はHPが減るほど頻度UP（CD短縮）。満タンで1.0倍→瀕死で約0.45倍。
+    const float bigHpFrac = (boss_.maxHp > 0.0f) ? ClampFloat(boss_.hp / boss_.maxHp, 0.0f, 1.0f) : 1.0f;
+    const float bigCdMul = specialCdMul * (0.45f + 0.55f * bigHpFrac);
     // 攻撃の重なり防止：何か攻撃中（特殊技＝busy／通常弾幕の予兆中）は小休止をリセットし続け、
     // 攻撃が終わってから BossAttackRest 秒だけ次の攻撃開始を待たせる。
     if (busy || intro || boss_.telegraphT > 0.0f) boss_.attackRestT = BossAttackRest;
@@ -653,13 +905,15 @@ void SweetsApp::UpdateBoss(float dt)
         }
     }
 
+    // タレットはボスのダウン中も稼働させたいので、UpdateBoss冒頭の UpdateBossTurrets() で常時更新する。
+
     // === 貫通ビーム（パリィ不可・低頻度の強攻撃）===
     // 通常弾幕の予兆中(telegraphT)・特殊攻撃中はクールダウンを進めない＝攻撃が重ならない。
     if (!busy && boss_.telegraphT <= 0.0f)
     {
         boss_.beamCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
     }
-    if (boss_.beamCd <= 0.0f && canStart)
+    if (boss_.beamCd <= 0.0f && canStart && boss_.kitBeam)
     {
         // 予兆開始：方向をプレイヤーへロックし、地面に予測線を出す。
         boss_.beamWarnT = BossBeamWarnTime;
@@ -685,6 +939,7 @@ void SweetsApp::UpdateBoss(float dt)
         {
             boss_.beamWarnT = 0.0f;
             boss_.beamActiveT = BossBeamActiveTime;
+            beamWasReflecting_ = false; // 新しいビーム開始：反射カウントをリセット
             Burst(boss_.pos, Red, 30);
             audio_.PlaySoundEffect(SoundEffect::UltimateSlash);
         }
@@ -700,7 +955,10 @@ void SweetsApp::UpdateBoss(float dt)
         float reflectDist = -1.0f;
         for (const auto& o : obstacles_)
         {
-            if (!o.chocoWall || o.ttl <= 0.0f) continue;
+            // リフレクションコア（chocoWall）。恒久コアは ttl=-1、旧時限壁は ttl>0。
+            // 除去待ち（ttl が (-0.5, 0]）のものだけスキップする。
+            if (!o.chocoWall) continue;
+            if (o.ttl <= 0.0f && o.ttl > -0.5f) continue;
             const V2 rel = o.pos - boss_.pos;
             const float along = Dot(rel, bdir);
             if (along <= 0.0f || along > BossBeamLength) continue;
@@ -709,10 +967,15 @@ void SweetsApp::UpdateBoss(float dt)
             if (reflectDist < 0.0f || along < reflectDist) reflectDist = along;
         }
         const float effLen = reflectDist >= 0.0f ? reflectDist : BossBeamLength;
+        // ビーム反射の「開始」を1回だけカウント（ネガポジ突入の進捗）。
+        const bool reflectingNow = reflectDist >= 0.0f;
+        if (reflectingNow && !beamWasReflecting_) RegisterReflectSuccess();
+        beamWasReflecting_ = reflectingNow;
         // 照射：本体から beamAngle 方向の線分（壁まで）に乗ったプレイヤーへダメージ（貫通・パリィ不可）。
         for (auto& p : players_)
         {
             if (!p.active || p.downed || p.inv > 0.0f) continue;
+            if (p.reflectShieldT > 0.0f) continue; // シールド展開中は被弾せず反射（シールド側で処理）
             const V2 rel = p.pos - boss_.pos;
             const float along = Dot(rel, bdir);
             if (along < 0.0f || along > effLen) continue; // 壁より奥は当たらない
@@ -730,26 +993,8 @@ void SweetsApp::UpdateBoss(float dt)
             const float refl = boss_.atk * BossBeamReflectDps * dt;
             DamageBoss(refl, true, 0);          // 反射＝HPダメージ（反射ボーナス込み）
             if (!boss_.active) return;          // 撃破した場合はここで終了
-            boss_.breakGauge += refl;           // 反射ダメージをゲージへ蓄積
+            boss_.breakGauge += refl;           // 反射ダメージを崩しゲージへ蓄積（発動はUpdateBoss冒頭で）
             Burst(wallPos, Sky, 2);
-            // ゲージ満タンでブレイク（崩し）：一定時間動けなくなる。
-            if (boss_.breakT <= 0.0f && boss_.breakGauge >= boss_.breakGaugeMax)
-            {
-                boss_.breakGauge = 0.0f;
-                boss_.breakT = BossBreakDuration;
-                breakCombo_ = 0;                // ブレイク開始時はコンボ0から
-                boss_.beamActiveT = 0.0f;       // 進行中のビームをキャンセル
-                boss_.beamReflectDist = 0.0f;
-                boss_.beamCd = (BossBeamCooldownMin + Rand(0.0f, BossBeamCooldownVar)) * specialCdMul;
-                Burst(boss_.pos, Gold, 80);
-                screenFlashT_ = 0.25f;
-                screenFlashLife_ = screenFlashT_;
-                screenFlashColor_ = Sky;
-                message_ = L"ブレイク!";
-                messageT_ = 2.0f;
-                audio_.PlaySoundEffect(SoundEffect::Reflect);
-                return;
-            }
         }
         if (boss_.beamActiveT <= 0.0f)
         {
@@ -760,106 +1005,65 @@ void SweetsApp::UpdateBoss(float dt)
         return; // 照射中は通常攻撃しない
     }
 
-    // === 地中突き上げ（Burrow→Eruption・回避専用＝パリィ不可）===
-    // 予兆→潜行(無敵/非表示)→各プレイヤー足元の予測円が追尾・ロック→地面から噴出。
-    if (boss_.telegraphT <= 0.0f)
+    // === 分身（本体＋分身が反射可能な弾をまとめて撃つ）===
+    if (!busy && boss_.telegraphT <= 0.0f) boss_.cloneCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+    bool legacyCloneEnabled = false; // 旧・分身演出は新「分裂」に置換予定のため無効化
+    if (legacyCloneEnabled && boss_.cloneCd <= 0.0f && canStart)
     {
-        boss_.burrowCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
-    }
-    if (boss_.burrowCd <= 0.0f && canStart)
-    {
-        boss_.burrowWarnT = BossBurrowWarnTime;
-        boss_.flash = std::max(boss_.flash, BossBurrowWarnTime);
-        message_ = L"地中突き上げ!";
+        // 予兆：本体の左右に分身を配置（出現エフェクト）。
+        boss_.cloneWarnT = BossCloneWarnTime;
+        boss_.cloneCount = BossCloneMax;
+        for (int i = 0; i < BossCloneMax; ++i)
+        {
+            const float side = (i == 0) ? 1.0f : -1.0f;
+            const float a = AngleOf(toP) + side * 1.2f;
+            boss_.clonePos[i] = boss_.pos + FromAngle(a) * BossCloneOffset;
+            ClampInside(boss_.clonePos[i], boss_.radius);
+            Burst(boss_.clonePos[i], Grape, 18);
+        }
+        boss_.flash = std::max(boss_.flash, BossCloneWarnTime);
+        message_ = L"分身!";
         messageT_ = std::max(messageT_, 1.0f);
     }
-    if (boss_.burrowWarnT > 0.0f)
+    if (boss_.cloneWarnT > 0.0f)
     {
-        boss_.burrowWarnT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
-        if (boss_.burrowWarnT <= 0.0f)
+        boss_.cloneWarnT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        if (boss_.cloneWarnT <= 0.0f)
         {
-            boss_.burrowWarnT = 0.0f;
-            boss_.burrowSubT = BossBurrowSubmergeTime; // 潜行開始（この間は無敵・非表示）
-            // 予測地点を全アクティブプレイヤー位置で初期化（潜行中に追尾し、最後にロック）。
-            boss_.burrowCount = 0;
-            for (auto& p : players_)
+            boss_.cloneWarnT = 0.0f;
+            boss_.cloneActiveT = BossCloneActiveTime;
+            // 本体＋各分身からプレイヤーへ扇状の反射可能弾を発射。
+            auto fanFrom = [&](V2 src)
             {
-                if (!p.active || p.downed) continue;
-                if (boss_.burrowCount < MaxPlayers)
+                const float baseA = AngleOf(targetPlayer->pos - src);
+                for (int k = 0; k < BossCloneBulletCount; ++k)
                 {
-                    boss_.burrowTargets[boss_.burrowCount] = p.pos;
-                    ++boss_.burrowCount;
+                    const float t = (BossCloneBulletCount > 1) ? (static_cast<float>(k) / (BossCloneBulletCount - 1) - 0.5f) : 0.0f;
+                    const float a = baseA + t * BossCloneBulletSpread;
+                    SpawnEnemyShot(src, a, BossCloneBulletSpeed, boss_.atk * BossCloneDamageMul, 0.32f, Grape, 4.0f, 0.0f, 0.0f);
                 }
-            }
-            if (boss_.burrowCount == 0) { boss_.burrowTargets[0] = targetPlayer->pos; boss_.burrowCount = 1; }
-            Burst(boss_.pos, Grape, 30);
-        }
-        return; // 潜る前は通常攻撃しない
-    }
-    if (boss_.burrowSubT > 0.0f)
-    {
-        boss_.burrowSubT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
-        // ロック時間に入るまでは予測円が各プレイヤーを追尾。以降は固定（避け先を作れる）。
-        if (boss_.burrowSubT > BossBurrowLockTime)
-        {
-            int idx = 0;
-            for (auto& p : players_)
-            {
-                if (!p.active || p.downed) continue;
-                if (idx < boss_.burrowCount) boss_.burrowTargets[idx] = p.pos;
-                ++idx;
-            }
-        }
-        if (boss_.burrowSubT <= 0.0f)
-        {
-            boss_.burrowSubT = 0.0f;
-            boss_.burrowEruptT = BossBurrowEruptTime;
-            // 噴出：ロック地点の円内にいるプレイヤーへダメージ＋演出。
-            for (int i = 0; i < boss_.burrowCount; ++i)
-            {
-                const V2 at = boss_.burrowTargets[i];
-                for (auto& p : players_)
-                {
-                    if (!p.active || p.downed || p.inv > 0.0f) continue;
-                    if (RuleDistance(p.pos, PlayerBodyY, at, 0.0f) <= BossBurrowRadius + p.radius)
-                    {
-                        ResolvePlayerHit(p, boss_.atk * BossBurrowDamageMul, AngleOf(p.pos - at));
-                    }
-                }
-                Burst(at, Grape, 40);
-                EffectPulse pulse{};
-                pulse.pos = at;
-                pulse.startRadius = BossBurrowRadius * 0.3f;
-                pulse.endRadius = BossBurrowRadius * 1.15f;
-                pulse.ttl = BossBurrowEruptTime;
-                pulse.life = BossBurrowEruptTime;
-                pulse.y = 0.25f;
-                pulse.color = Grape;
-                pulse.pos3 = Grounded3D(pulse.pos, pulse.y);
-                effectPulses_.push_back(pulse);
-            }
-            // ボスは最初のロック地点へ再出現（潜って距離を詰める挙動）。
-            boss_.pos = boss_.burrowTargets[0];
-            ClampInside(boss_.pos, boss_.radius);
-            SyncBoss3D(boss_);
+                Burst(src, Grape, 16);
+            };
+            fanFrom(boss_.pos);
+            for (int i = 0; i < boss_.cloneCount; ++i) fanFrom(boss_.clonePos[i]);
             audio_.PlaySoundEffect(SoundEffect::UltimateSlash);
         }
-        return; // 潜行中は通常攻撃しない
+        return; // 予兆中は通常攻撃しない
     }
-    if (boss_.burrowEruptT > 0.0f)
+    if (boss_.cloneActiveT > 0.0f)
     {
-        boss_.burrowEruptT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
-        if (boss_.burrowEruptT <= 0.0f)
+        boss_.cloneActiveT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        if (boss_.cloneActiveT <= 0.0f)
         {
-            boss_.burrowEruptT = 0.0f;
-            boss_.burrowCd = (BossBurrowCooldownMin + Rand(0.0f, BossBurrowCooldownVar)) * specialCdMul;
+            boss_.cloneActiveT = 0.0f;
+            boss_.cloneCount = 0;
+            boss_.cloneCd = (BossCloneCooldownMin + Rand(0.0f, BossCloneCooldownVar)) * specialCdMul;
         }
-        return; // 噴出演出中は通常攻撃しない
     }
 
     // === 極太回転ビーム薙ぎ払い（パリィ不可）===
     if (!busy && boss_.telegraphT <= 0.0f) boss_.megaBeamCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
-    if (boss_.megaBeamCd <= 0.0f && canStart)
+    if (boss_.megaBeamCd <= 0.0f && canStart && boss_.bigMove == static_cast<int>(BossBigMove::MegaBeam))
     {
         boss_.megaBeamWarnT = BossMegaBeamWarnTime;
         boss_.megaBeamAngle = AngleOf(toP);
@@ -900,9 +1104,251 @@ void SweetsApp::UpdateBoss(float dt)
         if (boss_.megaBeamActiveT <= 0.0f)
         {
             boss_.megaBeamActiveT = 0.0f;
-            boss_.megaBeamCd = (BossMegaBeamCooldownMin + Rand(0.0f, BossMegaBeamCooldownVar)) * specialCdMul;
+            boss_.megaBeamCd = (BossMegaBeamCooldownMin + Rand(0.0f, BossMegaBeamCooldownVar)) * bigCdMul;
         }
         return;
+    }
+
+    // === 分裂（HP1/4の分身を出し、反射可能弾を撃たせる通常技）===
+    if (!busy && boss_.telegraphT <= 0.0f) boss_.splitCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+    if (boss_.splitCd <= 0.0f && canStart && boss_.kitSplit)
+    {
+        int alive = 0;
+        for (const auto& e : enemies_) if (!e.dead && e.bossSplit) ++alive;
+        if (alive < BossSplitMax)
+        {
+            const int toSpawn = std::min(BossSplitCount, BossSplitMax - alive);
+            for (int k = 0; k < toSpawn; ++k)
+            {
+                Enemy c{};
+                c.bossSplit = true;
+                c.type = EnemyType::Normal;
+                c.kind = static_cast<int>(c.type);
+                const float a = Rand(0.0f, TwoPi);
+                c.pos = boss_.pos + FromAngle(a) * (boss_.radius + 1.6f);
+                ClampInside(c.pos, BossSplitRadius);
+                c.radius = BossSplitRadius;
+                c.height = EnemyBodyY;
+                c.hp = boss_.maxHp * BossSplitHpRatio;
+                c.maxHp = c.hp;
+                c.speed = BossSplitSpeed;
+                c.atk = boss_.atk;
+                c.score = 600;
+                c.color = Navy; // 本体と同系色でミニボス感
+                c.lifeT = BossSplitLifetime;
+                c.shootCd = Rand(0.4f, BossSplitFireInterval);
+                c.id = ++enemySerial_;
+                SyncEnemy3D(c);
+                enemies_.push_back(c);
+                Burst(c.pos, Navy, 26);
+            }
+            message_ = L"分裂!";
+            messageT_ = std::max(messageT_, 1.2f);
+            Burst(boss_.pos, Sky, 40);
+            boss_.splitCd = (BossSplitCooldownMin + Rand(0.0f, BossSplitCooldownVar)) * specialCdMul;
+        }
+        else
+        {
+            boss_.splitCd = 2.0f; // まだ分身が残っているなら少し待って再試行
+        }
+    }
+
+    // === 扇状斬撃（壁で3回跳ね返り巨大化。本体/プレイヤー接触で消滅。反射可能）===
+    if (!busy && boss_.telegraphT <= 0.0f) boss_.fanSlashCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+    if (boss_.fanSlashCd <= 0.0f && canStart && boss_.kitFanSlash)
+    {
+        const float base = AngleOf(toP);
+        const int count = BossFanSlashCount;
+        for (int i = 0; i < count; ++i)
+        {
+            const float a = base + (count > 1 ? (static_cast<float>(i) / (count - 1) - 0.5f) * BossFanSlashSpread : 0.0f);
+            Shot s{};
+            s.enemy = true;
+            s.fanSlash = true;
+            s.visual = ShotVisualKind::Blade;
+            s.pos = boss_.pos + FromAngle(a) * (boss_.radius + 0.4f);
+            s.vel = FromAngle(a) * BossFanSlashSpeed;
+            s.radius = BossFanSlashRadius;
+            s.damage = boss_.atk * BossFanSlashDamageMul;
+            s.ttl = BossFanSlashTtl;
+            s.bounce = BossFanSlashBounce;
+            s.color = Grape;
+            s.ownerIndex = -1;
+            SyncShot3D(s);
+            shots_.push_back(s);
+        }
+        message_ = L"扇状斬撃!";
+        messageT_ = std::max(messageT_, 1.0f);
+        Burst(boss_.pos, Grape, 30);
+        boss_.fanSlashCd = (BossFanSlashCooldownMin + Rand(0.0f, BossFanSlashCooldownVar)) * specialCdMul;
+    }
+
+    // === チャージ衝撃波（チャージ後、範囲円へ衝撃波。遠いほど高ダメージ＝近づくほど安全）===
+    if (!busy && boss_.telegraphT <= 0.0f) boss_.shockCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+    // チャージ進行 → 完了で衝撃波展開を開始。
+    if (boss_.shockChargeT > 0.0f)
+    {
+        boss_.shockChargeT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        if (boss_.shockChargeT <= 0.0f)
+        {
+            boss_.shockChargeT = 0.0f;
+            boss_.shockActiveT = BossShockwaveActiveTime;
+            boss_.shockRadius = 0.0f;
+            for (int i = 0; i < MaxPlayers; ++i) boss_.shockHitPlayer[i] = false;
+            Burst(boss_.pos, Sky, 60);
+            shakeMag_ = 0.55f; shakeLife_ = 0.32f; shakeT_ = shakeLife_;
+            screenFlashT_ = 0.18f; screenFlashLife_ = screenFlashT_; screenFlashColor_ = Sky;
+            audio_.PlaySoundEffect(SoundEffect::UltimateSlash);
+        }
+    }
+    // 展開中：リング前線を外へ広げ、通過したプレイヤーへ「遠いほど高い」ダメージ。
+    if (boss_.shockActiveT > 0.0f)
+    {
+        const float maxR = ArenaRadius * BossShockwaveRangeRatio;
+        const float prevR = boss_.shockRadius;
+        const float prog = 1.0f - ClampFloat(boss_.shockActiveT / BossShockwaveActiveTime, 0.0f, 1.0f);
+        boss_.shockRadius = maxR * prog;
+        for (int i = 0; i < MaxPlayers; ++i)
+        {
+            Player& p = players_[i];
+            if (!p.active || p.downed || boss_.shockHitPlayer[i]) continue;
+            const float pd = Len(p.pos - boss_.pos);
+            if (pd <= boss_.shockRadius && pd > prevR - 0.001f) // リング前線がプレイヤーを通過した瞬間
+            {
+                const float t = ClampFloat(pd / maxR, 0.0f, 1.0f); // 遠いほど大きい
+                const float dmgMul = BossShockwaveMinDamageMul + (BossShockwaveMaxDamageMul - BossShockwaveMinDamageMul) * t;
+                if (p.inv <= 0.0f) ResolvePlayerHit(p, boss_.atk * dmgMul, AngleOf(p.pos - boss_.pos));
+                boss_.shockHitPlayer[i] = true;
+            }
+        }
+        boss_.shockActiveT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        if (boss_.shockActiveT <= 0.0f) { boss_.shockActiveT = 0.0f; boss_.shockRadius = 0.0f; }
+    }
+    // チャージ開始。
+    if (boss_.shockCd <= 0.0f && canStart && boss_.kitShockwave
+        && boss_.shockChargeT <= 0.0f && boss_.shockActiveT <= 0.0f)
+    {
+        boss_.shockChargeT = BossShockwaveChargeTime;
+        message_ = L"衝撃波チャージ... (近づけ!)";
+        messageT_ = std::max(messageT_, 1.2f);
+        Burst(boss_.pos, Sky, 20);
+        boss_.shockCd = (BossShockwaveCooldownMin + Rand(0.0f, BossShockwaveCooldownVar)) * specialCdMul;
+    }
+
+    // === 隕石落下（大技：一定時間ランダム位置に隕石を降らせる。反射不可・予兆を見て回避）===
+    if (boss_.bigMove == static_cast<int>(BossBigMove::Meteor))
+    {
+        if (boss_.meteorT <= 0.0f && !busy && boss_.telegraphT <= 0.0f)
+            boss_.meteorCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        // 開始：降下チャネルに入る（busyにmeteorTを含むので本体は停止）。
+        if (boss_.meteorCd <= 0.0f && canStart && boss_.meteorT <= 0.0f)
+        {
+            boss_.meteorT = BossMeteorDuration;
+            boss_.meteorSpawnCd = 0.3f;
+            message_ = L"隕石！";
+            messageT_ = std::max(messageT_, 1.5f);
+            Burst(boss_.pos, Red, 40);
+            shakeMag_ = std::max(shakeMag_, 0.4f); shakeLife_ = 0.3f; shakeT_ = shakeLife_;
+            boss_.meteorCd = (BossMeteorCooldownMin + Rand(0.0f, BossMeteorCooldownVar)) * bigCdMul;
+        }
+        // 降下中：一定間隔でランダム位置（たまにプレイヤー付近）に隕石を生成。
+        if (boss_.meteorT > 0.0f)
+        {
+            boss_.meteorT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+            boss_.meteorSpawnCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+            if (boss_.meteorSpawnCd <= 0.0f)
+            {
+                for (int k = 0; k < BossMeteorPerDrop; ++k)
+                {
+                    Meteor m{};
+                    if (Rand(0.0f, 1.0f) < 0.4f)
+                        m.pos = targetPlayer->pos + FromAngle(Rand(0.0f, TwoPi)) * Rand(0.0f, 2.5f);
+                    else
+                        m.pos = FromAngle(Rand(0.0f, TwoPi)) * Rand(0.0f, ArenaRadius * 0.9f);
+                    ClampInside(m.pos, BossMeteorRadius);
+                    m.radius = BossMeteorRadius;
+                    m.warnT = BossMeteorWarnTime;
+                    m.impactT = BossMeteorImpactTime;
+                    meteors_.push_back(m);
+                }
+                boss_.meteorSpawnCd = BossMeteorDropInterval;
+            }
+        }
+    }
+
+    // === 突進追走（大技：高速で走り回り、接触で確定つかみ→引きずり。無敵ではない＝反射で削れる）===
+    if (boss_.bigMove == static_cast<int>(BossBigMove::InvincibleChase))
+    {
+        if (boss_.rushT <= 0.0f && !busy && boss_.telegraphT <= 0.0f)
+            boss_.rushCd -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+        // 開始。
+        if (boss_.rushCd <= 0.0f && canStart && boss_.rushT <= 0.0f)
+        {
+            boss_.rushT = BossRushDuration;
+            boss_.rushDragT = 0.0f;
+            boss_.rushGrabTarget = -1;
+            message_ = L"突進！ (接触注意)";
+            messageT_ = std::max(messageT_, 1.5f);
+            Burst(boss_.pos, Berry, 36);
+            shakeMag_ = std::max(shakeMag_, 0.4f); shakeLife_ = 0.3f; shakeT_ = shakeLife_;
+            boss_.rushCd = (BossRushCooldownMin + Rand(0.0f, BossRushCooldownVar)) * bigCdMul;
+        }
+        // 実行中：走り回って追走。接触で確定つかみ→引きずり。
+        if (boss_.rushT > 0.0f)
+        {
+            boss_.rushT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+            const float rushMove = dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+            if (boss_.rushDragT > 0.0f)
+            {
+                // 引きずり中：プレイヤーをボスに固定して一緒に走り、周期ダメージ。ブリンクで脱出可。
+                Player* gp = (boss_.rushGrabTarget >= 0 && boss_.rushGrabTarget < MaxPlayers) ? &players_[boss_.rushGrabTarget] : nullptr;
+                if (!gp || !gp->active || gp->downed || gp->grabbedT <= 0.0f)
+                {
+                    boss_.rushDragT = 0.0f;
+                    boss_.rushGrabTarget = -1;
+                }
+                else
+                {
+                    // ボスは引きずりながらも動き続ける（中心付近へ向かって暴れる）。
+                    const V2 dir = Normalize(targetPlayer->pos - boss_.pos);
+                    if (LenSq(dir) > 0.001f) boss_.pos += dir * boss_.speed * BossRushSpeedMul * 0.55f * rushMove;
+                    ClampInside(boss_.pos, boss_.radius);
+                    gp->pos = boss_.pos + FromAngle(boss_.rushGrabAngle) * (boss_.radius + gp->radius + 0.05f);
+                    ClampInside(gp->pos, gp->radius);
+                    SyncPlayer3D(*gp);
+                    gp->grabbedT = std::max(gp->grabbedT, 0.2f);
+                    if (gp->inv <= 0.0f) ResolvePlayerHit(*gp, boss_.atk * BossRushDragDamageMul, boss_.rushGrabAngle + Pi);
+                    boss_.rushDragT -= dt * (slowT_ > 0.0f ? 0.5f : 1.0f);
+                    if (boss_.rushDragT <= 0.0f)
+                    {
+                        gp->grabbedT = 0.0f; gp->inv = std::max(gp->inv, 0.45f); Burst(gp->pos, Cream, 16);
+                        boss_.rushDragT = 0.0f; boss_.rushGrabTarget = -1;
+                    }
+                }
+            }
+            else
+            {
+                // 走り回ってプレイヤーへ高速接近。
+                const V2 dir = Normalize(targetPlayer->pos - boss_.pos);
+                if (LenSq(dir) > 0.001f) boss_.pos += dir * boss_.speed * BossRushSpeedMul * rushMove;
+                ClampInside(boss_.pos, boss_.radius);
+                // 走行エフェクト：後方にダスト（残像粒子）を撒いて疾走感を出す。
+                Burst(boss_.pos - dir * boss_.radius, Berry, 3);
+                // 接触で確定つかみ開始。
+                const float rd = RuleDistance(boss_.pos, boss_.height, targetPlayer->pos, PlayerBodyY);
+                if (rd < boss_.radius + targetPlayer->radius && !targetPlayer->downed && targetPlayer->inv <= 0.0f)
+                {
+                    boss_.rushGrabTarget = targetPlayer->index;
+                    boss_.rushGrabAngle = AngleOf(targetPlayer->pos - boss_.pos);
+                    boss_.rushDragT = BossRushDragTime;
+                    targetPlayer->grabbedT = BossRushDragTime;
+                    Burst(targetPlayer->pos, Berry, 20);
+                    message_ = L"つかみ！ (ブリンクで脱出)";
+                    messageT_ = std::max(messageT_, 1.0f);
+                }
+            }
+            SyncBoss3D(boss_);
+        }
     }
 
     // === 腕（赤先端）：常時の接触ダメージ＋つかみ攻撃（腕を伸ばして掴む）===
@@ -1041,8 +1487,8 @@ void SweetsApp::UpdateBoss(float dt)
         ResolvePlayerHit(*targetPlayer, boss_.atk, AngleOf(toP));
     }
 
-    // ボスのみデバッグステージでは弾幕（通常パターン）を撃たず、新技だけを使う。
-    if (gameMode_ == GameMode::BossOnlyDebug) return;
+    // ボス単体戦（デバッグ/カスタム）では弾幕（通常パターン）を撃たず、選ばれた技だけを使う。
+    if (gameMode_ == GameMode::BossOnlyDebug || gameMode_ == GameMode::CustomBoss) return;
 
     const EncounterTuning& tuning = CurrentEncounterTuning();
     // 予兆が終わった瞬間に実際の攻撃を出すラムダです。
@@ -1473,6 +1919,15 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
         }
         return;
     }
+    // ネガポジ中はボスへの攻撃が反転＝回復になる（受けに徹して終了時のお返しで決める）。
+    // ※お返し自体は GameFlow 側で negaposiT_=0 にしてから呼ぶので通常ダメージとして通る。
+    if (negaposiT_ > 0.0f)
+    {
+        boss_.hp = std::min(boss_.maxHp, boss_.hp + dmg);
+        boss_.flash = 0.1f;
+        Burst(boss_.pos, Mint, 6);
+        return;
+    }
     float appliedDmg = dmg;
     const bool isReflected = reflected || kind == BossDamageKind::ReflectedShot || kind == BossDamageKind::HiddenBossAuraKey;
     auto addNotice = [&](const std::wstring& text, Color color)
@@ -1553,15 +2008,18 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
             break;
         }
     }
-    appliedDmg = std::min(appliedDmg, NormalBossHitCap(boss_.maxHp, kind, reflected));
-    // ブレイクコンボ：ブレイク中のヒットは重ねるほど火力UP（終了で必ずリセット）。
+    // 崩し中＝弱点露出：被ダメージ倍率＋ブレイクコンボ（重ねるほど火力UP）。崩し中は通常の上限を緩める。
     bool breakHit = false;
     if (boss_.breakT > 0.0f)
     {
         const float comboMul = std::min(BreakComboMaxMul, 1.0f + static_cast<float>(breakCombo_) * BreakComboDamagePerHit);
-        appliedDmg *= comboMul;
+        appliedDmg *= BossBreakWeakDamageMul * comboMul;
         ++breakCombo_;
         breakHit = true;
+    }
+    else
+    {
+        appliedDmg = std::min(appliedDmg, NormalBossHitCap(boss_.maxHp, kind, reflected));
     }
     boss_.hp -= appliedDmg;
     boss_.flash = 0.15f;
@@ -1627,5 +2085,9 @@ void SweetsApp::DamageBoss(float dmg, BossDamageKind kind, bool reflected, int o
         }
         Burst(boss_.pos, Gold, 90);
         boss_.active = false;
+        // 分裂の分身はボス撃破で道連れに消す（次ボスへ持ち越さない・クリアを妨げない）。
+        for (auto& e : enemies_) if (e.bossSplit && !e.dead) { e.dead = true; Burst(e.pos, Sky, 18); }
+        // ボスラッシュ：1体撃破ごとにカウント。次のボス出現/クリア判定は ClearWave 側で行う。
+        if (gameMode_ == GameMode::BossOnlyDebug) ++gauntletIndex_;
     }
 }

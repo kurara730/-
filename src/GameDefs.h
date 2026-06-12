@@ -36,8 +36,13 @@ constexpr float BossAttackRest = 0.7f;
 // チョコウォール（右クリックの壁）をビームの軌道上に置くと、ビームを反射してボスへダメージ。
 // 反射ダメージは「ブレイクゲージ」に蓄積し、満タンでボスが一定時間動けなくなる（ブレイク）。
 constexpr float BossBeamReflectDps = 1.6f;     // 反射中、ボスへ与える毎秒ダメージ（boss.atk倍率）
-constexpr float BossBreakGaugeMax = 90.0f;     // ブレイクゲージ最大値（反射ダメージの蓄積で満タン＝約3回の全反射）
-constexpr float BossBreakDuration = 10.0f;     // ブレイク状態（動けない）の継続時間（秒）
+constexpr float BossBreakGaugeMax = 90.0f;     // 崩しゲージ初期最大値（反射ダメージの蓄積で満タン）
+constexpr float BossBreakGaugeGrowth = 1.6f;   // 崩すたびに次の必要量がこの倍率で増える（だんだん崩しづらく）
+constexpr float BossBreakDuration = 8.0f;      // 崩し（弱点露出）の継続時間（秒）
+// 崩し中：停止せず弱点が露出。その代わり行動が活発化（攻撃頻度・移動速度UP）し、被ダメージが増える。
+constexpr float BossBreakWeakDamageMul = 2.2f; // 崩し中の弱点ダメージ倍率
+constexpr float BossBreakAggroCdMul = 0.5f;    // 崩し中の攻撃クールダウン短縮（小さいほど活発）
+constexpr float BossBreakSpeedMul = 1.35f;     // 崩し中の移動速度倍率
 
 // ボスのフェーズ（SAO風の分割HPバー）。HPを BossGaugeCount 本のゲージに分割し、
 // 1本削り切るたびにフェーズが上がり、行動が激化する（移動・攻撃頻度の上昇＋弾消し＋演出）。
@@ -50,6 +55,76 @@ constexpr float BossPhaseIntroTime = 0.9f;     // フェーズ移行時の小休
 constexpr float BreakComboDamagePerHit = 0.06f;// 1ヒットごとの倍率上昇（+6%）
 constexpr float BreakComboMaxMul = 3.0f;       // 倍率の上限
 
+// リフレクションコア：全キャラ共通。敵に攻撃を当ててチャージ→満タンで右クリック設置（時間では消えず壊れるまで残る）。
+constexpr float ReflectionCoreCost = 100.0f;        // 設置に必要なチャージ量
+constexpr float ReflectionCoreChargePerDamage = 0.7f;// 与ダメージ1あたりのチャージ獲得
+constexpr int ReflectionCoreMax = 3;                // 同時設置できる最大数（超えると古い順に消える）
+constexpr float ReflectionCoreHp = 140.0f;          // コアの耐久（敵に壊されると消える）
+
+// 反射シールド（全キャラ共通）：左クリックで前方にシールドを展開し、当たったボス攻撃を反射する。
+// 反射の「効果」だけキャラごとに異なる（チョコ＝増殖、など）。
+constexpr float ReflectShieldActive = 0.45f;     // 展開している時間
+constexpr float ReflectShieldCooldown = 0.6f;    // 再展開までのクールダウン
+constexpr float ReflectShieldRange = 1.9f;       // 自機からシールドの届く距離
+constexpr float ReflectShieldArc = 1.8f;         // シールドの開き角（全角・ラジアン）
+
+// シールドスタミナ：張りっぱなしを防ぐ。構え続けると減り、下ろすと回復。0で一旦構えられない。
+constexpr float ShieldStaminaMax = 100.0f;
+constexpr float ShieldStaminaDrainPerSec = 32.0f; // 構え中の消費（毎秒）
+constexpr float ShieldStaminaRegenPerSec = 26.0f; // 下ろし中の回復（毎秒）
+constexpr float ShieldStaminaMinToRaise = 20.0f;  // 切らした後、これだけ回復するまで再展開できない
+// パーフェクト反射：構え直した直後の短い窓で反射すると強化（崩しゲージ多め＋増殖＋演出）。
+constexpr float PerfectReflectWindow = 0.18f;     // 構え直後にパーフェクト扱いになる時間
+constexpr float PerfectReflectBreakMul = 2.2f;    // パーフェクト時の崩しゲージ倍率
+
+// ブレイク中だけ使える攻撃（左クリック）。崩した相手を殴ってブレイクコンボで火力を伸ばす。
+constexpr float BreakAttackDamage = 26.0f;       // 1発のダメージ（ブレイクコンボ倍率が乗る）
+constexpr float BreakAttackInterval = 0.10f;     // 連射間隔
+constexpr float BreakAttackBoltSpeed = 18.0f;    // 弾速
+
+// チョコの「増殖反射」：左クリックのチョコボムが飛行中、敵弾やボスのビームを巻き取り、
+// 数を増やしてボスへ撃ち返す。チョコの報酬寄り＝手数でブレイクゲージを稼ぐ。
+constexpr int ChocoReflectMultiply = 4;          // 1回の反射で撃ち返す弾数
+constexpr float ChocoReflectBoltSpeed = 16.0f;   // 反射弾の速度
+constexpr float ChocoReflectBoltDamage = 16.0f;  // 反射弾1発のダメージ
+constexpr float ChocoReflectBeamCd = 0.28f;      // ビーム巻き取りの間隔（連続発生防止）
+constexpr float ChocoReflectBreakPerCatch = 6.0f;// 1回の反射で溜まるブレイクゲージ
+
+// シールド反射のキャラ別個性。共通モーション（前方シールド展開）で受けた弾を、
+// キャラごとに違う「返し方」へ変換する。チョコ=増殖 / ショート=威力 / チーズ=連鎖 / ロール=集束。
+// ショート（威力）：少数の極太・高威力弾でまとめて削る。
+constexpr int   ShortReflectCount = 1;            // 撃ち返す弾数
+constexpr float ShortReflectDamageMul = 2.6f;     // 威力倍率（重い一撃）
+constexpr float ShortReflectSpeedMul = 0.95f;     // 速度倍率
+constexpr float ShortReflectRadius = 0.44f;       // 弾の太さ
+constexpr int   ShortReflectPierce = 2;           // 貫通回数
+// チーズ（連鎖）：反射弾がボス→タレット→分身へ自動で飛び移る稲妻型。複数の的に同時に効く。
+constexpr int   CheeseReflectCount = 1;           // 撃ち返す弾数
+constexpr float CheeseReflectDamageMul = 1.15f;   // 威力倍率
+constexpr float CheeseReflectSpeedMul = 1.15f;    // 速度倍率
+constexpr float CheeseReflectRadius = 0.22f;      // 弾の太さ
+constexpr int   CheeseReflectChainJumps = 4;      // 飛び移り回数（連鎖）
+constexpr float CheeseReflectChainGain = 1.12f;   // 1ホップごとの威力倍率
+constexpr float CheeseReflectChainSpeed = 17.0f;  // ホップ時の弾速
+// ロール（渦）：受けた敵弾を渦に巻き取ってストックし、満タン/パーフェクトで
+// 回転しながらスパイラル弾幕として一気に放出する。
+constexpr int   RollVortexStockMax = 14;          // 巻き取れる最大ストック数
+constexpr int   RollVortexThreshold = 8;          // この数まで貯まると自動で放出
+constexpr int   RollVortexBoltsPerStock = 2;      // ストック1つあたり放出する弾数
+constexpr float RollVortexSpiralTurns = 1.4f;     // スパイラルの巻き幅（大きいほど広く渦巻く）
+constexpr float RollVortexBoltSpeed = 15.0f;      // 放出弾の速度
+constexpr float RollVortexBoltDamage = 13.0f;     // 放出弾1発のダメージ
+constexpr float RollVortexBoltAngular = 2.4f;     // 放出弾のコークスクリュー回転（rad/s）＝渦の見た目
+
+// ネガポジ：ジャスト回避を一定回数ためると突入。発動中は世界が反転する。
+// 被ダメージ→自分が回復＆蓄積し、終了時にまとめてボスへお返し。攻撃すると逆に敵が回復するので受けに徹する。
+// お返し倍率は「ネガポジに入った累計回数」で伸びる（恒久成長）。
+constexpr int NegaPosiReflectReq = 2;          // 突入に必要なリフレクションコアの反射成功回数（デバッグ用に2）
+constexpr float NegaPosiDuration = 7.0f;       // 発動時間（秒）
+constexpr float NegaPosiPaybackBase = 1.0f;    // 1回目のお返し倍率
+constexpr float NegaPosiPaybackPerCount = 0.5f;// 累計発動回数ごとのお返し倍率上乗せ
+constexpr float NegaPosiAccumMax = 800.0f;     // 蓄積ダメージの上限（一撃必殺になりすぎないように）
+
 // ボスの極太回転ビーム薙ぎ払い（パリィ不可）。極太ビームを出しながらゆっくり回す。
 constexpr float BossMegaBeamWarnTime = 1.6f;
 constexpr float BossMegaBeamActiveTime = 3.2f;   // 回しながら照射する時間
@@ -59,6 +134,88 @@ constexpr float BossMegaBeamDamageMul = 1.5f;
 constexpr float BossMegaBeamRotateSpeed = 0.55f; // 回転速度（ラジアン/秒）
 constexpr float BossMegaBeamCooldownMin = 17.0f;
 constexpr float BossMegaBeamCooldownVar = 6.0f;
+
+// 分身：本体＋分身が反射可能な弾をまとめて撃つ攻撃。
+constexpr int BossCloneMax = 2;                 // 同時に出す分身の数
+constexpr float BossCloneWarnTime = 1.0f;       // 出現予兆
+constexpr float BossCloneActiveTime = 1.2f;     // 分身が残る時間（演出）
+constexpr float BossCloneCooldownMin = 9.0f;
+constexpr float BossCloneCooldownVar = 4.0f;
+constexpr int BossCloneBulletCount = 5;         // 1体が撃つ弾数（扇）
+constexpr float BossCloneBulletSpeed = 6.0f;
+constexpr float BossCloneBulletSpread = 0.5f;   // 扇の全角（ラジアン）
+constexpr float BossCloneDamageMul = 1.0f;      // 弾のダメージ倍率（boss.atk基準）
+constexpr float BossCloneOffset = 3.2f;         // 本体からの分身配置距離
+
+// 分裂：HP1/4ほどの分身を出し、一定時間or撃破まで反射可能弾を撃たせる通常技。
+constexpr int   BossSplitCount = 2;             // 1回の発動で出す分身数
+constexpr int   BossSplitMax = 2;               // 同時に存在できる分身の上限
+constexpr float BossSplitHpRatio = 0.25f;       // 分身HP＝ボス最大HPの割合（1/4）
+constexpr float BossSplitLifetime = 30.0f;      // 寿命（秒）。これか撃破で消える
+constexpr float BossSplitCooldownMin = 16.0f;   // 次の分裂までの最短
+constexpr float BossSplitCooldownVar = 6.0f;    // 上乗せ乱数
+constexpr float BossSplitRadius = 0.78f;        // 分身の当たり/見た目半径（ミニボス感）
+constexpr float BossSplitSpeed = 2.1f;          // 分身の移動速度
+constexpr float BossSplitFireInterval = 1.5f;   // 反射可能弾の発射間隔
+constexpr int   BossSplitBulletCount = 3;       // 1回の発射数（扇）
+constexpr float BossSplitBulletSpeed = 5.5f;    // 弾速
+constexpr float BossSplitBulletSpread = 0.4f;   // 扇の全角（ラジアン）
+constexpr float BossSplitDamageMul = 0.7f;      // 弾ダメージ（boss.atk基準）
+
+// 扇状斬撃：壁で3回跳ね返り、跳ねるほど巨大化＆強化する斬撃を扇状に飛ばす通常技。
+// 本体（自分）かプレイヤー（敵）に当たると消滅。反射可能。
+constexpr float BossFanSlashCooldownMin = 9.0f;
+constexpr float BossFanSlashCooldownVar = 4.0f;
+constexpr int   BossFanSlashCount = 1;          // 飛ばす斬撃数（三日月を1つ）
+constexpr float BossFanSlashSpread = 0.7f;      // 扇の全角（ラジアン・複数時のみ使用）
+constexpr float BossFanSlashSpeed = 6.5f;       // 初速
+constexpr float BossFanSlashRadius = 0.5f;      // 初期サイズ（シールドの大きさ）
+constexpr int   BossFanSlashBounce = 3;         // 壁反射回数
+constexpr float BossFanSlashGrowth = 1.25f;     // 1反射ごとのサイズ/威力倍率
+constexpr float BossFanSlashDamageMul = 0.9f;   // ダメージ（boss.atk基準）
+constexpr float BossFanSlashTtl = 6.0f;         // 寿命（秒）
+
+// チャージ衝撃波：チャージ後、フィールド1/2ほどの範囲円へ衝撃波を放つ通常技。
+// 衝撃波（＝ボス）から遠いほどダメージが上がる＝ボスに近づくほど安全（高リスク誘導）。
+constexpr float BossShockwaveCooldownMin = 11.0f;
+constexpr float BossShockwaveCooldownVar = 5.0f;
+constexpr float BossShockwaveChargeTime = 1.3f;    // チャージ（予兆）時間。この間に近づいて回避
+constexpr float BossShockwaveActiveTime = 0.55f;   // 衝撃波が広がりきるまでの時間
+constexpr float BossShockwaveRangeRatio = 0.5f;    // 到達半径＝アリーナ半径×これ（1/2フィールド）
+constexpr float BossShockwaveMinDamageMul = 0.15f; // 中心付近（近い）の最小ダメージ（boss.atk基準）
+constexpr float BossShockwaveMaxDamageMul = 1.6f;  // 最遠（範囲端）の最大ダメージ（boss.atk基準）
+
+// 隕石落下（大技・反射不可）：一定時間、エリアのランダム位置に隕石を落とし続ける。
+// 着弾には予兆（落下位置の表示）があり、踏まなければ回避できる。
+constexpr float BossMeteorCooldownMin = 13.0f;
+constexpr float BossMeteorCooldownVar = 5.0f;
+constexpr float BossMeteorDuration = 5.0f;      // 降らせ続ける時間
+constexpr float BossMeteorDropInterval = 0.42f; // 落下の間隔
+constexpr float BossMeteorWarnTime = 0.85f;     // 着弾予兆（落下位置表示）の時間
+constexpr float BossMeteorImpactTime = 0.32f;   // 着弾エフェクト/判定の時間
+constexpr float BossMeteorRadius = 1.7f;        // 着弾の半径
+constexpr float BossMeteorDamageMul = 1.4f;     // 着弾ダメージ（boss.atk基準）
+constexpr int   BossMeteorPerDrop = 1;          // 1回の落下数
+
+// 突進追走（大技）：高速で走り回り、接触で確定つかみ→引きずりダメージ。
+// ※無敵ではない＝この間も反射などでダメージは通る。
+constexpr float BossRushCooldownMin = 14.0f;
+constexpr float BossRushCooldownVar = 5.0f;
+constexpr float BossRushDuration = 6.0f;        // 走り回る時間
+constexpr float BossRushSpeedMul = 3.6f;        // 通常移動速度に対する突進速度倍率
+constexpr float BossRushDragTime = 1.6f;        // 1回のつかみ引きずり時間
+constexpr float BossRushDragDamageMul = 0.6f;   // 引きずり中の周期ダメージ（boss.atk基準）
+
+// タレット：合間にボスが設置する反射可能な砲台。反射弾で壊せる。
+constexpr int BossTurretMax = 3;                // 同時設置できる数
+constexpr float BossTurretSpawnInterval = 5.0f; // 設置の間隔
+constexpr float BossTurretHp = 60.0f;           // 砲台HP（反射弾で削る・tierで増える）
+constexpr float BossTurretFireInterval = 1.6f;  // 発射間隔（tierで短縮）
+constexpr float BossTurretBulletSpeed = 6.5f;   // 弾速（tierで上昇）
+constexpr float BossTurretDamageMul = 0.8f;     // 弾ダメージ（boss.atk基準）
+constexpr float BossTurretRadius = 0.6f;        // 当たり/見た目半径
+// tier（強さ段階）：フェーズが進むほど強い砲台が出る。tier2はビーム（高速連射ストリーム）。
+constexpr int BossTurretBeamBurst = 3;          // ビームタレットの1発あたり連射数
 
 // ボスの腕（ダメージ床）。ボス本体の一部として最寄りプレイヤー方向へ伸び、触れると継続ダメージ。
 // 腕に触れた瞬間、つかみ(下記)が可能ならそのプレイヤーを捕獲する。
@@ -154,6 +311,22 @@ enum class BossType
     HiddenBoss
 };
 
+// 各ボスが1つだけ持つ大技（反射不可）。SpawnBossでランダム/ラッシュ順に付与。
+enum class BossBigMove
+{
+    MegaBeam = 0,       // 極太レーザー薙ぎ払い（既存）
+    Meteor,             // 隕石落下（新）
+    InvincibleChase,    // 無敵で走り回り接触で確定つかみ（新）
+    Count
+};
+
+// ボスラッシュ（連続戦）の体数。
+constexpr int GauntletBossCount = 3;
+
+// カスタムボスのHP倍率スライダーの範囲。
+constexpr float CustomBossHpScaleMin = 0.5f;
+constexpr float CustomBossHpScaleMax = 4.0f;
+
 enum class StageType
 {
     Donut = 0,
@@ -187,8 +360,32 @@ enum class PickupType
     UltFull,
     Spread,
     Speed,
-    ScoreDouble
+    ScoreDouble,
+    // === 反射ゲーム向けの新アイテム ===
+    HealKit,        // 通常：最大HPの20%回復
+    ShieldEnlarge,  // 通常：5秒 反射板×1.2＋スタミナ消費なし
+    BlinkBoost,     // 通常：10秒 ブリンク距離×1.2
+    ReflectMagnet,  // 通常：5秒 弾が反射板中央へ吸い寄せられる
+    ChargeBlink,    // 通常：ブリンク即リキャスト＋色変化ブリンク（使用後10秒 反射×1.1, 最大2回）
+    NegaPosiCandy,  // レア：5秒ネガポジ（受けたダメを後でボスへ）
+    OverloadCore,   // レア：所持中 反射サイズ/距離/威力×1.2、最大HP80%固定
+    PhoenixFeather  // 激レア：所持中 一度だけ復活
 };
+
+// 新アイテムのパラメータ。
+constexpr float ItemHealPercent = 0.20f;           // 回復キット：最大HPの割合
+constexpr float ItemShieldEnlargeTime = 5.0f;      // 反射板巨大化の持続
+constexpr float ItemShieldEnlargeMul = 1.2f;       // 反射板の倍率
+constexpr float ItemBlinkBoostTime = 10.0f;        // ブリンク強化の持続
+constexpr float ItemBlinkBoostMul = 1.2f;          // ブリンク距離の倍率
+constexpr float ItemMagnetTime = 5.0f;             // マグネットの持続
+constexpr float ItemMagnetPull = 10.0f;            // 吸引の強さ（速度寄せ）
+constexpr float ItemChargeBlinkBuffTime = 10.0f;   // 色変化ブリンク使用後の反射バフ持続
+constexpr float ItemChargeBlinkReflectMul = 1.1f;  // そのときの反射ダメージ倍率
+constexpr int   ItemChargeBlinkMaxStacks = 2;      // 色変化ブリンクの使用可能回数
+constexpr float ItemNegaPosiTime = 5.0f;           // ネガポジキャンディーの持続
+constexpr float ItemOverloadMul = 1.2f;            // オーバーロードコアの反射倍率
+constexpr float ItemOverloadHpCap = 0.8f;          // オーバーロード中の最大HP割合
 
 enum class CoopSlotMode
 {
