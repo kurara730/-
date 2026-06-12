@@ -161,6 +161,7 @@ struct SettingsLayout
     std::array<UiRect, 5> volumeSliders{}; // 0-3:音量, 4:画面振動
     std::array<UiRect, 3> aimButtons{};
     UiRect fullscreenToggle{};
+    UiRect damageNumberToggle{};
     float sliderLeft = 0.0f;
     float sliderRight = 0.0f;
 };

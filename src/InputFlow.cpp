@@ -623,6 +623,14 @@ bool SweetsApp::HandleSettingsClick(float sx, float sy)
         SetFullscreenFromSettings(!fullscreen_);
         return true;
     }
+
+    const UiRect& dmgRect = layout.damageNumberToggle;
+    if (PointInRect(sx, sy, dmgRect.left, dmgRect.top, dmgRect.right, dmgRect.bottom))
+    {
+        showDamageNumbers_ = !showDamageNumbers_;
+        SaveSettings();
+        return true;
+    }
     return true;
 }
 

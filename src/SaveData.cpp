@@ -57,6 +57,7 @@ void SweetsApp::LoadProgress()
     seVolume_ = 1.0f;
     uiVolume_ = 1.0f;
     shakeScale_ = 1.0f;
+    showDamageNumbers_ = true;
     aimMode_ = AimMode::MoveDirection;
     bool savedFullscreen = false;
     const std::filesystem::path path = SaveFilePath();
@@ -75,6 +76,7 @@ void SweetsApp::LoadProgress()
             seVolume_ = ParseSaveFloat(line, "seVolume", seVolume_);
             uiVolume_ = ParseSaveFloat(line, "uiVolume", uiVolume_);
             shakeScale_ = ParseSaveFloat(line, "shakeScale", shakeScale_);
+            showDamageNumbers_ = ParseSaveInt(line, "damageNumbers", showDamageNumbers_ ? 1 : 0, 0, 1) != 0;
             aimMode_ = static_cast<AimMode>(ParseSaveInt(line, "aimMode", static_cast<int>(aimMode_), 0, 2));
             savedFullscreen = ParseSaveInt(line, "fullscreen", savedFullscreen ? 1 : 0, 0, 1) != 0;
         }
@@ -97,6 +99,7 @@ void SweetsApp::SaveSettings()
     out << "seVolume=" << ClampFloat(seVolume_, 0.0f, 1.0f) << "\n";
     out << "uiVolume=" << ClampFloat(uiVolume_, 0.0f, 1.0f) << "\n";
     out << "shakeScale=" << ClampFloat(shakeScale_, 0.0f, 1.0f) << "\n";
+    out << "damageNumbers=" << (showDamageNumbers_ ? 1 : 0) << "\n";
     out << "aimMode=" << static_cast<int>(aimMode_) << "\n";
     out << "fullscreen=" << (fullscreen_ ? 1 : 0) << "\n";
 }

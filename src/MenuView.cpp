@@ -1055,6 +1055,24 @@ void SweetsApp::DrawSettingsMenu()
     d2dContext_->DrawTextW(fullscreenText, static_cast<UINT32>(wcslen(fullscreenText)), smallFormat_.Get(),
         D2D1::RectF(fullscreenRect.left, fullscreenRect.top + 7.0f, fullscreenRect.right, fullscreenRect.bottom), textBrush_.Get());
 
+    // ダメージ数値表示のON/OFFトグル。
+    const UiRect& dmgHit = layout.damageNumberToggle;
+    const D2D1_RECT_F dmgRect = D2D1::RectF(dmgHit.left, dmgHit.top, dmgHit.right, dmgHit.bottom);
+    const bool dmgHover = PointInRect(mouseX_, mouseY_, dmgHit.left, dmgHit.top, dmgHit.right, dmgHit.bottom);
+    const bool dmgActive = dmgHover || showDamageNumbers_;
+    textBrush_->SetColor(D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.92f));
+    const wchar_t* dmgLabel = L"ダメージ数値";
+    d2dContext_->DrawTextW(dmgLabel, static_cast<UINT32>(wcslen(dmgLabel)), smallFormat_.Get(),
+        D2D1::RectF(left + 38.0f, dmgHit.top + 6.0f, left + 180.0f, dmgHit.bottom), textBrush_.Get());
+    textBrush_->SetColor(OldSelectFill(dmgActive));
+    d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(dmgRect, 6.0f, 6.0f), textBrush_.Get());
+    textBrush_->SetColor(OldSelectStroke(dmgActive));
+    d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(dmgRect, 6.0f, 6.0f), textBrush_.Get(), dmgActive ? 2.2f : 1.0f);
+    const wchar_t* dmgText = showDamageNumbers_ ? L"ON" : L"OFF";
+    textBrush_->SetColor(OldSelectText(dmgActive));
+    d2dContext_->DrawTextW(dmgText, static_cast<UINT32>(wcslen(dmgText)), smallFormat_.Get(),
+        D2D1::RectF(dmgRect.left, dmgRect.top + 7.0f, dmgRect.right, dmgRect.bottom), textBrush_.Get());
+
     smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
     textBrush_->SetColor(D2D1::ColorF(0.86f, 0.74f, 0.80f, 0.92f));
     const wchar_t* hint = L"スライダーと攻撃方向をクリックで操作。Esc / Backspaceで戻る";

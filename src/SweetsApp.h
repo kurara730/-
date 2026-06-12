@@ -519,6 +519,7 @@ private:
     float seVolume_ = 1.0f;
     float uiVolume_ = 1.0f;
     float shakeScale_ = 1.0f;   // 画面振動の強さ（設定。0=なし〜1=標準）
+    bool showDamageNumbers_ = true; // ダメージ数値表示（設定でON/OFF）
     uint64_t titleVideoSerial_ = 0;
     uint64_t eventVideoSerial_ = 0;
     Screen eventVideoNextScreen_ = Screen::Title;

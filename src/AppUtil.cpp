@@ -234,7 +234,7 @@ SettingsLayout SweetsApp::BuildSettingsLayout() const
 {
     SettingsLayout layout{};
     const float panelW = 480.0f;
-    const float panelH = 496.0f; // 画面振動スライダー1行ぶん追加
+    const float panelH = 540.0f; // 画面振動スライダー＋ダメージ数値トグルの行ぶん追加
     const float left = (static_cast<float>(width_) - panelW) * 0.5f;
     const float top = (static_cast<float>(height_) - panelH) * 0.5f;
     layout.panel = { left, top, left + panelW, top + panelH };
@@ -256,5 +256,7 @@ SettingsLayout SweetsApp::BuildSettingsLayout() const
     }
     const float fullscreenTop = aimTop + 54.0f;
     layout.fullscreenToggle = { left + panelW - 148.0f, fullscreenTop, left + panelW - 48.0f, fullscreenTop + 32.0f };
+    const float damageTop = fullscreenTop + 42.0f;
+    layout.damageNumberToggle = { left + panelW - 148.0f, damageTop, left + panelW - 48.0f, damageTop + 32.0f };
     return layout;
 }
