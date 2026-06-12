@@ -166,6 +166,31 @@ struct SettingsLayout
     float sliderRight = 0.0f;
 };
 
+// カスタムボスのプリセット（3枠まで保存）。
+struct CustomBossPreset
+{
+    bool used = false;
+    bool normals[5] = { true, true, false, false, false };
+    int bigMove = 0;
+    float hpScale = 1.0f;
+};
+
+// カスタムボス設定画面のクリック領域。Draw とクリック判定で共有する。
+struct CustomBossLayout
+{
+    UiRect panel{};
+    std::array<UiRect, 5> normalToggles{};
+    std::array<UiRect, 3> bigButtons{};
+    UiRect charButton{};
+    UiRect hpSlider{};      // クリック領域
+    float hpSliderLeft = 0.0f;
+    float hpSliderRight = 0.0f;
+    float hpSliderY = 0.0f;
+    std::array<UiRect, 3> presetLoad{};
+    std::array<UiRect, 3> presetSave{};
+    UiRect fightButton{};
+};
+
 struct CameraState
 {
     V2 center{};

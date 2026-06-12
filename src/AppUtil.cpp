@@ -260,3 +260,49 @@ SettingsLayout SweetsApp::BuildSettingsLayout() const
     layout.damageNumberToggle = { left + panelW - 148.0f, damageTop, left + panelW - 48.0f, damageTop + 32.0f };
     return layout;
 }
+
+CustomBossLayout SweetsApp::BuildCustomBossLayout() const
+{
+    CustomBossLayout layout{};
+    const float panelW = 560.0f;
+    const float panelH = 626.0f;
+    const float left = (static_cast<float>(width_) - panelW) * 0.5f;
+    const float top = (static_cast<float>(height_) - panelH) * 0.5f;
+    layout.panel = { left, top, left + panelW, top + panelH };
+
+    const float normalTop = top + 82.0f;
+    for (int i = 0; i < 5; ++i)
+    {
+        const float y = normalTop + i * 42.0f;
+        layout.normalToggles[i] = { left + 40.0f, y, left + panelW - 40.0f, y + 34.0f };
+    }
+    const float bigTop = normalTop + 5 * 42.0f + 26.0f;
+    const float bigW = (panelW - 80.0f - 2.0f * 12.0f) / 3.0f;
+    for (int i = 0; i < 3; ++i)
+    {
+        const float x = left + 40.0f + i * (bigW + 12.0f);
+        layout.bigButtons[i] = { x, bigTop, x + bigW, bigTop + 36.0f };
+    }
+    // HPスライダー。
+    layout.hpSliderY = bigTop + 36.0f + 30.0f;
+    layout.hpSliderLeft = left + 130.0f;
+    layout.hpSliderRight = left + panelW - 90.0f;
+    layout.hpSlider = { layout.hpSliderLeft - 14.0f, layout.hpSliderY - 16.0f, layout.hpSliderRight + 14.0f, layout.hpSliderY + 16.0f };
+    // キャラ。
+    const float charTop = layout.hpSliderY + 26.0f;
+    layout.charButton = { left + 40.0f, charTop, left + panelW - 40.0f, charTop + 34.0f };
+    // プリセット（呼出/保存の2行×3枠）。
+    const float presetW = (panelW - 80.0f - 2.0f * 10.0f) / 3.0f;
+    const float loadTop = charTop + 34.0f + 26.0f;
+    const float saveTop = loadTop + 34.0f;
+    for (int i = 0; i < 3; ++i)
+    {
+        const float x = left + 40.0f + i * (presetW + 10.0f);
+        layout.presetLoad[i] = { x, loadTop, x + presetW, loadTop + 30.0f };
+        layout.presetSave[i] = { x, saveTop, x + presetW, saveTop + 28.0f };
+    }
+    // 戦う。
+    const float fightTop = saveTop + 28.0f + 16.0f;
+    layout.fightButton = { left + panelW * 0.5f - 110.0f, fightTop, left + panelW * 0.5f + 110.0f, fightTop + 42.0f };
+    return layout;
+}

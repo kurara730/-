@@ -369,6 +369,11 @@ void SweetsApp::SpawnBoss()
         boss_.maxHp *= 2.0f; // ボス単体戦：耐久を2倍にして歯ごたえを出す
         boss_.hp = boss_.maxHp;
     }
+    if (gameMode_ == GameMode::CustomBoss)
+    {
+        boss_.maxHp *= customHpScale_; // カスタム設定のHP倍率
+        boss_.hp = boss_.maxHp;
+    }
     for (int i = 0; i < 2; ++i)
     {
         boss_.armHp[i] = boss_.maxHp * BossArmHpRatio; // 腕HP＝ボス最大HPの10%

@@ -639,49 +639,82 @@ void SweetsApp::SetFullscreenFromSettings(bool enabled)
     SetFullscreen(enabled, true);
 }
 
-// カスタムボス設定画面のクリック処理。座標計算は DrawCustomBossMenu と一致させること。
+// カスタムボス設定画面のクリック処理。レイアウトは BuildCustomBossLayout() を共有。
 bool SweetsApp::HandleCustomBossClick(float sx, float sy)
 {
-    const float panelW = 560.0f;
-    const float panelH = 560.0f;
-    const float left = (static_cast<float>(width_) - panelW) * 0.5f;
-    const float top = (static_cast<float>(height_) - panelH) * 0.5f;
+    const CustomBossLayout layout = BuildCustomBossLayout();
 
-    // 通常技トグル（5行）。
-    const float normalTop = top + 90.0f;
+    // 通常技トグル。
     for (int i = 0; i < 5; ++i)
     {
-        const float y = normalTop + i * 44.0f;
-        if (PointInRect(sx, sy, left + 40.0f, y, left + panelW - 40.0f, y + 36.0f))
+        const UiRect& r = layout.normalToggles[i];
+        if (PointInRect(sx, sy, r.left, r.top, r.right, r.bottom))
         {
             customKitNormals_[i] = !customKitNormals_[i];
             return true;
         }
     }
     // 大技（3択）。
-    const float bigTop = normalTop + 5 * 44.0f + 6.0f + 28.0f;
-    const float bigW = (panelW - 80.0f - 2.0f * 12.0f) / 3.0f;
     for (int i = 0; i < 3; ++i)
     {
-        const float x = left + 40.0f + i * (bigW + 12.0f);
-        if (PointInRect(sx, sy, x, bigTop, x + bigW, bigTop + 38.0f))
+        const UiRect& r = layout.bigButtons[i];
+        if (PointInRect(sx, sy, r.left, r.top, r.right, r.bottom))
         {
             customBigMove_ = i;
             return true;
         }
     }
+    // HPスライダー（クリック位置で設定）。
+    if (PointInRect(sx, sy, layout.hpSlider.left, layout.hpSlider.top, layout.hpSlider.right, layout.hpSlider.bottom))
+    {
+        const float v = ClampFloat((sx - layout.hpSliderLeft) / (layout.hpSliderRight - layout.hpSliderLeft), 0.0f, 1.0f);
+        customHpScale_ = CustomBossHpScaleMin + v * (CustomBossHpScaleMax - CustomBossHpScaleMin);
+        return true;
+    }
     // キャラ選択（サイクル）。
-    const float charTop = bigTop + 56.0f;
-    if (PointInRect(sx, sy, left + 40.0f, charTop, left + panelW - 40.0f, charTop + 38.0f))
+    if (PointInRect(sx, sy, layout.charButton.left, layout.charButton.top, layout.charButton.right, layout.charButton.bottom))
     {
         loadoutIndex_ = (loadoutIndex_ + 1) % static_cast<int>(Loadouts.size());
         player_.weapon = Loadouts[loadoutIndex_].weapon;
         player_.character = Loadouts[loadoutIndex_].character;
         return true;
     }
+    // プリセット呼出。
+    for (int i = 0; i < 3; ++i)
+    {
+        const UiRect& r = layout.presetLoad[i];
+        if (PointInRect(sx, sy, r.left, r.top, r.right, r.bottom))
+        {
+            if (customPresets_[i].used)
+            {
+                for (int k = 0; k < 5; ++k) customKitNormals_[k] = customPresets_[i].normals[k];
+                customBigMove_ = customPresets_[i].bigMove;
+                customHpScale_ = customPresets_[i].hpScale;
+                message_ = L"プリセット" + std::to_wstring(i + 1) + L" 呼出";
+                messageT_ = 1.2f;
+            }
+            return true;
+        }
+    }
+    // プリセット保存。
+    for (int i = 0; i < 3; ++i)
+    {
+        const UiRect& r = layout.presetSave[i];
+        if (PointInRect(sx, sy, r.left, r.top, r.right, r.bottom))
+        {
+            customPresets_[i].used = true;
+            for (int k = 0; k < 5; ++k) customPresets_[i].normals[k] = customKitNormals_[k];
+            customPresets_[i].bigMove = customBigMove_;
+            customPresets_[i].hpScale = customHpScale_;
+            SaveSettings();
+            message_ = L"プリセット" + std::to_wstring(i + 1) + L" 保存";
+            messageT_ = 1.2f;
+            return true;
+        }
+    }
     // 戦う。
-    const float fightTop = charTop + 58.0f;
-    if (PointInRect(sx, sy, left + panelW * 0.5f - 110.0f, fightTop, left + panelW * 0.5f + 110.0f, fightTop + 44.0f))
+    const UiRect& f = layout.fightButton;
+    if (PointInRect(sx, sy, f.left, f.top, f.right, f.bottom))
     {
         pendingGameMode_ = GameMode::CustomBoss;
         difficultyIndex_ = static_cast<int>(Difficulty::Normal);

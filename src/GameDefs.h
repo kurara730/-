@@ -323,6 +323,10 @@ enum class BossBigMove
 // ボスラッシュ（連続戦）の体数。
 constexpr int GauntletBossCount = 3;
 
+// カスタムボスのHP倍率スライダーの範囲。
+constexpr float CustomBossHpScaleMin = 0.5f;
+constexpr float CustomBossHpScaleMax = 4.0f;
+
 enum class StageType
 {
     Donut = 0,

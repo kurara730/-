@@ -260,6 +260,7 @@ private:
     void StartSelectedTitleItem();
     void DrawCustomBossMenu();              // カスタムボス設定画面の描画
     bool HandleCustomBossClick(float sx, float sy); // カスタムボス設定画面のクリック処理
+    CustomBossLayout BuildCustomBossLayout() const; // 設定画面のレイアウト（Draw/Click共有）
     void ActivatePauseMenuItem();
     bool HandlePauseClick(float sx, float sy);
     bool HandlePauseDrag(float sx, float sy);
@@ -465,6 +466,8 @@ private:
     // カスタムボス：プレイヤーが選んだ技セット（0:タレット 1:ビーム 2:分裂 3:扇 4:衝撃波）と大技。
     bool customKitNormals_[5] = { true, true, false, false, false };
     int  customBigMove_ = 0;    // BossBigMove（0:薙払 1:隕石 2:突進）
+    float customHpScale_ = 1.0f; // カスタムボスのHP倍率
+    CustomBossPreset customPresets_[3]; // プリセット3枠
     StageType stage_ = StageType::Donut;
     FieldShape fieldShape_ = FieldShape::Circle;
     float stageTimer_ = 0.0f;
