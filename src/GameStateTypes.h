@@ -112,6 +112,16 @@ struct Player
     bool shieldExhausted = false;       // スタミナ切れ中（一定回復まで再展開不可）
     float reflectPerfectT = 0.0f;       // 構え直後のパーフェクト反射の残り窓
     int   rollVortexStock = 0;          // ロール渦反射：シールドで巻き取った敵弾のストック（満タン/パーフェクトでスパイラル放出）
+    // === アイテム効果 ===
+    float itemShieldEnlargeT = 0.0f;    // 反射板巨大化（×1.2＋スタミナ消費なし）の残り
+    float itemBlinkBoostT = 0.0f;       // ブリンク強化（距離×1.2）の残り
+    float itemMagnetT = 0.0f;           // マグネット（弾を反射板中央へ）の残り
+    float itemReflectBuffT = 0.0f;      // チャージブリンク由来の反射×1.1 の残り
+    int   chargeBlinkStacks = 0;        // 色変化ブリンクの残り使用回数（最大ItemChargeBlinkMaxStacks）
+    bool  hasOverloadCore = false;      // オーバーロードコア所持（反射全部×1.2・最大HP80%固定）
+    bool  hasPhoenix = false;           // フェニックスの羽所持（一度だけ復活）
+    float reflectSizeMul = 1.0f;        // 反射板サイズ倍率（毎フレーム算出・描画/判定で共有）
+    float reflectDmgMul = 1.0f;         // 反射ダメージ倍率（毎フレーム算出）
     float coreCharge = 0.0f;            // リフレクションコアのチャージ（敵に攻撃を当てて蓄積。満タンで右クリック設置）
     float bombCharge = 0.0f;    // チョコ爆弾のチャージ量（長押し時間）
     float fireHeat = 0.0f;      // ショートのヒート（撃ち続けた時間。移動でリセット）

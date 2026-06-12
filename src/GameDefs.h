@@ -360,8 +360,32 @@ enum class PickupType
     UltFull,
     Spread,
     Speed,
-    ScoreDouble
+    ScoreDouble,
+    // === 反射ゲーム向けの新アイテム ===
+    HealKit,        // 通常：最大HPの20%回復
+    ShieldEnlarge,  // 通常：5秒 反射板×1.2＋スタミナ消費なし
+    BlinkBoost,     // 通常：10秒 ブリンク距離×1.2
+    ReflectMagnet,  // 通常：5秒 弾が反射板中央へ吸い寄せられる
+    ChargeBlink,    // 通常：ブリンク即リキャスト＋色変化ブリンク（使用後10秒 反射×1.1, 最大2回）
+    NegaPosiCandy,  // レア：5秒ネガポジ（受けたダメを後でボスへ）
+    OverloadCore,   // レア：所持中 反射サイズ/距離/威力×1.2、最大HP80%固定
+    PhoenixFeather  // 激レア：所持中 一度だけ復活
 };
+
+// 新アイテムのパラメータ。
+constexpr float ItemHealPercent = 0.20f;           // 回復キット：最大HPの割合
+constexpr float ItemShieldEnlargeTime = 5.0f;      // 反射板巨大化の持続
+constexpr float ItemShieldEnlargeMul = 1.2f;       // 反射板の倍率
+constexpr float ItemBlinkBoostTime = 10.0f;        // ブリンク強化の持続
+constexpr float ItemBlinkBoostMul = 1.2f;          // ブリンク距離の倍率
+constexpr float ItemMagnetTime = 5.0f;             // マグネットの持続
+constexpr float ItemMagnetPull = 10.0f;            // 吸引の強さ（速度寄せ）
+constexpr float ItemChargeBlinkBuffTime = 10.0f;   // 色変化ブリンク使用後の反射バフ持続
+constexpr float ItemChargeBlinkReflectMul = 1.1f;  // そのときの反射ダメージ倍率
+constexpr int   ItemChargeBlinkMaxStacks = 2;      // 色変化ブリンクの使用可能回数
+constexpr float ItemNegaPosiTime = 5.0f;           // ネガポジキャンディーの持続
+constexpr float ItemOverloadMul = 1.2f;            // オーバーロードコアの反射倍率
+constexpr float ItemOverloadHpCap = 0.8f;          // オーバーロード中の最大HP割合
 
 enum class CoopSlotMode
 {

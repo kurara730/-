@@ -192,6 +192,71 @@ void SweetsApp::DrawHud()
             D2D1::RectF(l, t, r, t + 22.0f), textBrush_.Get());
     };
 
+    // === アイテムの残り時間ゲージ（右上）===
+    if (screen_ == Screen::Playing || screen_ == Screen::Paused)
+    {
+        const Player& ip = players_[0];
+        const float gx = static_cast<float>(width_) - 236.0f;
+        const float gw = 200.0f;
+        float gy = 56.0f;
+        auto timedGauge = [&](const wchar_t* name, float rem, float total, D2D1::ColorF c)
+        {
+            if (rem <= 0.0f || total <= 0.0f) return;
+            hudText(name, gx, gy - 2.0f, gx + gw, D2D1::ColorF(1.0f, 0.94f, 0.86f, 0.95f));
+            fillBar(gx, gy + 17.0f, gw, 8.0f, rem / total, D2D1::ColorF(0.20f, 0.10f, 0.15f, 0.9f), c);
+            gy += 34.0f;
+        };
+        timedGauge(L"反射板巨大化", ip.itemShieldEnlargeT, ItemShieldEnlargeTime, D2D1::ColorF(0.45f, 0.75f, 1.0f, 0.95f));
+        timedGauge(L"ブリンク強化", ip.itemBlinkBoostT, ItemBlinkBoostTime, D2D1::ColorF(1.0f, 0.95f, 0.80f, 0.95f));
+        timedGauge(L"マグネット", ip.itemMagnetT, ItemMagnetTime, D2D1::ColorF(1.0f, 0.75f, 0.30f, 0.95f));
+        timedGauge(L"反射バフ x1.1", ip.itemReflectBuffT, ItemChargeBlinkBuffTime, D2D1::ColorF(0.70f, 0.45f, 1.0f, 0.95f));
+        timedGauge(L"ネガポジ", negaposiT_, ItemNegaPosiTime, D2D1::ColorF(1.0f, 0.30f, 0.50f, 0.95f));
+        auto heldLabel = [&](const std::wstring& s, D2D1::ColorF c)
+        {
+            hudText(s, gx, gy - 2.0f, gx + gw, c);
+            gy += 24.0f;
+        };
+        if (ip.chargeBlinkStacks > 0) heldLabel(L"色変化ブリンク x" + std::to_wstring(ip.chargeBlinkStacks), D2D1::ColorF(0.8f, 0.6f, 1.0f, 0.95f));
+        if (ip.hasOverloadCore) heldLabel(L"◆ オーバーロードコア", D2D1::ColorF(1.0f, 0.4f, 0.35f, 0.95f));
+        if (ip.hasPhoenix) heldLabel(L"羽 フェニックスの羽", D2D1::ColorF(1.0f, 0.8f, 0.3f, 0.95f));
+    }
+
+    // === アイテム取得テロップ（中央上の目立つバナー）===
+    if ((screen_ == Screen::Playing || screen_ == Screen::Paused) && itemTelopT_ > 0.0f && !itemTelopName_.empty())
+    {
+        const float elapsed = itemTelopLife_ - itemTelopT_;
+        float a = 1.0f;
+        if (elapsed < 0.22f) a = elapsed / 0.22f;            // フェードイン
+        else if (itemTelopT_ < 0.7f) a = itemTelopT_ / 0.7f; // フェードアウト
+        a = ClampFloat(a, 0.0f, 1.0f);
+        const float bw = 540.0f;
+        const float bh = 78.0f;
+        const float bx = (static_cast<float>(width_) - bw) * 0.5f;
+        const float by = static_cast<float>(height_) - 168.0f + (1.0f - a) * 16.0f; // 画面下に表示・少し下からスライドイン
+        const D2D1_RECT_F box = D2D1::RectF(bx, by, bx + bw, by + bh);
+        const Color ic = itemTelopColor_;
+        // 背景パネル＋カラー枠＋左アクセントバー。
+        textBrush_->SetColor(D2D1::ColorF(0.06f, 0.03f, 0.05f, 0.82f * a));
+        d2dContext_->FillRoundedRectangle(D2D1::RoundedRect(box, 10.0f, 10.0f), textBrush_.Get());
+        textBrush_->SetColor(D2D1::ColorF(ic.r, ic.g, ic.b, 0.95f * a));
+        d2dContext_->DrawRoundedRectangle(D2D1::RoundedRect(box, 10.0f, 10.0f), textBrush_.Get(), 2.6f);
+        d2dContext_->FillRectangle(D2D1::RectF(bx, by + 10.0f, bx + 8.0f, by + bh - 10.0f), textBrush_.Get());
+        // 「アイテム入手」ラベル＋名前＋効果。
+        textBrush_->SetColor(D2D1::ColorF(ic.r, ic.g, ic.b, 0.9f * a));
+        smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        d2dContext_->DrawTextW(L"ITEM GET", 8, smallFormat_.Get(),
+            D2D1::RectF(bx, by + 6.0f, bx + bw, by + 26.0f), textBrush_.Get());
+        hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
+        textBrush_->SetColor(D2D1::ColorF(1.0f, 0.96f, 0.88f, a));
+        d2dContext_->DrawTextW(itemTelopName_.c_str(), static_cast<UINT32>(itemTelopName_.size()), hudFormat_.Get(),
+            D2D1::RectF(bx, by + 22.0f, bx + bw, by + 52.0f), textBrush_.Get());
+        textBrush_->SetColor(D2D1::ColorF(0.92f, 0.88f, 0.82f, 0.92f * a));
+        d2dContext_->DrawTextW(itemTelopDesc_.c_str(), static_cast<UINT32>(itemTelopDesc_.size()), smallFormat_.Get(),
+            D2D1::RectF(bx, by + 52.0f, bx + bw, by + 74.0f), textBrush_.Get());
+        hudFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+        smallFormat_->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
+    }
+
     for (int i = 0; i < MaxPlayers; ++i)
     {
         const Player& p = players_[i];

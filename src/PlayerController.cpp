@@ -301,10 +301,17 @@ void SweetsApp::UpdatePlayer(float dt)
         // フル状態から使い始めるときだけ回復タイマーを起動（連続使用中は継続）。
         if (player_.blinkCharges == BlinkMaxCharges) player_.blinkRechargeT = BlinkChargeCooldown;
         --player_.blinkCharges;
-        // 移動入力があればその方向、なければ向いている方向へ一定距離飛ぶ。
+        // 色変化ブリンク（チャージブリンクで付与）を消費＝使用後一定時間 反射ダメージUP。
+        if (player_.chargeBlinkStacks > 0)
+        {
+            --player_.chargeBlinkStacks;
+            player_.itemReflectBuffT = ItemChargeBlinkBuffTime;
+            Burst(fromPos, Gold, 16);
+        }
+        // 移動入力があればその方向、なければ向いている方向へ一定距離飛ぶ（強化中は1.2倍）。
         const V2 blinkDir = LenSq(dir) > 0.001f ? dir : FromAngle(player_.face);
         Burst(fromPos, Sky, 14);                       // 出発点に残光
-        player_.pos += blinkDir * BlinkDistance;
+        player_.pos += blinkDir * BlinkDistance * (player_.itemBlinkBoostT > 0.0f ? ItemBlinkBoostMul : 1.0f);
         ClampInside(player_.pos, player_.radius);
         player_.inv = std::max(player_.inv, BlinkInvuln);
         player_.dashT = 0.0f;                           // 既存ダッシュ移動はキャンセル
@@ -325,6 +332,16 @@ void SweetsApp::UpdatePlayer(float dt)
     if (player_.blinkLockT > 0.0f) player_.blinkLockT -= dt;
     if (player_.reflectShieldT > 0.0f) player_.reflectShieldT -= dt;
     if (player_.reflectPerfectT > 0.0f) player_.reflectPerfectT -= dt;
+    // アイテム効果タイマー。
+    if (player_.itemShieldEnlargeT > 0.0f) player_.itemShieldEnlargeT -= dt;
+    if (player_.itemBlinkBoostT > 0.0f) player_.itemBlinkBoostT -= dt;
+    if (player_.itemMagnetT > 0.0f) player_.itemMagnetT -= dt;
+    if (player_.itemReflectBuffT > 0.0f) player_.itemReflectBuffT -= dt;
+    // 反射板サイズ/反射ダメージ倍率（巨大化・オーバーロード・色変化ブリンクを合成）。
+    player_.reflectSizeMul = (player_.itemShieldEnlargeT > 0.0f ? ItemShieldEnlargeMul : 1.0f)
+        * (player_.hasOverloadCore ? ItemOverloadMul : 1.0f);
+    player_.reflectDmgMul = (player_.itemReflectBuffT > 0.0f ? ItemChargeBlinkReflectMul : 1.0f)
+        * (player_.hasOverloadCore ? ItemOverloadMul : 1.0f);
     // ブリンク直後は攻撃ロック中。クリックをこの間は受け付けない＝同時発動を防ぐ。
     const bool attackLocked = player_.blinkLockT > 0.0f;
     // 左クリック（マウス）/ RT・RB（パッド）：基本は前方シールドで反射。
@@ -346,7 +363,9 @@ void SweetsApp::UpdatePlayer(float dt)
     // スタミナ：構え中は消費、下ろし中は回復。0で一旦スタミナ切れ（一定回復まで再展開不可）。
     if (shieldHeldThisFrame)
     {
-        player_.shieldStamina = std::max(0.0f, player_.shieldStamina - ShieldStaminaDrainPerSec * dt);
+        // 反射板巨大化中はスタミナを消費しない。
+        if (player_.itemShieldEnlargeT <= 0.0f)
+            player_.shieldStamina = std::max(0.0f, player_.shieldStamina - ShieldStaminaDrainPerSec * dt);
         if (player_.shieldStamina <= 0.0f) { player_.shieldExhausted = true; player_.reflectShieldT = 0.0f; }
     }
     else
@@ -741,6 +760,8 @@ void SweetsApp::UpdateReflectShield(float dt)
     Player& p = player_;
     if (p.downed || p.reflectShieldT <= 0.0f || !boss_.active) return;
     const V2 face = FromAngle(p.face);
+    const float sizeMul = p.reflectSizeMul; // アイテム：反射板サイズ倍率
+    const float itemDmgMul = p.reflectDmgMul; // アイテム：反射ダメージ倍率
     const bool choco = p.character == CharacterType::Chocolate;
     const bool roll = p.character == CharacterType::Roll; // ロールは渦に巻き取ってからスパイラル放出
     const bool perfect = p.reflectPerfectT > 0.0f; // 構え直後のパーフェクト反射
@@ -787,7 +808,7 @@ void SweetsApp::UpdateReflectShield(float dt)
             b.pos = from;
             b.vel = FromAngle(baseA + spread) * (ChocoReflectBoltSpeed * prof.speedMul);
             b.radius = prof.radius;
-            b.damage = ChocoReflectBoltDamage * prof.dmgMul;
+            b.damage = ChocoReflectBoltDamage * prof.dmgMul * itemDmgMul;
             b.ttl = 2.0f;
             b.color = prof.color;
             b.enemy = false;
@@ -807,7 +828,7 @@ void SweetsApp::UpdateReflectShield(float dt)
         const int n = p.rollVortexStock * RollVortexBoltsPerStock;
         if (n <= 0) return;
         const float baseDir = boss_.active ? AngleOf(boss_.pos - p.pos) : p.face; // ボスへ向けて渦を放つ
-        const float dmg = RollVortexBoltDamage * (perfect ? 1.35f : 1.0f);
+        const float dmg = RollVortexBoltDamage * (perfect ? 1.35f : 1.0f) * itemDmgMul;
         for (int i = 0; i < n; ++i)
         {
             const float t = (n > 1) ? static_cast<float>(i) / static_cast<float>(n - 1) : 0.0f;
@@ -846,7 +867,7 @@ void SweetsApp::UpdateReflectShield(float dt)
         if (!es.enemy || es.dead) continue;
         const V2 rel = es.pos - p.pos;
         const float d = Len(rel);
-        if (d > ReflectShieldRange + es.radius || d < 0.01f) continue;
+        if (d > ReflectShieldRange * sizeMul + es.radius || d < 0.01f) continue;
         if (Dot(rel / d, face) < cosHalf) continue; // 正面の扇の外
         es.dead = true;
         if (roll) absorb(es.pos); else volley(es.pos);
@@ -867,7 +888,7 @@ void SweetsApp::UpdateReflectShield(float dt)
             const V2 perp = rel - bdir * along;
             if (Len(perp) < BossBeamHalfWidth + p.radius)
             {
-                const float refl = boss_.atk * BossBeamReflectDps * dt * (choco ? 1.0f : 1.2f);
+                const float refl = boss_.atk * BossBeamReflectDps * dt * (choco ? 1.0f : 1.2f) * itemDmgMul;
                 DamageBoss(refl, true, 0);
                 if (boss_.active)
                 {
@@ -911,13 +932,27 @@ void SweetsApp::ResolvePlayerHit(Player& p, float dmg, float angle)
     Burst(p.pos, Red, 12);
     if (p.hp <= 0.0f)
     {
-        p.hp = 0.0f;
-        p.downed = true;
-        p.alive = false;
-        p.reviveT = 0.0f;
-        Burst(p.pos, Red, 28);
-        message_ = p.index == 0 ? L"プレイヤーがダウン" : L"味方がダウン";
-        messageT_ = 2.0f;
+        if (p.hasPhoenix)
+        {
+            // フェニックスの羽：一度だけ復活。
+            p.hasPhoenix = false;
+            p.hp = p.maxHp * 0.5f;
+            p.inv = std::max(p.inv, 1.6f);
+            Burst(p.pos, Gold, 50);
+            Burst(p.pos, Red, 30);
+            message_ = L"フェニックス復活!";
+            messageT_ = 2.4f;
+        }
+        else
+        {
+            p.hp = 0.0f;
+            p.downed = true;
+            p.alive = false;
+            p.reviveT = 0.0f;
+            Burst(p.pos, Red, 28);
+            message_ = p.index == 0 ? L"プレイヤーがダウン" : L"味方がダウン";
+            messageT_ = 2.0f;
+        }
     }
 }
 

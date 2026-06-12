@@ -100,7 +100,9 @@ void SweetsApp::ResetGame()
     // スペースを押したまま開始しても、開始直後にブリンクが暴発しないようにする。
     prevSpace_ = true;
     prevMouseLeft_ = mouseLeft_;
-    for (auto& pl : players_) { pl.grabbedT = 0.0f; pl.coreCharge = 0.0f; pl.reflectShieldT = 0.0f; pl.reflectShieldCd = 0.0f; pl.shieldStamina = ShieldStaminaMax; pl.shieldExhausted = false; pl.reflectPerfectT = 0.0f; pl.rollVortexStock = 0; }
+    for (auto& pl : players_) { pl.grabbedT = 0.0f; pl.coreCharge = 0.0f; pl.reflectShieldT = 0.0f; pl.reflectShieldCd = 0.0f; pl.shieldStamina = ShieldStaminaMax; pl.shieldExhausted = false; pl.reflectPerfectT = 0.0f; pl.rollVortexStock = 0;
+        pl.itemShieldEnlargeT = 0.0f; pl.itemBlinkBoostT = 0.0f; pl.itemMagnetT = 0.0f; pl.itemReflectBuffT = 0.0f;
+        pl.chargeBlinkStacks = 0; pl.hasOverloadCore = false; pl.hasPhoenix = false; pl.reflectSizeMul = 1.0f; pl.reflectDmgMul = 1.0f; }
     clearTimer_ = 0.0f;
     hiddenIntroT_ = 0.0f;
     hiddenBossT_ = 0.0f;
@@ -136,6 +138,9 @@ void SweetsApp::ResetGame()
     pendingHiddenBoss_ = false;
     message_ = L"";
     messageT_ = 0.0f;
+    itemTelopT_ = 0.0f;
+    itemTelopName_.clear();
+    itemTelopDesc_.clear();
     screenFlashT_ = 0.0f;
     combatNotices_.clear();
     damageNumbers_.clear();
@@ -300,22 +305,45 @@ void SweetsApp::ClearWave()
 // 表示は GameplayView.cpp 側で形も変え、敵と見分けやすくしています。
 void SweetsApp::SpawnPickupAt(V2 pos)
 {
+    // 反射ゲーム向けの新アイテムをレア度の重み付きで抽選する。
+    // 通常＝出やすい / レア＝たまに / 激レア＝ごく稀。重み0にすれば出現しない。
+    struct Weighted { PickupType type; int weight; };
+    static const Weighted table[] = {
+        { PickupType::HealKit,        100 }, // 通常
+        { PickupType::ShieldEnlarge,  100 },
+        { PickupType::BlinkBoost,     100 },
+        { PickupType::ReflectMagnet,  100 },
+        { PickupType::ChargeBlink,    100 },
+        { PickupType::NegaPosiCandy,   22 }, // レア
+        { PickupType::OverloadCore,    22 },
+        { PickupType::PhoenixFeather,   5 }, // 激レア
+    };
+    int total = 0;
+    for (const auto& w : table) total += w.weight;
+    if (total <= 0) return;
+    int roll = RandInt(0, total - 1);
+    PickupType chosen = table[0].type;
+    for (const auto& w : table)
+    {
+        if (roll < w.weight) { chosen = w.type; break; }
+        roll -= w.weight;
+    }
+
     Pickup p{};
     p.pos = pos;
     ClampInside(p.pos, 1.0f);
-    p.type = RandInt(0, 9);
-    p.pickupType = static_cast<PickupType>(p.type);
+    p.pickupType = chosen;
+    p.type = static_cast<int>(p.pickupType);
     switch (p.pickupType)
     {
-    case PickupType::Attack: p.color = Berry; break;
-    case PickupType::Slow: p.color = Sky; break;
-    case PickupType::Invincible: p.color = Cream; break;
-    case PickupType::Magnet: p.color = Mint; break;
-    case PickupType::BombDamage: p.color = Red; break;
-    case PickupType::Heal: p.color = Mint; break;
-    case PickupType::UltFull: p.color = Grape; break;
-    case PickupType::Spread: p.color = Gold; break;
-    case PickupType::Speed: p.color = Sky; break;
+    case PickupType::HealKit: p.color = Mint; break;
+    case PickupType::ShieldEnlarge: p.color = Sky; break;
+    case PickupType::BlinkBoost: p.color = Cream; break;
+    case PickupType::ReflectMagnet: p.color = Gold; break;
+    case PickupType::ChargeBlink: p.color = Grape; break;
+    case PickupType::NegaPosiCandy: p.color = Berry; break;
+    case PickupType::OverloadCore: p.color = Red; break;
+    case PickupType::PhoenixFeather: p.color = Gold; break;
     default: p.color = Sky; break;
     }
     SyncPickup3D(p);
@@ -625,6 +653,7 @@ void SweetsApp::UpdatePlaying(float dt)
 
     gameTime_ += dt;
     if (messageT_ > 0.0f) messageT_ -= dt;
+    if (itemTelopT_ > 0.0f) itemTelopT_ -= dt;
     if (slowT_ > 0.0f) slowT_ -= dt;
     // ネガポジ：残り時間を減らし、終了時に蓄積ダメージをまとめてボスへお返しする。
     if (negaposiT_ > 0.0f)

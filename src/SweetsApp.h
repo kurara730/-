@@ -527,6 +527,12 @@ private:
     uint64_t eventVideoSerial_ = 0;
     Screen eventVideoNextScreen_ = Screen::Title;
     std::wstring message_;
+    // アイテム取得テロップ（目立つバナー）。名前と効果を分けて表示する。
+    std::wstring itemTelopName_;
+    std::wstring itemTelopDesc_;
+    float itemTelopT_ = 0.0f;
+    float itemTelopLife_ = 0.0f;
+    Color itemTelopColor_ = Cream;
     std::wstring lastLoadStep_ = L"Boot";
     std::wstring lastLoadWarning_;
 

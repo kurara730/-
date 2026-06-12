@@ -233,6 +233,17 @@ void SweetsApp::UpdateShots(float dt)
             s.homingStrength = std::max(0.0f, s.homingStrength - dt * 0.65f);
         }
 
+        // マグネット：敵弾を反射板の中央付近へ吸い寄せる（前方の弾だけ・1Pのみ）。
+        if (s.enemy && !s.dead && player_.itemMagnetT > 0.0f && !player_.downed)
+        {
+            const V2 center = player_.pos + FromAngle(player_.face) * (ReflectShieldRange * 0.5f);
+            const V2 toC = center - s.pos;
+            const float dist = Len(toC);
+            if (dist > 0.05f && dist < ReflectShieldRange + 2.0f)
+            {
+                s.vel += (toC / dist) * ItemMagnetPull * dt;
+            }
+        }
         s.pos += s.vel * dt;
         if (Use3DRules() && s.enemy)
         {
@@ -604,6 +615,47 @@ void SweetsApp::UpdatePickups(float dt)
                 p.scoreDoubleT = 10.0f;
                 message_ = L"スコア2倍";
                 break;
+            // === 反射ゲーム向けの新アイテム（取得で即発動・テロップ表示）===
+            case PickupType::HealKit:
+                p.hp = std::min(p.maxHp, p.hp + p.maxHp * ItemHealPercent);
+                message_ = L"回復キット / HP20%回復";
+                break;
+            case PickupType::ShieldEnlarge:
+                p.itemShieldEnlargeT = ItemShieldEnlargeTime;
+                message_ = L"反射板巨大化 / 5秒 反射板1.2倍・消費なし";
+                break;
+            case PickupType::BlinkBoost:
+                p.itemBlinkBoostT = ItemBlinkBoostTime;
+                message_ = L"ブリンク強化 / 10秒 移動距離1.2倍";
+                break;
+            case PickupType::ReflectMagnet:
+                p.itemMagnetT = ItemMagnetTime;
+                message_ = L"マグネット / 5秒 弾を反射板へ吸着";
+                break;
+            case PickupType::ChargeBlink:
+                p.blinkCharges = BlinkMaxCharges;
+                p.blinkRechargeT = 0.0f;
+                p.chargeBlinkStacks = ItemChargeBlinkMaxStacks;
+                message_ = L"チャージブリンク / 即回復・色変化ブリンク×2 (使用後 反射1.1倍)";
+                break;
+            case PickupType::NegaPosiCandy:
+                negaposiT_ = ItemNegaPosiTime;
+                negaposiAccum_ = 0.0f;
+                message_ = L"ネガポジキャンディー / 5秒 受けたダメをボスへお返し";
+                break;
+            case PickupType::OverloadCore:
+                if (!p.hasOverloadCore)
+                {
+                    p.hasOverloadCore = true;
+                    p.maxHp *= ItemOverloadHpCap;        // 最大HP80%固定
+                    p.hp = std::min(p.hp, p.maxHp);
+                }
+                message_ = L"オーバーロードコア / 反射1.2倍・最大HP80%";
+                break;
+            case PickupType::PhoenixFeather:
+                p.hasPhoenix = true;
+                message_ = L"フェニックスの羽 / 一度だけ復活する";
+                break;
             default:
                 p.bombs = std::min(5, p.bombs + 1);
                 p.inv = std::max(p.inv, 1.0f);
@@ -611,7 +663,18 @@ void SweetsApp::UpdatePickups(float dt)
                 break;
             }
             Burst(item.pos, item.color, 28);
-            messageT_ = 2.0f;
+            messageT_ = 2.6f;
+            // 目立つ取得テロップ。message_ の「名前 / 効果」を分割してバナー表示する。
+            {
+                const std::wstring m = message_;
+                const size_t sep = m.find(L" / ");
+                itemTelopName_ = (sep == std::wstring::npos) ? m : m.substr(0, sep);
+                itemTelopDesc_ = (sep == std::wstring::npos) ? L"" : m.substr(sep + 3);
+                itemTelopColor_ = item.color;
+                itemTelopLife_ = 3.2f;
+                itemTelopT_ = itemTelopLife_;
+            }
+            audio_.PlaySoundEffect(SoundEffect::Reflect);
             item.ttl = 0.0f;
         }
     }

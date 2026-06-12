@@ -352,7 +352,8 @@ void SweetsApp::DrawScene()
         const float life = ClampFloat(player_.reflectShieldT / ReflectShieldActive, 0.0f, 1.0f);
         const float pulse = 0.6f + 0.4f * std::sin(gameTime_ * 24.0f);
         const Color sc = WithAlpha(Sky, ClampFloat(0.35f + 0.45f * life * pulse, 0.0f, 0.9f));
-        spriteCanvas_.DrawArc(player_.pos, ReflectShieldRange * 0.92f, ReflectShieldRange * 0.5f, player_.face, ReflectShieldArc, sc, 0.06f, 40);
+        const float szMul = player_.reflectSizeMul; // アイテムで反射板が拡大する
+        spriteCanvas_.DrawArc(player_.pos, ReflectShieldRange * 0.92f * szMul, ReflectShieldRange * 0.5f * szMul, player_.face, ReflectShieldArc, sc, 0.06f, 40);
     }
     // フェーズ移行中：フェーズ色のオーラ＋外へ広がる衝撃波リングで派手に演出。
     if (boss_.active && boss_.phaseIntroT > 0.0f)
