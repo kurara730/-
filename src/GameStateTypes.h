@@ -208,6 +208,18 @@ struct Geyser
     bool fired = false;     // この噴出のダメージ適用済み
 };
 
+// 集束装置（フィールドギミック）：反射弾を当てるとチャージ→満タンで予兆→ボスへビーム照射。
+struct Collector
+{
+    V2 pos{};
+    float charge = 0.0f;     // チャージ量（0..CollectorCapacity）
+    float warnT = 0.0f;      // 照射予兆の残り
+    float beamT = 0.0f;      // 照射中の残り
+    float cooldownT = 0.0f;  // 照射後のクールダウン残り
+    float beamAngle = 0.0f;  // 照射方向（予兆開始時にボスへ固定）
+    float flash = 0.0f;      // ヒット時の発光
+};
+
 // 通常ボスと隠しボスで共通利用する状態です。
 // 隠しボス固有のギミックは HiddenBossCore など別構造に分け、ここは本体HPと攻撃状態を持ちます。
 struct Boss

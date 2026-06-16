@@ -70,6 +70,7 @@ void SweetsApp::ResetGame()
     shots_.clear();
     meteors_.clear();
     geysers_.clear();
+    collectors_.clear();
     fieldGimmick_ = FieldGimmick::None;
     slashes_.clear();
     pickups_.clear();
@@ -210,6 +211,7 @@ void SweetsApp::StartWave()
     shots_.clear();
     meteors_.clear();
     geysers_.clear();
+    collectors_.clear();
     slashes_.clear();
     boss_ = {};
     BuildStage();
@@ -704,6 +706,7 @@ void SweetsApp::UpdatePlaying(float dt)
     UpdateMeteors(dt);       // 隕石（大技）の予兆→着弾
     UpdateGeysers(dt);       // 間欠泉（フィールドギミック）の周期→噴出
     UpdateRotatingDanger(dt); // 回転する危険帯（フィールドギミック）の回転＋継続ダメージ
+    UpdateCollectors(dt);    // 集束装置（フィールドギミック）のチャージ→照射
     UpdateReflectShield(dt); // 左クリックの反射シールド（UpdateShotsの前に反射を確定）
     UpdateShots(dt);
     ReleaseCaughtIfNoBomb();

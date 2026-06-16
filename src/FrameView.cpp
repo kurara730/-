@@ -432,28 +432,56 @@ void SweetsApp::DrawScene()
             spriteCanvas_.DrawRing(m.pos, m.radius * (0.8f + ip), 0.14f * (1.0f - ip) + 0.04f, WithAlpha(Red, 0.85f * (1.0f - ip)), 0.049f, 44);
         }
     }
-    // 間欠泉（フィールドギミック）：待機＝地割れマーカー、予兆＝蒸気の収束リング、噴出＝噴き上げ。
+    // 間欠泉（フィールドギミック）：待機＝噴出口＋蒸気、予兆＝地割れ発光＋立ち上る蒸気、噴出＝水柱＋衝撃波。
+    // 画面上＝-z方向。水柱は -z へ伸ばして「噴き上がり」を演出する。
     for (const auto& g : geysers_)
     {
         if (g.activeT > 0.0f)
         {
-            const float ap = ClampFloat(1.0f - g.activeT / GeyserActiveTime, 0.0f, 1.0f); // 0→1で減衰
-            spriteCanvas_.DrawCircle(g.pos, GeyserRadius * (0.7f + 0.5f * ap), WithAlpha(Sky, 0.7f * (1.0f - ap)), 0.05f, 36);
-            spriteCanvas_.DrawRing(g.pos, GeyserRadius * (0.6f + ap), 0.14f * (1.0f - ap) + 0.04f, WithAlpha(Cream, 0.85f * (1.0f - ap)), 0.049f, 44);
-            spriteCanvas_.DrawCircle(g.pos, GeyserRadius * 0.22f, WithAlpha(Cream, 0.6f * (1.0f - ap)), 0.048f, 18);
+            const float ap = ClampFloat(1.0f - g.activeT / GeyserActiveTime, 0.0f, 1.0f); // 0(噴出開始)→1(収束)
+            const float fade = 1.0f - ap;
+            // 噴き上がる水柱（根元→先端へ縮みながら -z へ伸びる）。
+            const int seg = 7;
+            for (int k = 0; k < seg; ++k)
+            {
+                const float t = static_cast<float>(k) / static_cast<float>(seg - 1); // 0根元→1先端
+                const float rise = GeyserRadius * (0.4f + 2.6f * ap) * t;
+                const V2 p{ g.pos.x, g.pos.z - rise };
+                const float rr = GeyserRadius * (0.55f - 0.34f * t) * (0.7f + 0.6f * ap);
+                spriteCanvas_.DrawCircle(p, std::max(0.05f, rr), WithAlpha(Cream, (0.75f - 0.5f * t) * fade), 0.052f, 18);
+                spriteCanvas_.DrawCircle(p, std::max(0.03f, rr * 0.6f), WithAlpha(Sky, (0.7f - 0.45f * t) * fade), 0.051f, 14);
+            }
+            // 地面の多重衝撃波リング。
+            spriteCanvas_.DrawCircle(g.pos, GeyserRadius * (0.7f + 0.5f * ap), WithAlpha(Sky, 0.7f * fade), 0.05f, 36);
+            spriteCanvas_.DrawRing(g.pos, GeyserRadius * (0.6f + 1.0f * ap), 0.14f * fade + 0.04f, WithAlpha(Cream, 0.85f * fade), 0.049f, 44);
+            spriteCanvas_.DrawRing(g.pos, GeyserRadius * (0.3f + 1.6f * ap), 0.08f * fade + 0.02f, WithAlpha(Mint, 0.5f * fade), 0.049f, 40);
+            // 根元の閃光。
+            spriteCanvas_.DrawCircle(g.pos, GeyserRadius * 0.34f * fade, WithAlpha(Cream, 0.9f * fade), 0.048f, 18);
         }
         else if (g.warnT > 0.0f)
         {
             const float wp = ClampFloat(1.0f - g.warnT / GeyserWarnTime, 0.0f, 1.0f); // 0→1で収束
-            const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 22.0f);
-            spriteCanvas_.DrawRing(g.pos, GeyserRadius, 0.09f, WithAlpha(Sky, 0.4f + 0.4f * pulse), 0.05f, 40);
-            spriteCanvas_.DrawRing(g.pos, GeyserRadius * (1.4f - wp), 0.06f, WithAlpha(Mint, 0.45f + 0.5f * wp), 0.049f, 32);
+            const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 24.0f);
+            // 地割れの発光（噴出が近いほど強く）。
+            spriteCanvas_.DrawRing(g.pos, GeyserRadius, 0.09f, WithAlpha(Sky, 0.35f + 0.45f * wp * pulse), 0.05f, 40);
+            spriteCanvas_.DrawRing(g.pos, GeyserRadius * (1.4f - 0.9f * wp), 0.06f, WithAlpha(Mint, 0.4f + 0.5f * wp), 0.049f, 32);
+            // 立ち上る蒸気のwisp（小さな円が揺れながら -z へ昇る）。
+            for (int k = 0; k < 3; ++k)
+            {
+                const float ph = gameTime_ * 2.6f + static_cast<float>(k) * 2.1f;
+                const float up = ph - std::floor(ph); // 0→1 ループ
+                const float ox = std::sin(ph * 3.1f) * 0.25f;
+                const V2 p{ g.pos.x + ox, g.pos.z - GeyserRadius * (0.3f + 1.0f * up) };
+                spriteCanvas_.DrawCircle(p, GeyserRadius * (0.18f * (1.0f - up) + 0.05f), WithAlpha(Cream, 0.4f * (1.0f - up) * (0.4f + 0.6f * wp)), 0.051f, 12);
+            }
         }
         else
         {
-            // 待機：噴出位置がわかる薄い地割れマーカー。
+            // 待機：噴出口（暗い穴）＋薄い地割れ＋ごく薄い蒸気のゆらぎ。
+            const float wisp = 0.5f + 0.5f * std::sin(gameTime_ * 1.8f + g.pos.x);
             spriteCanvas_.DrawRing(g.pos, GeyserRadius * 0.5f, 0.05f, WithAlpha(Sky, 0.16f), 0.02f, 28);
-            spriteCanvas_.DrawCircle(g.pos, GeyserRadius * 0.12f, WithAlpha(Mint, 0.18f), 0.02f, 14);
+            spriteCanvas_.DrawCircle(g.pos, GeyserRadius * 0.14f, WithAlpha(Navy, 0.30f), 0.021f, 14);
+            spriteCanvas_.DrawCircle({ g.pos.x, g.pos.z - GeyserRadius * 0.35f }, GeyserRadius * 0.08f, WithAlpha(Cream, 0.06f + 0.06f * wisp), 0.021f, 10);
         }
     }
     // 回転する危険帯（フィールドギミック）：危険セクター＝赤ウェッジ、先行警告＝点滅オレンジ。
@@ -477,6 +505,35 @@ void SweetsApp::DrawScene()
                 WithAlpha(Red, 0.18f + 0.10f * pulse), 0.057f, 40);
             // 外周の縁取り（境界を見やすく）。
             spriteCanvas_.DrawArc(center, ArenaRadius * 0.92f, 0.28f, c, sectorArc, WithAlpha(Red, 0.55f), 0.056f, 40);
+        }
+    }
+    // 集束装置（フィールドギミック）：本体＋チャージリング、満タン発光、予兆線、照射ビーム。
+    for (const auto& c : collectors_)
+    {
+        const float cf = ClampFloat(c.charge / CollectorCapacity, 0.0f, 1.0f);
+        const bool full = c.charge >= CollectorCapacity || c.warnT > 0.0f || c.beamT > 0.0f;
+        const float glow = full ? (0.6f + 0.4f * (0.5f + 0.5f * std::sin(gameTime_ * 10.0f))) : 0.0f;
+        // 本体（砲台）。
+        spriteCanvas_.DrawCircle(c.pos, CollectorRadius, WithAlpha(Navy, 0.85f), 0.30f, 28);
+        spriteCanvas_.DrawCircle(c.pos, CollectorRadius * 0.6f, WithAlpha(Sky, 0.7f + 0.3f * c.flash + glow), 0.29f, 24);
+        spriteCanvas_.DrawRing(c.pos, CollectorRadius * 1.18f, 0.08f, WithAlpha(Cream, 0.4f), 0.29f, 32);
+        // チャージリング（溜まり具合を弧で表示）。
+        if (cf > 0.0f)
+            spriteCanvas_.DrawArc(c.pos, CollectorRadius * 1.3f, 0.12f, -Pi * 0.5f + TwoPi * cf * 0.5f, TwoPi * cf, WithAlpha(Gold, 0.85f), 0.288f, 48);
+        // 予兆線（照射方向を固定表示・細い点滅ライン）。
+        if (c.warnT > 0.0f)
+        {
+            const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 30.0f);
+            const V2 mid = c.pos + FromAngle(c.beamAngle) * (CollectorBeamLength * 0.5f);
+            spriteCanvas_.DrawQuad(nullptr, mid, { CollectorBeamHalfWidth * 0.5f, CollectorBeamLength }, c.beamAngle - Pi * 0.5f, WithAlpha(Gold, 0.25f + 0.4f * pulse), 0.055f);
+        }
+        // 照射ビーム（収束ビーム）。
+        if (c.beamT > 0.0f)
+        {
+            const float bp = ClampFloat(c.beamT / CollectorBeamTime, 0.0f, 1.0f);
+            const V2 mid = c.pos + FromAngle(c.beamAngle) * (CollectorBeamLength * 0.5f);
+            spriteCanvas_.DrawQuad(nullptr, mid, { CollectorBeamHalfWidth * 2.0f * bp, CollectorBeamLength }, c.beamAngle - Pi * 0.5f, WithAlpha(Sky, 0.85f * bp), 0.054f);
+            spriteCanvas_.DrawQuad(nullptr, mid, { CollectorBeamHalfWidth * bp, CollectorBeamLength }, c.beamAngle - Pi * 0.5f, WithAlpha(Cream, 0.9f * bp), 0.053f);
         }
     }
 

@@ -352,6 +352,21 @@ constexpr float RotatingDangerWarnTime = 0.7f;       // 危険化の予兆時間
 constexpr float RotatingDangerDpsMul = 0.7f;         // 継続ダメージ＝boss.atk×これ（毎秒・小さめのチップ）
 constexpr float RotatingDangerTickInterval = 0.5f;   // チップ適用間隔（i-frame 0.45 < これ で安定適用）
 
+// 集束装置（フィールドギミック）：反射弾を当ててチャージ→満タンでボスへビーム照射。
+// 反射が上手いほど早く撃てる＝反射を攻め火力に変える攻めの選択肢。
+constexpr int   CollectorCount = 2;                  // 設置数（アリーナ対角）
+constexpr float CollectorRadius = 0.7f;              // 当たり／見た目半径
+constexpr float CollectorCapacity = 100.0f;          // チャージ容量（満タンで照射）
+constexpr float CollectorChargeReflected = 18.0f;    // 反射弾を当てた時のチャージ（主）
+constexpr float CollectorChargeNormal = 5.0f;        // 通常弾を当てた時のチャージ（効率低・反射優遇）
+constexpr float CollectorWarnTime = 0.8f;            // 照射予兆（線を出して狙いを固定）
+constexpr float CollectorBeamTime = 0.5f;            // 照射時間
+constexpr float CollectorCooldown = 6.0f;            // 照射後のクールダウン
+constexpr float CollectorBeamDamage = 220.0f;        // 照射ダメージ（与ダメ基準・boss.atk非依存＝プレイヤー有利）
+constexpr float CollectorBeamDamagePerWave = 6.0f;   // wave補正
+constexpr float CollectorBeamHalfWidth = 1.1f;       // ビーム半幅（命中判定）
+constexpr float CollectorBeamLength = 28.0f;         // ビーム長（アリーナを貫く）
+
 // カスタムボスのHP倍率スライダーの範囲。
 constexpr float CustomBossHpScaleMin = 0.5f;
 constexpr float CustomBossHpScaleMax = 4.0f;

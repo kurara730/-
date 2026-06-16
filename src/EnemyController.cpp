@@ -775,6 +775,7 @@ void SweetsApp::UpdateMeteors(float dt)
 void SweetsApp::SetupFieldGimmick()
 {
     geysers_.clear();
+    collectors_.clear();
     dangerRot_ = 0.0f;
     dangerTickT_ = 0.0f;
     if (fieldGimmick_ == FieldGimmick::Geyser)
@@ -786,6 +787,67 @@ void SweetsApp::SetupFieldGimmick()
             g.pos = FromAngle(a) * (ArenaRadius * 0.55f);
             g.cycleT = GeyserCycle * i / GeyserSpotCount; // 位相ずらし＝順番に噴く
             geysers_.push_back(g);
+        }
+    }
+    else if (fieldGimmick_ == FieldGimmick::Collector)
+    {
+        for (int i = 0; i < CollectorCount; ++i)
+        {
+            Collector c{};
+            const float a = Pi * 0.25f + TwoPi * static_cast<float>(i) / static_cast<float>(CollectorCount); // 対角配置
+            c.pos = FromAngle(a) * (ArenaRadius * 0.66f);
+            collectors_.push_back(c);
+        }
+    }
+}
+
+// 集束装置（フィールドギミック）の更新。チャージ満タン→予兆→ボスへビーム照射→クールダウン。
+// チャージは弾ヒット時（CombatLoop側）に加算される。照射は与ダメ基準の固定大ダメージ。
+void SweetsApp::UpdateCollectors(float dt)
+{
+    if (fieldGimmick_ != FieldGimmick::Collector) return;
+    const float tmul = slowT_ > 0.0f ? 0.5f : 1.0f;
+    for (auto& c : collectors_)
+    {
+        if (c.flash > 0.0f) c.flash = std::max(0.0f, c.flash - dt * 3.0f);
+        if (c.beamT > 0.0f)
+        {
+            c.beamT -= dt * tmul;
+            if (c.beamT <= 0.0f) { c.beamT = 0.0f; c.cooldownT = CollectorCooldown; }
+        }
+        else if (c.warnT > 0.0f)
+        {
+            c.warnT -= dt * tmul;
+            if (c.warnT <= 0.0f)
+            {
+                c.warnT = 0.0f;
+                c.beamT = CollectorBeamTime;
+                c.charge = 0.0f;
+                // 照射：予兆開始時に固定した線分上にボスがいればダメージ（移動で回避され得る）。
+                if (boss_.active)
+                {
+                    const V2 dir = FromAngle(c.beamAngle);
+                    const float proj = Dot(boss_.pos - c.pos, dir);
+                    if (proj > 0.0f && proj <= CollectorBeamLength)
+                    {
+                        const V2 closest = c.pos + dir * proj;
+                        if (Len(boss_.pos - closest) <= CollectorBeamHalfWidth + boss_.radius)
+                            DamageBoss(CollectorBeamDamage + wave_ * CollectorBeamDamagePerWave, true, 0);
+                    }
+                }
+                Burst(c.pos, Sky, 30);
+                shakeMag_ = std::max(shakeMag_, 0.20f); shakeLife_ = std::max(shakeLife_, 0.12f); shakeT_ = shakeLife_;
+            }
+        }
+        else if (c.cooldownT > 0.0f)
+        {
+            c.cooldownT = std::max(0.0f, c.cooldownT - dt * tmul);
+        }
+        else if (c.charge >= CollectorCapacity && boss_.active)
+        {
+            // 満タン→照射開始。狙いはここで固定（プレイヤー／ボスが線を読める）。
+            c.beamAngle = AngleOf(boss_.pos - c.pos);
+            c.warnT = CollectorWarnTime;
         }
     }
 }
@@ -822,10 +884,14 @@ void SweetsApp::UpdateGeysers(float dt)
                 if (boss_.active && Len(boss_.pos - g.pos) <= GeyserRadius + boss_.radius)
                 {
                     DamageBoss(GeyserBossDamage, false, 0);
-                    Burst(g.pos, Gold, 34);
+                    Burst(g.pos, Gold, 40);
+                    Burst(g.pos, Cream, 24);
                 }
-                Burst(g.pos, Sky, 26);
-                shakeMag_ = std::max(shakeMag_, 0.22f); shakeLife_ = std::max(shakeLife_, 0.14f); shakeT_ = shakeLife_;
+                // 噴き上げの飛沫（水柱イメージ）。
+                Burst(g.pos, Sky, 34);
+                Burst(g.pos, Cream, 20);
+                Burst(g.pos, Mint, 14);
+                shakeMag_ = std::max(shakeMag_, 0.30f); shakeLife_ = std::max(shakeLife_, 0.18f); shakeT_ = shakeLife_;
             }
         }
         else

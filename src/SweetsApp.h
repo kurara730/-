@@ -165,6 +165,7 @@ private:
     void UpdateMeteors(float dt);     // 隕石（大技）の予兆→着弾処理
     void UpdateGeysers(float dt);     // 間欠泉（フィールドギミック）の周期→噴出処理
     void UpdateRotatingDanger(float dt); // 回転する危険帯（フィールドギミック）の回転＋継続ダメージ
+    void UpdateCollectors(float dt);  // 集束装置（フィールドギミック）のチャージ→照射処理
     void SetupFieldGimmick();         // 現在の fieldGimmick_ に応じてフィールドギミックを初期化
     void UpdateShots(float dt);
     void ReleaseCaughtIfNoBomb();
@@ -412,6 +413,7 @@ private:
     std::vector<Shot> shots_;
     std::vector<Meteor> meteors_;       // 隕石（大技）
     std::vector<Geyser> geysers_;       // 間欠泉（フィールドギミック）
+    std::vector<Collector> collectors_; // 集束装置（フィールドギミック）
     FieldGimmick fieldGimmick_ = FieldGimmick::None; // ボスごとに割り当てるフィールドギミック
     float dangerRot_ = 0.0f;            // 回転危険帯：危険セクターの回転角（ラジアン）
     float dangerTickT_ = 0.0f;          // 回転危険帯：チップダメージの適用タイマー

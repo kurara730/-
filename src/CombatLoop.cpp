@@ -372,6 +372,23 @@ void SweetsApp::UpdateShots(float dt)
 
         if (s.dead) continue;
 
+        // 集束装置（フィールドギミック）：プレイヤー弾を当てるとチャージ。反射弾は多めに溜まる。
+        if (!s.enemy && !collectors_.empty())
+        {
+            for (auto& c : collectors_)
+            {
+                if (RuleDistance(s.pos, s.height, c.pos, ShotBodyY) < s.radius + CollectorRadius)
+                {
+                    c.charge = std::min(CollectorCapacity, c.charge + (s.reflected ? CollectorChargeReflected : CollectorChargeNormal));
+                    c.flash = 1.0f;
+                    Burst(s.pos, s.reflected ? Gold : Sky, s.reflected ? 12 : 6);
+                    s.dead = true;
+                    break;
+                }
+            }
+            if (s.dead) continue;
+        }
+
         // ショート弾：反射した瞬間に小さな追尾弾へ分裂（面制圧）
         if (!s.enemy && s.reflectSplit > 0 && s.reflectedCount > reflectBefore)
         {

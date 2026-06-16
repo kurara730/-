@@ -217,7 +217,7 @@ void SweetsApp::OnKeyDown(WPARAM key)
             const int next = (static_cast<int>(fieldGimmick_) + 1) % 4;
             fieldGimmick_ = static_cast<FieldGimmick>(next);
             SetupFieldGimmick();
-            const wchar_t* nm[4] = { L"なし", L"集束装置(未)", L"回転危険帯", L"間欠泉" };
+            const wchar_t* nm[4] = { L"なし", L"集束装置", L"回転危険帯", L"間欠泉" };
             message_ = std::wstring(L"[DBG] ギミック:") + nm[next]; messageT_ = 1.4f;
             break;
         }
