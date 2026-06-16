@@ -33,6 +33,7 @@
     <ClCompile Include="src\EnemyController.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\FrameView.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\GameFlow.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="src\GamepadInput.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\GameplayView.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\GraphicsDevice.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="src\HiddenBossLogic.cpp"><Filter>Source Files</Filter></ClCompile>

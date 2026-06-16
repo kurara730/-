@@ -82,6 +82,7 @@ void SweetsApp::UpdateEffectVisuals(float dt)
 // ダメージ数値（モンハンライズ風）を1つ湧かせる。小さなダメージや連続ヒットは直近の数値へ合算する。
 void SweetsApp::SpawnDamageNumber(V2 pos, float value, Color color, bool crit)
 {
+    if (!showDamageNumbers_) return; // 設定でダメージ数値表示をオフにしている
     if (value < 1.0f) return; // 微小な連続ダメージ（反射の毎フレーム等）は出さない
     // 近くに出たばかりの数値があれば合算（数字の洪水を防ぐ）。
     for (auto& dn : damageNumbers_)

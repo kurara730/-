@@ -56,6 +56,8 @@ void SweetsApp::LoadProgress()
     bgmVolume_ = 1.0f;
     seVolume_ = 1.0f;
     uiVolume_ = 1.0f;
+    shakeScale_ = 1.0f;
+    showDamageNumbers_ = true;
     aimMode_ = AimMode::MoveDirection;
     bool savedFullscreen = false;
     const std::filesystem::path path = SaveFilePath();
@@ -73,7 +75,23 @@ void SweetsApp::LoadProgress()
             bgmVolume_ = ParseSaveFloat(line, "bgmVolume", bgmVolume_);
             seVolume_ = ParseSaveFloat(line, "seVolume", seVolume_);
             uiVolume_ = ParseSaveFloat(line, "uiVolume", uiVolume_);
+            shakeScale_ = ParseSaveFloat(line, "shakeScale", shakeScale_);
+            showDamageNumbers_ = ParseSaveInt(line, "damageNumbers", showDamageNumbers_ ? 1 : 0, 0, 1) != 0;
             aimMode_ = static_cast<AimMode>(ParseSaveInt(line, "aimMode", static_cast<int>(aimMode_), 0, 2));
+            for (int i = 0; i < 3; ++i)
+            {
+                const std::string ku = "preset" + std::to_string(i) + "used";
+                const std::string kn = "preset" + std::to_string(i) + "norm";
+                const std::string kb = "preset" + std::to_string(i) + "big";
+                const std::string kh = "preset" + std::to_string(i) + "hp";
+                customPresets_[i].used = ParseSaveInt(line, ku.c_str(), customPresets_[i].used ? 1 : 0, 0, 1) != 0;
+                int curMask = 0;
+                for (int k = 0; k < 5; ++k) if (customPresets_[i].normals[k]) curMask |= (1 << k);
+                const int mask = ParseSaveInt(line, kn.c_str(), curMask, 0, 31);
+                for (int k = 0; k < 5; ++k) customPresets_[i].normals[k] = ((mask >> k) & 1) != 0;
+                customPresets_[i].bigMove = ParseSaveInt(line, kb.c_str(), customPresets_[i].bigMove, 0, 2);
+                customPresets_[i].hpScale = ParseSaveFloat(line, kh.c_str(), customPresets_[i].hpScale);
+            }
             savedFullscreen = ParseSaveInt(line, "fullscreen", savedFullscreen ? 1 : 0, 0, 1) != 0;
         }
     }
@@ -94,8 +112,20 @@ void SweetsApp::SaveSettings()
     out << "bgmVolume=" << ClampFloat(bgmVolume_, 0.0f, 1.0f) << "\n";
     out << "seVolume=" << ClampFloat(seVolume_, 0.0f, 1.0f) << "\n";
     out << "uiVolume=" << ClampFloat(uiVolume_, 0.0f, 1.0f) << "\n";
+    out << "shakeScale=" << ClampFloat(shakeScale_, 0.0f, 1.0f) << "\n";
+    out << "damageNumbers=" << (showDamageNumbers_ ? 1 : 0) << "\n";
     out << "aimMode=" << static_cast<int>(aimMode_) << "\n";
     out << "fullscreen=" << (fullscreen_ ? 1 : 0) << "\n";
+    // カスタムボスのプリセット3枠（通常技はビットマスク）。
+    for (int i = 0; i < 3; ++i)
+    {
+        int mask = 0;
+        for (int k = 0; k < 5; ++k) if (customPresets_[i].normals[k]) mask |= (1 << k);
+        out << "preset" << i << "used=" << (customPresets_[i].used ? 1 : 0) << "\n";
+        out << "preset" << i << "norm=" << mask << "\n";
+        out << "preset" << i << "big=" << customPresets_[i].bigMove << "\n";
+        out << "preset" << i << "hp=" << ClampFloat(customPresets_[i].hpScale, CustomBossHpScaleMin, CustomBossHpScaleMax) << "\n";
+    }
 }
 
 void SweetsApp::SaveProgress()

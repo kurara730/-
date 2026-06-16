@@ -112,6 +112,7 @@
     <ClCompile Include="src\EnemyController.cpp" />
     <ClCompile Include="src\FrameView.cpp" />
     <ClCompile Include="src\GameFlow.cpp" />
+    <ClCompile Include="src\GamepadInput.cpp" />
     <ClCompile Include="src\GameplayView.cpp" />
     <ClCompile Include="src\GraphicsDevice.cpp" />
     <ClCompile Include="src\HiddenBossLogic.cpp" />

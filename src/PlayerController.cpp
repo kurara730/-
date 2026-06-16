@@ -95,6 +95,27 @@ void SweetsApp::EnforceChocoWallLimit(size_t maxWalls)
     }
 }
 
+// リフレクションコア（恒久＝ttl<-0.5）の最大数を保つ。超過分は古い順に静かに撤去（衝撃波なし）。
+void SweetsApp::EnforceReflectionCoreLimit(size_t maxCores)
+{
+    auto countCores = [this]() {
+        size_t n = 0;
+        for (const auto& o : obstacles_) if (o.chocoWall && o.ttl < -0.5f) ++n;
+        return n;
+    };
+    while (countCores() >= maxCores)
+    {
+        Obstacle* oldest = nullptr;
+        for (auto& o : obstacles_)
+        {
+            if (o.chocoWall && o.ttl < -0.5f) { oldest = &o; break; }
+        }
+        if (!oldest) break;
+        Burst(oldest->pos, Cream, 10);
+        oldest->ttl = -0.25f; // breakableの衝撃波を出さずに除去パスで回収させる
+    }
+}
+
 // ブリンクした位置が「危険だったか」を判定します（ジャスト回避演出のトリガー）。
 // 迫る敵弾、ボスの照射ビーム帯、ダメージ床、地中噴出の円のいずれかに掛かっていれば true。
 bool SweetsApp::IsBlinkJustDodge(V2 pos) const
@@ -151,7 +172,8 @@ void SweetsApp::UpdatePlayer(float dt)
     // ただしブリンク（スペース）でだけは拘束を振りほどいて脱出できる。
     if (player_.grabbedT > 0.0f)
     {
-        const bool spaceHeldNow = KeyDown(VK_SPACE);
+        // スペース（キーボード）またはAボタン（パッド）で振りほどく。
+        const bool spaceHeldNow = KeyDown(VK_SPACE) || padBlinkHeld_;
         const bool spacePressedNow = spaceHeldNow && !prevSpace_;
         if (spacePressedNow && player_.blinkCharges > 0)
         {
@@ -161,6 +183,7 @@ void SweetsApp::UpdatePlayer(float dt)
             if (KeyDown('S') || KeyDown(VK_DOWN)) esc.z -= 1.0f;
             if (KeyDown('A') || KeyDown(VK_LEFT)) esc.x -= 1.0f;
             if (KeyDown('D') || KeyDown(VK_RIGHT)) esc.x += 1.0f;
+            esc += padMove_; // パッドの左スティック方向も加味
             const V2 escDir = LenSq(esc) > 0.001f ? Normalize(esc)
                 : Normalize(player_.pos - boss_.pos);
             const V2 fromPos = player_.pos;
@@ -205,10 +228,11 @@ void SweetsApp::UpdatePlayer(float dt)
     if (KeyDown('S') || KeyDown(VK_DOWN)) dir.z -= 1.0f;
     if (KeyDown('A') || KeyDown(VK_LEFT)) dir.x -= 1.0f;
     if (KeyDown('D') || KeyDown(VK_RIGHT)) dir.x += 1.0f;
+    dir += padMove_; // パッドの左スティック＋十字キーを加算してから正規化
     dir = Normalize(dir);
 
-    // Shift集中移動は速度を落として、弾幕を避けやすくする操作です。
-    player_.focus = KeyDown(VK_SHIFT);
+    // Shift（キーボード）/ LB（パッド）の集中移動は速度を落として、弾幕を避けやすくする操作です。
+    player_.focus = KeyDown(VK_SHIFT) || padFocus_;
     const float focusMul = player_.focus ? 0.42f : 1.0f;
     const float spd = player_.speed * focusMul * (player_.speedBuffT > 0.0f ? 1.55f : 1.0f);
     if (player_.dashT > 0.0f)
@@ -253,7 +277,10 @@ void SweetsApp::UpdatePlayer(float dt)
     // マウス座標をゲーム内座標へ変換して、照準モードに応じた向きを作ります。
     const V2 aimPoint = ScreenToWorld(mouseX_, mouseY_);
     player_.face = ResolvePlayerAim(player_, 0, dir, aimPoint);
+    // パッドの右スティックを倒している間は、照準モードに関わらずその方向へ向ける（ツインスティック操作）。
+    if (LenSq(padAim_) > 0.04f) player_.face = AngleOf(padAim_);
     const V2 actionPoint = ResolvePlayerAimPoint(player_, 0, aimPoint, 8.0f);
+    (void)actionPoint; // 旧チャージ攻撃で使用。現在は未使用だが照準計算の整合のため残す。
 
     // スペースキーでブリンク（短距離テレポート＋短い無敵）。最大BlinkMaxChargesまで連続使用可。
     // チャージは1回ごとに BlinkChargeCooldown 秒かけて順番に回復する。
@@ -266,21 +293,25 @@ void SweetsApp::UpdatePlayer(float dt)
             player_.blinkRechargeT = (player_.blinkCharges < BlinkMaxCharges) ? BlinkChargeCooldown : 0.0f;
         }
     }
-    const bool spaceHeld = KeyDown(VK_SPACE);
+    const bool spaceHeld = KeyDown(VK_SPACE) || padBlinkHeld_;
     const bool spacePressed = spaceHeld && !prevSpace_;
     if (spacePressed && player_.blinkCharges > 0)
     {
         const V2 fromPos = player_.pos;
-        // ジャスト回避判定：危険な状況（迫る敵弾／ボスの照射ビーム帯／ダメージ床／地中噴出）でのブリンク。
-        const bool justDodge = IsBlinkJustDodge(fromPos);
         // フル状態から使い始めるときだけ回復タイマーを起動（連続使用中は継続）。
         if (player_.blinkCharges == BlinkMaxCharges) player_.blinkRechargeT = BlinkChargeCooldown;
         --player_.blinkCharges;
-        // 移動入力があればその方向、なければ向いている方向へ飛ぶ。
+        // 色変化ブリンク（チャージブリンクで付与）を消費＝使用後一定時間 反射ダメージUP。
+        if (player_.chargeBlinkStacks > 0)
+        {
+            --player_.chargeBlinkStacks;
+            player_.itemReflectBuffT = ItemChargeBlinkBuffTime;
+            Burst(fromPos, Gold, 16);
+        }
+        // 移動入力があればその方向、なければ向いている方向へ一定距離飛ぶ（強化中は1.2倍）。
         const V2 blinkDir = LenSq(dir) > 0.001f ? dir : FromAngle(player_.face);
-        const float blinkDist = justDodge ? BlinkJustDistance : BlinkDistance; // 成功時は長く飛ぶ
         Burst(fromPos, Sky, 14);                       // 出発点に残光
-        player_.pos += blinkDir * blinkDist;
+        player_.pos += blinkDir * BlinkDistance * (player_.itemBlinkBoostT > 0.0f ? ItemBlinkBoostMul : 1.0f);
         ClampInside(player_.pos, player_.radius);
         player_.inv = std::max(player_.inv, BlinkInvuln);
         player_.dashT = 0.0f;                           // 既存ダッシュ移動はキャンセル
@@ -294,149 +325,56 @@ void SweetsApp::UpdatePlayer(float dt)
         SyncPlayer3D(player_);
         Burst(player_.pos, Cream, 18);                 // 到着点に出現エフェクト
         audio_.PlaySoundEffect(SoundEffect::Reflect);
-        if (justDodge)
-        {
-            // ヒットストップ＋自キャラへズーム。
-            hitstopT_ = HitstopTime;
-            justZoomT_ = JustZoomLife;
-            justZoomLife_ = JustZoomLife;
-            Burst(fromPos, Gold, 26);
-            message_ = L"ジャスト回避!";
-            messageT_ = std::max(messageT_, 0.9f);
-        }
     }
     prevSpace_ = spaceHeld;
 
     if (player_.fireCd > 0.0f) player_.fireCd -= dt;
     if (player_.blinkLockT > 0.0f) player_.blinkLockT -= dt;
-    // ブリンク直後は攻撃ロック中。クリック攻撃（左/右）をこの間は受け付けない＝同時発動を防ぐ。
+    if (player_.reflectShieldT > 0.0f) player_.reflectShieldT -= dt;
+    if (player_.reflectPerfectT > 0.0f) player_.reflectPerfectT -= dt;
+    // アイテム効果タイマー。
+    if (player_.itemShieldEnlargeT > 0.0f) player_.itemShieldEnlargeT -= dt;
+    if (player_.itemBlinkBoostT > 0.0f) player_.itemBlinkBoostT -= dt;
+    if (player_.itemMagnetT > 0.0f) player_.itemMagnetT -= dt;
+    if (player_.itemReflectBuffT > 0.0f) player_.itemReflectBuffT -= dt;
+    // 反射板サイズ/反射ダメージ倍率（巨大化・オーバーロード・色変化ブリンクを合成）。
+    player_.reflectSizeMul = (player_.itemShieldEnlargeT > 0.0f ? ItemShieldEnlargeMul : 1.0f)
+        * (player_.hasOverloadCore ? ItemOverloadMul : 1.0f);
+    player_.reflectDmgMul = (player_.itemReflectBuffT > 0.0f ? ItemChargeBlinkReflectMul : 1.0f)
+        * (player_.hasOverloadCore ? ItemOverloadMul : 1.0f);
+    // ブリンク直後は攻撃ロック中。クリックをこの間は受け付けない＝同時発動を防ぐ。
     const bool attackLocked = player_.blinkLockT > 0.0f;
-    // 左クリックは通常弾専用です。長押ししてもチャージ弾は出しません。
-    const bool primaryHeld = mouseLeft_ && !attackLocked;
-    const bool primaryPressed = primaryHeld && !prevMouseLeft_;
-    const bool primaryReleased = !primaryHeld && prevMouseLeft_;
-    if (player_.weapon == Weapon::Chocolate)
+    // 左クリック（マウス）/ RT・RB（パッド）：基本は前方シールドで反射。
+    const bool primaryHeld = (mouseLeft_ || padPrimaryHeld_) && !attackLocked;
+    bool shieldHeldThisFrame = false;
+    // 左クリックは常に反射シールド（直接攻撃はしない＝反射主体）。
+    // ボスのダウン中も同じく、攻撃ではなく反射でフィールドに干渉して有利を作る。
+    if (primaryHeld && !player_.shieldExhausted && player_.shieldStamina > 0.0f)
     {
-        // 長押しでチャージ→離して発射（サイズはチャージ段階）。飛行中はクリックで爆発
-        Shot* bomb = nullptr;
-        for (auto& bs : shots_)
+        // 長押しで反射シールドを継続展開。構え直した瞬間だけパーフェクト窓が開く。
+        if (player_.reflectShieldT <= 0.0f)
         {
-            if (!bs.dead && bs.chocoBomb && bs.ownerIndex == 0) { bomb = &bs; break; }
+            player_.reflectPerfectT = PerfectReflectWindow; // 構え直後＝パーフェクト
+            audio_.PlaySoundEffect(SoundEffect::Reflect);
         }
-        if (bomb)
-        {
-            if (primaryPressed && player_.fireCd <= 0.0f)
-            {
-                DetonateChocoBomb(*bomb, 0);
-                player_.fireCd = 0.2f;
-            }
-            player_.bombCharge = 0.0f;
-        }
-        else if (primaryHeld)
-        {
-            player_.bombCharge = std::min(1.3f, player_.bombCharge + dt);
-        }
-        else if (primaryReleased && player_.bombCharge > 0.05f && player_.fireCd <= 0.0f)
-        {
-            FireChocoBomb(player_, 0, player_.face, player_.bombCharge);
-            player_.bombCharge = 0.0f;
-            player_.fireCd = 0.15f;
-        }
+        player_.reflectShieldT = ReflectShieldActive;
+        shieldHeldThisFrame = true;
     }
-    else if (player_.weapon == Weapon::Strawberry)
+    // スタミナ：構え中は消費、下ろし中は回復。0で一旦スタミナ切れ（一定回復まで再展開不可）。
+    if (shieldHeldThisFrame)
     {
-        // ショート（ミニガン）：足を止めて撃ち続けるほどヒートが上がり、連射速度・威力・反射・サイズが増す。
-        // 上限まで振り切るとオーバーヒートして一定時間撃てない。動くと熱が冷めてリセット。
-        player_.firing = primaryHeld; // 発射中フラグ（ゲージ表示用）
-        if (player_.overheatT > 0.0f)
-        {
-            // オーバーヒート中：発射ロック。ロック時間をかけて完全冷却する。
-            player_.overheatT -= dt;
-            player_.fireHeat = std::max(0.0f, player_.fireHeat - dt * (StrawberryHeatMax / StrawberryOverheatLock));
-            if (player_.overheatT <= 0.0f)
-            {
-                player_.overheatT = 0.0f;
-                player_.fireHeat = 0.0f;
-            }
-        }
-        else if (primaryHeld)
-        {
-            // 移動中でもヒートは溜まる。レッドゾーンでは過熱の進みを落として最大火力を長く保つ。
-            const float gain = player_.fireHeat >= StrawberryHeatMax * StrawberryRedline
-                ? dt * StrawberryRedlineHeatMul
-                : dt;
-            player_.fireHeat += gain;
-            if (player_.fireHeat >= StrawberryHeatMax)
-            {
-                // 振り切った→オーバーヒート発動。しばらく撃てなくなる隙。
-                player_.fireHeat = StrawberryHeatMax;
-                player_.overheatT = StrawberryOverheatLock;
-                Burst(player_.pos, Gold, 26);
-                PlayCombatEffect(L"sword_slash", player_.pos, 0.5f, player_.face, 1.0f, Red, 14);
-                message_ = L"オーバーヒート!";
-                messageT_ = std::max(messageT_, 1.0f);
-            }
-            else if (player_.fireCd <= 0.0f)
-            {
-                FireStrawberryHeat(player_, 0, player_.face);
-            }
-        }
-        else
-        {
-            // 撃つのをやめると素早く冷める＝小休止での熱管理がしやすい
-            player_.fireHeat = std::max(0.0f, player_.fireHeat - dt * 3.5f);
-        }
+        // 反射板巨大化中はスタミナを消費しない。
+        if (player_.itemShieldEnlargeT <= 0.0f)
+            player_.shieldStamina = std::max(0.0f, player_.shieldStamina - ShieldStaminaDrainPerSec * dt);
+        if (player_.shieldStamina <= 0.0f) { player_.shieldExhausted = true; player_.reflectShieldT = 0.0f; }
     }
-    else if (primaryHeld && player_.fireCd <= 0.0f)
+    else
     {
-        FirePrimaryFor(player_, 0, player_.face);
+        player_.shieldStamina = std::min(ShieldStaminaMax, player_.shieldStamina + ShieldStaminaRegenPerSec * dt);
+        if (player_.shieldExhausted && player_.shieldStamina >= ShieldStaminaMinToRaise) player_.shieldExhausted = false;
     }
 
-    // 右クリックはチャージ専用です。チョコだけ短押し時に壁設置へ分岐します。
-    // ブリンク直後のロック中は受け付けない（攻撃とブリンクの同時発動を防ぐ）。
-    if (attackLocked)
-    {
-        // ロック中は右クリックの状態を進めず、リリースも握りつぶす。
-    }
-    else if (mouseRight_)
-    {
-        player_.chargeT += dt;
-        player_.chargeReady = player_.chargeT >= 0.55f;
-        player_.chargeFull = player_.chargeT >= 1.15f;
-        player_.charging = true;
-    }
-    else if (mouseRightReleased_ || player_.charging)
-    {
-        if (player_.chargeReady && player_.chargeCd <= 0.0f)
-        {
-            FireCharged(player_, 0, player_.face, actionPoint);
-        }
-        else if (mouseRightReleased_ && player_.character == CharacterType::Chocolate && obstacles_.size() < 20)
-        {
-            // 出す前に最大3枚へ調整（古い壁から消える=FIFO）。
-            EnforceChocoWallLimit(3);
-            Obstacle wall{};
-            // チャージボムの発射方向（player_.face）と同じ向きへ出す。
-            wall.pos = player_.pos + FromAngle(player_.face) * 1.1f;
-            ClampInside(wall.pos, 0.8f);
-            wall.radius = 0.52f;          // 判定（反射）は従来通りこの円のまま
-            wall.hp = 110.0f + player_.level * 18.0f;
-            wall.ttl = 7.5f;
-            wall.kind = 2;
-            wall.ownerIndex = 0;
-            wall.reflectPower = 1.35f + player_.corePower;
-            wall.cheeseWall = true;       // 反射挙動は従来通り
-            wall.chocoWall = true;        // FIFO管理＆長方形描画の対象
-            wall.spin = player_.face;     // 長方形の向き。chocoWall は spin を加算更新しないので固定される
-            wall.color = Choco;
-            SyncObstacle3D(wall);
-            obstacles_.push_back(wall);
-        }
-        player_.charging = false;
-        player_.chargeReady = false;
-        player_.chargeFull = false;
-        player_.chargeT = 0.0f;
-    }
+    // 右クリックは現在未定（リフレクションコアは廃止）。
     mouseRightReleased_ = false;
     prevMouseLeft_ = primaryHeld;
 }
@@ -791,6 +729,184 @@ void SweetsApp::ResolvePlayerHit(float dmg, float angle)
     ResolvePlayerHit(player_, dmg, angle);
 }
 
+// リフレクションコアの反射成功を記録し、規定回数でネガポジへ突入する。
+// ネガポジ発動中・ボス不在時はカウントしない。
+void SweetsApp::RegisterReflectSuccess()
+{
+    // 反射成功のカウントのみ（HUD表示用）。ネガポジ突入は一旦無効化。
+    if (negaposiT_ > 0.0f) return;
+    ++reflectCount_;
+#if 0 // ネガポジ突入は一旦コメントアウト（後で復活させる）
+    if (reflectCount_ < NegaPosiReflectReq) return;
+    reflectCount_ = 0;
+    ++negaposiCount_;
+    negaposiT_ = NegaPosiDuration;
+    negaposiAccum_ = 0.0f;
+    screenFlashT_ = 0.3f;
+    screenFlashLife_ = screenFlashT_;
+    screenFlashColor_ = Grape;
+    shakeMag_ = 0.7f; shakeLife_ = 0.4f; shakeT_ = shakeLife_;
+    Burst(player_.pos, Grape, 60);
+    message_ = L"ネガポジ! 受けて返せ";
+    messageT_ = std::max(messageT_, 2.0f);
+    audio_.PlaySoundEffect(SoundEffect::Reflect);
+#endif
+}
+
+// 左クリックの反射シールド更新。展開中、前方に来たボス攻撃を反射する。
+// 反射の「効果」はキャラごとに異なる（チョコ＝増殖：数を増やして返す。他は当面シンプル反射）。
+void SweetsApp::UpdateReflectShield(float dt)
+{
+    Player& p = player_;
+    if (p.downed || p.reflectShieldT <= 0.0f || !boss_.active) return;
+    const V2 face = FromAngle(p.face);
+    const float sizeMul = p.reflectSizeMul; // アイテム：反射板サイズ倍率
+    const float itemDmgMul = p.reflectDmgMul; // アイテム：反射ダメージ倍率
+    const bool choco = p.character == CharacterType::Chocolate;
+    const bool roll = p.character == CharacterType::Roll; // ロールは渦に巻き取ってからスパイラル放出
+    const bool perfect = p.reflectPerfectT > 0.0f; // 構え直後のパーフェクト反射
+    const float breakMul = perfect ? PerfectReflectBreakMul : 1.0f;
+    const float cosHalf = std::cos(ReflectShieldArc * 0.5f);
+
+    // キャラ別の反射プロファイル。受けモーションは全キャラ共通で、「返し方」だけを変える。
+    // チョコ=増殖 / ショート=威力 / チーズ=連鎖（壁反射） / ロール=集束（高速貫通）。
+    struct ReflectProfile { int count; float dmgMul; float speedMul; float radius; int pierce; int bounce; int chain; Color color; };
+    ReflectProfile prof;
+    switch (p.character)
+    {
+    case CharacterType::Shortcake:
+        prof = { ShortReflectCount, ShortReflectDamageMul, ShortReflectSpeedMul, ShortReflectRadius, ShortReflectPierce, 0, 0, Berry };
+        break;
+    case CharacterType::Cheese:
+        prof = { CheeseReflectCount, CheeseReflectDamageMul, CheeseReflectSpeedMul, CheeseReflectRadius, 0, 0, CheeseReflectChainJumps, Gold };
+        break;
+    case CharacterType::Roll:
+        // ロールは渦に巻き取ってから放出するため volley は使わない（absorb 経路）。profile はダミー。
+        prof = { 1, 1.0f, 1.0f, 0.18f, 1, 0, 0, Mint };
+        break;
+    case CharacterType::Chocolate:
+    default:
+        prof = { ChocoReflectMultiply, 1.0f, 1.0f, 0.20f, 1, 0, 0, Sky };
+        break;
+    }
+    // パーフェクト反射ボーナス：チョコは弾数+2、それ以外は威力UP。
+    if (perfect)
+    {
+        if (choco) prof.count += 2;
+        else prof.dmgMul *= 1.35f;
+    }
+
+    std::vector<Shot> out; // 反射で生む弾は後でまとめて追加（イテレーション破壊を避ける）
+    auto volley = [&](V2 from)
+    {
+        // 反射弾はシールドを向けた方向（face）へ直進＝自動追尾しない。狙って当てる。
+        const float baseA = p.face;
+        for (int i = 0; i < prof.count; ++i)
+        {
+            const float spread = (prof.count > 1) ? (static_cast<float>(i) / static_cast<float>(prof.count - 1) - 0.5f) * 0.5f : 0.0f;
+            Shot b{};
+            b.pos = from;
+            b.vel = FromAngle(baseA + spread) * (ChocoReflectBoltSpeed * prof.speedMul);
+            b.radius = prof.radius;
+            b.damage = ChocoReflectBoltDamage * prof.dmgMul * itemDmgMul;
+            b.ttl = 2.0f;
+            b.color = prof.color;
+            b.enemy = false;
+            b.ownerIndex = 0;
+            b.reflected = true;
+            b.pierce = prof.pierce;
+            b.bounce = prof.bounce;
+            b.chainJumps = prof.chain;
+            b.sourceCharacter = p.character;
+            SyncShot3D(b);
+            out.push_back(b);
+        }
+    };
+    // ロール（渦）：受けた弾を即返さず渦にストックする。満タン/パーフェクトでスパイラル放出。
+    auto releaseVortex = [&]()
+    {
+        const int n = p.rollVortexStock * RollVortexBoltsPerStock;
+        if (n <= 0) return;
+        const float baseDir = boss_.active ? AngleOf(boss_.pos - p.pos) : p.face; // ボスへ向けて渦を放つ
+        const float dmg = RollVortexBoltDamage * (perfect ? 1.35f : 1.0f) * itemDmgMul;
+        for (int i = 0; i < n; ++i)
+        {
+            const float t = (n > 1) ? static_cast<float>(i) / static_cast<float>(n - 1) : 0.0f;
+            const float ang = baseDir + (t - 0.5f) * RollVortexSpiralTurns * 6.2831853f; // 巻きながら撒く
+            Shot b{};
+            b.pos = p.pos;
+            b.vel = FromAngle(ang) * (RollVortexBoltSpeed * (0.7f + 0.3f * t));
+            b.angularVel = RollVortexBoltAngular; // 全弾同方向に回す＝渦
+            b.radius = 0.18f;
+            b.damage = dmg;
+            b.ttl = 2.2f;
+            b.color = (i % 2) ? Grape : Mint;
+            b.enemy = false;
+            b.ownerIndex = 0;
+            b.reflected = true;
+            b.pierce = 1;
+            b.sourceCharacter = CharacterType::Roll;
+            SyncShot3D(b);
+            out.push_back(b);
+        }
+        Burst(p.pos, Grape, 26);
+        message_ = L"渦・解放!";
+        messageT_ = std::max(messageT_, 0.7f);
+        p.rollVortexStock = 0;
+    };
+    auto absorb = [&](V2 at)
+    {
+        p.rollVortexStock = std::min(RollVortexStockMax, p.rollVortexStock + 1);
+        Burst(at, Grape, 5); // 渦に巻き取る演出
+        // しきい値到達 or パーフェクト反射で一気に放出。
+        if (p.rollVortexStock >= RollVortexThreshold || perfect) releaseVortex();
+    };
+    // 前方シールド範囲に入った敵弾を反射。
+    for (auto& es : shots_)
+    {
+        if (!es.enemy || es.dead) continue;
+        const V2 rel = es.pos - p.pos;
+        const float d = Len(rel);
+        if (d > ReflectShieldRange * sizeMul + es.radius || d < 0.01f) continue;
+        if (Dot(rel / d, face) < cosHalf) continue; // 正面の扇の外
+        es.dead = true;
+        if (roll) absorb(es.pos); else volley(es.pos);
+        // ダウン中は崩しゲージを溜めない（連続崩しを防ぐ）。
+        if (boss_.breakT <= 0.0f)
+            boss_.breakGauge = std::min(boss_.breakGaugeMax, boss_.breakGauge + ChocoReflectBreakPerCatch * breakMul);
+        RegisterReflectSuccess();
+        Burst(es.pos, perfect ? Gold : Sky, perfect ? 16 : 8);
+    }
+    // ボスのビーム帯に正面で当たったら反射（毎フレーム小刻みにボスへダメージ＋ブレイク蓄積）。
+    if (boss_.beamActiveT > 0.0f)
+    {
+        const V2 bdir = FromAngle(boss_.beamAngle);
+        const V2 rel = p.pos - boss_.pos;
+        const float along = Dot(rel, bdir);
+        if (along > 0.0f && along < BossBeamLength)
+        {
+            const V2 perp = rel - bdir * along;
+            if (Len(perp) < BossBeamHalfWidth + p.radius)
+            {
+                const float refl = boss_.atk * BossBeamReflectDps * dt * (choco ? 1.0f : 1.2f) * itemDmgMul;
+                DamageBoss(refl, true, 0);
+                if (boss_.active)
+                {
+                    if (boss_.breakT <= 0.0f) // ダウン中は崩しゲージを溜めない
+                        boss_.breakGauge = std::min(boss_.breakGaugeMax, boss_.breakGauge + (choco ? 1.4f : 1.0f) * breakMul);
+                    if (p.fireCd <= 0.0f) // ビーム反射中も一定間隔でキャラ別の反射弾を放つ
+                    {
+                        if (roll) absorb(p.pos + face * 0.8f); else volley(p.pos + face * 0.8f);
+                        p.fireCd = ChocoReflectBeamCd;
+                    }
+                    Burst(p.pos + face * 0.8f, perfect ? Gold : Sky, 2);
+                }
+            }
+        }
+    }
+    for (auto& b : out) shots_.push_back(b);
+}
+
 // プレイヤー被弾処理です。
 // ダメージ、無敵時間、ノックバック、HP0時のダウン状態をここでまとめて処理します。
 void SweetsApp::ResolvePlayerHit(Player& p, float dmg, float angle)
@@ -800,6 +916,14 @@ void SweetsApp::ResolvePlayerHit(Player& p, float dmg, float angle)
 #endif
     if (p.inv > 0.0f || p.downed) return;
     if (p.shieldT > 0.0f) dmg *= 0.35f;
+    // ネガポジ中（1P）：被ダメージを反転＝回復＋蓄積。終了時にまとめてお返しする。
+    if (negaposiT_ > 0.0f && p.index == 0)
+    {
+        p.hp = std::min(p.maxHp, p.hp + dmg);
+        negaposiAccum_ = std::min(NegaPosiAccumMax, negaposiAccum_ + dmg);
+        Burst(p.pos, Mint, 8);
+        return; // ダメージは受けない（i-frameも消費せず受け続けられる）
+    }
     p.hp -= dmg;
     p.inv = 0.45f;
     p.grazeChain = 0;
@@ -808,13 +932,27 @@ void SweetsApp::ResolvePlayerHit(Player& p, float dmg, float angle)
     Burst(p.pos, Red, 12);
     if (p.hp <= 0.0f)
     {
-        p.hp = 0.0f;
-        p.downed = true;
-        p.alive = false;
-        p.reviveT = 0.0f;
-        Burst(p.pos, Red, 28);
-        message_ = p.index == 0 ? L"プレイヤーがダウン" : L"味方がダウン";
-        messageT_ = 2.0f;
+        if (p.hasPhoenix)
+        {
+            // フェニックスの羽：一度だけ復活。
+            p.hasPhoenix = false;
+            p.hp = p.maxHp * 0.5f;
+            p.inv = std::max(p.inv, 1.6f);
+            Burst(p.pos, Gold, 50);
+            Burst(p.pos, Red, 30);
+            message_ = L"フェニックス復活!";
+            messageT_ = 2.4f;
+        }
+        else
+        {
+            p.hp = 0.0f;
+            p.downed = true;
+            p.alive = false;
+            p.reviveT = 0.0f;
+            Burst(p.pos, Red, 28);
+            message_ = p.index == 0 ? L"プレイヤーがダウン" : L"味方がダウン";
+            messageT_ = 2.0f;
+        }
     }
 }
 
@@ -868,37 +1006,10 @@ void SweetsApp::UseUltimate()
     UseUltimateFor(player_, 0);
 }
 
-// 必殺技です。
-// 近くにULT満タンの味方がいる場合は合体必殺を優先し、いなければキャラ別必殺を出します。
+// 必殺技です。キャラ別の必殺を出します（合体必殺は廃止）。
 void SweetsApp::UseUltimateFor(Player& p, int ownerIndex)
 {
     if ((screen_ != Screen::Playing && screen_ != Screen::HiddenBoss) || p.ult < 100.0f || p.downed) return;
-    for (auto& other : players_)
-    {
-        if (!other.active || other.index == ownerIndex || other.downed || other.ult < 100.0f) continue;
-        if (RuleDistance(p.pos, PlayerBodyY, other.pos, PlayerBodyY) < 2.4f)
-        {
-            audio_.PlaySoundEffect(SoundEffect::UltimateSlash);
-            p.ult = 0.0f;
-            other.ult = 0.0f;
-            for (auto& s : shots_)
-            {
-                if (s.enemy) s.dead = true;
-            }
-            suppressEnemyKillUltGain_ = true;
-            for (auto& e : enemies_)
-            {
-                if (!e.dead) DamageEnemy(e, 240.0f + wave_ * 16.0f, p.pos, 2.4f, true, ownerIndex);
-            }
-            suppressEnemyKillUltGain_ = false;
-            if (boss_.active) DamageBoss(540.0f + wave_ * 24.0f, BossDamageKind::Ultimate, false, ownerIndex);
-            Burst((p.pos + other.pos) * 0.5f, Gold, 140);
-            PlayCombatEffect(L"ult_chocolate", (p.pos + other.pos) * 0.5f, 0.55f, p.face, 1.95f, Gold, 80);
-            message_ = L"合体必殺";
-            messageT_ = 2.0f;
-            return;
-        }
-    }
     audio_.PlaySoundEffect(SoundEffect::UltimateSlash);
     p.ult = 0.0f;
     const auto weapon = p.weapon;

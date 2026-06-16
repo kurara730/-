@@ -14,6 +14,7 @@ enum class Screen
     GameplayLoading,
     Title,
     Settings,
+    CustomBoss,         // カスタムボス：技を選んで戦う設定画面
     CharacterSelect,
     DifficultySelect,
     Playing,
@@ -65,7 +66,8 @@ enum class GameMode
     Story,
     Endless,
     HiddenBossPractice,
-    BossOnlyDebug      // デバッグ用：ボスのみ即出現し、新技（ビーム/薙ぎ払い/地中突き上げ）だけを使う
+    BossOnlyDebug,     // デバッグ用：ボスのみ即出現し、新技（ビーム/薙ぎ払い/地中突き上げ）だけを使う
+    CustomBoss         // カスタムボス：プレイヤーが選んだ技セットの単体ボスと戦う
 };
 
 enum class TitleMenuItem
@@ -156,11 +158,37 @@ struct UiRect
 struct SettingsLayout
 {
     UiRect panel{};
-    std::array<UiRect, 4> volumeSliders{};
+    std::array<UiRect, 5> volumeSliders{}; // 0-3:音量, 4:画面振動
     std::array<UiRect, 3> aimButtons{};
     UiRect fullscreenToggle{};
+    UiRect damageNumberToggle{};
     float sliderLeft = 0.0f;
     float sliderRight = 0.0f;
+};
+
+// カスタムボスのプリセット（3枠まで保存）。
+struct CustomBossPreset
+{
+    bool used = false;
+    bool normals[5] = { true, true, false, false, false };
+    int bigMove = 0;
+    float hpScale = 1.0f;
+};
+
+// カスタムボス設定画面のクリック領域。Draw とクリック判定で共有する。
+struct CustomBossLayout
+{
+    UiRect panel{};
+    std::array<UiRect, 5> normalToggles{};
+    std::array<UiRect, 3> bigButtons{};
+    UiRect charButton{};
+    UiRect hpSlider{};      // クリック領域
+    float hpSliderLeft = 0.0f;
+    float hpSliderRight = 0.0f;
+    float hpSliderY = 0.0f;
+    std::array<UiRect, 3> presetLoad{};
+    std::array<UiRect, 3> presetSave{};
+    UiRect fightButton{};
 };
 
 struct CameraState

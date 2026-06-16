@@ -163,7 +163,7 @@ void SweetsApp::DrawScene()
         if (shakeT_ > 0.0f)
         {
             const float k = ClampFloat(shakeT_ / std::max(0.01f, shakeLife_), 0.0f, 1.0f);
-            const float amp = shakeMag_ * k * k;
+            const float amp = shakeMag_ * k * k * shakeScale_; // shakeScale_=設定の振動強さ
             shx = std::sin(gameTime_ * 91.0f) * amp;
             shz = std::cos(gameTime_ * 77.0f) * amp;
         }
@@ -320,6 +320,41 @@ void SweetsApp::DrawScene()
         spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (1.6f + 0.25f * pulse), 0.08f, WithAlpha(Gold, ClampFloat(0.55f + 0.35f * pulse, 0.0f, 1.0f)), 0.05f, 48);
         spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (2.1f + 0.3f * pulse), 0.05f, WithAlpha(Sky, 0.45f), 0.05f, 48);
     }
+    // タレット（反射可能な砲台）：紫の小円＋HPに応じた明滅。
+    if (boss_.active)
+    {
+        for (int i = 0; i < BossTurretMax; ++i)
+        {
+            if (!boss_.turretActive[i]) continue;
+            const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 10.0f + i);
+            const bool beam = boss_.turretTier[i] >= 2;          // ビームタレットは赤系で強調
+            const Color body = beam ? Berry : Grape;
+            const Color ring = beam ? Gold : Berry;
+            spriteCanvas_.DrawCircle(boss_.turretPos[i], BossTurretRadius * (beam ? 1.15f : 1.0f), WithAlpha(body, 0.85f), 0.30f, 28);
+            spriteCanvas_.DrawRing(boss_.turretPos[i], BossTurretRadius * (1.1f + 0.15f * pulse) * (beam ? 1.2f : 1.0f), 0.05f, WithAlpha(ring, 0.7f), 0.295f, 28);
+        }
+    }
+    // 分身：予兆/発射中は本体色の半透明コピーを表示。
+    if (boss_.active && (boss_.cloneWarnT > 0.0f || boss_.cloneActiveT > 0.0f))
+    {
+        const float a = boss_.cloneWarnT > 0.0f
+            ? (1.0f - boss_.cloneWarnT / BossCloneWarnTime) * 0.6f
+            : ClampFloat(boss_.cloneActiveT / BossCloneActiveTime, 0.0f, 1.0f) * 0.7f;
+        for (int i = 0; i < boss_.cloneCount; ++i)
+        {
+            spriteCanvas_.DrawCircle(boss_.clonePos[i], boss_.radius, WithAlpha(Grape, ClampFloat(a, 0.0f, 0.7f)), 0.31f, 32);
+            spriteCanvas_.DrawRing(boss_.clonePos[i], boss_.radius * 1.15f, 0.06f, WithAlpha(Berry, ClampFloat(a, 0.0f, 0.8f)), 0.305f, 32);
+        }
+    }
+    // 反射シールド（左クリック・全キャラ共通）：自機の正面に弧を展開。
+    if (player_.reflectShieldT > 0.0f && !player_.downed)
+    {
+        const float life = ClampFloat(player_.reflectShieldT / ReflectShieldActive, 0.0f, 1.0f);
+        const float pulse = 0.6f + 0.4f * std::sin(gameTime_ * 24.0f);
+        const Color sc = WithAlpha(Sky, ClampFloat(0.35f + 0.45f * life * pulse, 0.0f, 0.9f));
+        const float szMul = player_.reflectSizeMul; // アイテムで反射板が拡大する
+        spriteCanvas_.DrawArc(player_.pos, ReflectShieldRange * 0.92f * szMul, ReflectShieldRange * 0.5f * szMul, player_.face, ReflectShieldArc, sc, 0.06f, 40);
+    }
     // フェーズ移行中：フェーズ色のオーラ＋外へ広がる衝撃波リングで派手に演出。
     if (boss_.active && boss_.phaseIntroT > 0.0f)
     {
@@ -338,6 +373,168 @@ void SweetsApp::DrawScene()
         // 足元の発光オーラ（点滅）。
         const float glow = 0.5f + 0.5f * std::sin(gameTime_ * 30.0f);
         spriteCanvas_.DrawCircle(boss_.pos, boss_.radius * (1.5f + 0.3f * glow), WithAlpha(pc, 0.30f + 0.25f * glow), 0.04f, 48);
+    }
+
+    // チャージ衝撃波：チャージ中は到達範囲を警告（赤円）、近いほど安全なので中心を強調。
+    if (boss_.active && boss_.shockChargeT > 0.0f)
+    {
+        const float maxR = ArenaRadius * BossShockwaveRangeRatio;
+        const float prog = ClampFloat(1.0f - boss_.shockChargeT / BossShockwaveChargeTime, 0.0f, 1.0f);
+        const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 22.0f);
+        // 危険範囲（外周ほど危険）。
+        spriteCanvas_.DrawRing(boss_.pos, maxR, 0.16f, WithAlpha(Red, 0.35f + 0.35f * prog * pulse), 0.045f, 72);
+        spriteCanvas_.DrawCircle(boss_.pos, maxR, WithAlpha(Red, 0.06f + 0.10f * prog), 0.046f, 64);
+        // 安全圏（中心）を青で強調＝ここに近づけ。
+        const float safeR = boss_.radius * 2.2f;
+        spriteCanvas_.DrawRing(boss_.pos, safeR, 0.10f, WithAlpha(Sky, 0.45f + 0.4f * pulse), 0.044f, 48);
+        // チャージのため込み（収束する内向きの光）。
+        spriteCanvas_.DrawCircle(boss_.pos, boss_.radius * (1.4f + 0.4f * pulse), WithAlpha(Sky, 0.30f + 0.25f * prog), 0.043f, 40);
+    }
+    // 衝撃波の展開：外へ広がるリング前線。
+    if (boss_.active && boss_.shockActiveT > 0.0f)
+    {
+        const float a = ClampFloat(boss_.shockActiveT / BossShockwaveActiveTime, 0.0f, 1.0f);
+        spriteCanvas_.DrawRing(boss_.pos, std::max(0.2f, boss_.shockRadius), 0.22f, WithAlpha(Sky, 0.85f * a + 0.15f), 0.045f, 80);
+        spriteCanvas_.DrawRing(boss_.pos, std::max(0.2f, boss_.shockRadius * 0.92f), 0.12f, WithAlpha(Cream, 0.6f * a), 0.044f, 80);
+    }
+    // 突進追走（大技）：走り回っているのが分かるよう、ボスに疾走オーラ＋スピードラインを出す。
+    if (boss_.active && boss_.rushT > 0.0f)
+    {
+        const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 30.0f);
+        const Color rc = boss_.rushDragT > 0.0f ? Gold : Berry; // 引きずり中は金、追走中はベリー
+        // 足元の疾走オーラ（点滅リング）。
+        spriteCanvas_.DrawRing(boss_.pos, boss_.radius * (1.5f + 0.3f * pulse), 0.10f, WithAlpha(rc, 0.55f + 0.35f * pulse), 0.044f, 40);
+        spriteCanvas_.DrawCircle(boss_.pos, boss_.radius * (1.2f + 0.25f * pulse), WithAlpha(rc, 0.18f + 0.12f * pulse), 0.045f, 36);
+        // 回転するスピードライン（4本）。
+        for (int i = 0; i < 4; ++i)
+        {
+            const float a = gameTime_ * 9.0f + i * (TwoPi / 4.0f);
+            const V2 from = boss_.pos + FromAngle(a) * (boss_.radius * 1.6f);
+            DrawSprite2D(L"effect_sword_line", from, { boss_.radius * 0.5f, boss_.radius * 2.4f }, a, WithAlpha(rc, 0.5f), 0.043f);
+        }
+    }
+    // 隕石（大技）：予兆＝着弾位置の収束マーカー、着弾＝閃光リング。
+    for (const auto& m : meteors_)
+    {
+        if (m.warnT > 0.0f)
+        {
+            const float wp = ClampFloat(1.0f - m.warnT / BossMeteorWarnTime, 0.0f, 1.0f); // 0→1で収束
+            const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 26.0f);
+            spriteCanvas_.DrawRing(m.pos, m.radius, 0.10f, WithAlpha(Red, 0.45f + 0.4f * pulse), 0.05f, 40);
+            // 落下点へ収束する内側リング。
+            spriteCanvas_.DrawRing(m.pos, m.radius * (1.4f - wp), 0.06f, WithAlpha(Gold, 0.5f + 0.5f * wp), 0.049f, 32);
+            spriteCanvas_.DrawCircle(m.pos, m.radius * 0.18f, WithAlpha(Red, 0.5f), 0.048f, 20);
+        }
+        else if (m.impactT > 0.0f)
+        {
+            const float ip = ClampFloat(1.0f - m.impactT / BossMeteorImpactTime, 0.0f, 1.0f); // 0→1で拡大
+            spriteCanvas_.DrawCircle(m.pos, m.radius * (0.6f + 0.6f * ip), WithAlpha(Gold, 0.7f * (1.0f - ip)), 0.05f, 36);
+            spriteCanvas_.DrawRing(m.pos, m.radius * (0.8f + ip), 0.14f * (1.0f - ip) + 0.04f, WithAlpha(Red, 0.85f * (1.0f - ip)), 0.049f, 44);
+        }
+    }
+    // 間欠泉（フィールドギミック）：待機＝噴出口＋蒸気、予兆＝地割れ発光＋立ち上る蒸気、噴出＝水柱＋衝撃波。
+    // 画面上＝-z方向。水柱は -z へ伸ばして「噴き上がり」を演出する。
+    for (const auto& g : geysers_)
+    {
+        if (g.activeT > 0.0f)
+        {
+            const float ap = ClampFloat(1.0f - g.activeT / GeyserActiveTime, 0.0f, 1.0f); // 0(噴出開始)→1(収束)
+            const float fade = 1.0f - ap;
+            // 噴き上がる水柱（根元→先端へ縮みながら -z へ伸びる）。
+            const int seg = 7;
+            for (int k = 0; k < seg; ++k)
+            {
+                const float t = static_cast<float>(k) / static_cast<float>(seg - 1); // 0根元→1先端
+                const float rise = GeyserRadius * (0.4f + 2.6f * ap) * t;
+                const V2 p{ g.pos.x, g.pos.z - rise };
+                const float rr = GeyserRadius * (0.55f - 0.34f * t) * (0.7f + 0.6f * ap);
+                spriteCanvas_.DrawCircle(p, std::max(0.05f, rr), WithAlpha(Cream, (0.75f - 0.5f * t) * fade), 0.052f, 18);
+                spriteCanvas_.DrawCircle(p, std::max(0.03f, rr * 0.6f), WithAlpha(Sky, (0.7f - 0.45f * t) * fade), 0.051f, 14);
+            }
+            // 地面の多重衝撃波リング。
+            spriteCanvas_.DrawCircle(g.pos, GeyserRadius * (0.7f + 0.5f * ap), WithAlpha(Sky, 0.7f * fade), 0.05f, 36);
+            spriteCanvas_.DrawRing(g.pos, GeyserRadius * (0.6f + 1.0f * ap), 0.14f * fade + 0.04f, WithAlpha(Cream, 0.85f * fade), 0.049f, 44);
+            spriteCanvas_.DrawRing(g.pos, GeyserRadius * (0.3f + 1.6f * ap), 0.08f * fade + 0.02f, WithAlpha(Mint, 0.5f * fade), 0.049f, 40);
+            // 根元の閃光。
+            spriteCanvas_.DrawCircle(g.pos, GeyserRadius * 0.34f * fade, WithAlpha(Cream, 0.9f * fade), 0.048f, 18);
+        }
+        else if (g.warnT > 0.0f)
+        {
+            const float wp = ClampFloat(1.0f - g.warnT / GeyserWarnTime, 0.0f, 1.0f); // 0→1で収束
+            const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 24.0f);
+            // 地割れの発光（噴出が近いほど強く）。
+            spriteCanvas_.DrawRing(g.pos, GeyserRadius, 0.09f, WithAlpha(Sky, 0.35f + 0.45f * wp * pulse), 0.05f, 40);
+            spriteCanvas_.DrawRing(g.pos, GeyserRadius * (1.4f - 0.9f * wp), 0.06f, WithAlpha(Mint, 0.4f + 0.5f * wp), 0.049f, 32);
+            // 立ち上る蒸気のwisp（小さな円が揺れながら -z へ昇る）。
+            for (int k = 0; k < 3; ++k)
+            {
+                const float ph = gameTime_ * 2.6f + static_cast<float>(k) * 2.1f;
+                const float up = ph - std::floor(ph); // 0→1 ループ
+                const float ox = std::sin(ph * 3.1f) * 0.25f;
+                const V2 p{ g.pos.x + ox, g.pos.z - GeyserRadius * (0.3f + 1.0f * up) };
+                spriteCanvas_.DrawCircle(p, GeyserRadius * (0.18f * (1.0f - up) + 0.05f), WithAlpha(Cream, 0.4f * (1.0f - up) * (0.4f + 0.6f * wp)), 0.051f, 12);
+            }
+        }
+        else
+        {
+            // 待機：噴出口（暗い穴）＋薄い地割れ＋ごく薄い蒸気のゆらぎ。
+            const float wisp = 0.5f + 0.5f * std::sin(gameTime_ * 1.8f + g.pos.x);
+            spriteCanvas_.DrawRing(g.pos, GeyserRadius * 0.5f, 0.05f, WithAlpha(Sky, 0.16f), 0.02f, 28);
+            spriteCanvas_.DrawCircle(g.pos, GeyserRadius * 0.14f, WithAlpha(Navy, 0.30f), 0.021f, 14);
+            spriteCanvas_.DrawCircle({ g.pos.x, g.pos.z - GeyserRadius * 0.35f }, GeyserRadius * 0.08f, WithAlpha(Cream, 0.06f + 0.06f * wisp), 0.021f, 10);
+        }
+    }
+    // 回転する危険帯（フィールドギミック）：危険セクター＝赤ウェッジ、先行警告＝点滅オレンジ。
+    if (fieldGimmick_ == FieldGimmick::RotatingDanger)
+    {
+        const int bands = std::min(RotatingDangerMaxBands, std::max(1, boss_.phase));
+        const float sectorArc = TwoPi / RotatingDangerSectors;
+        const float omega = RotatingDangerSpeed * (1.0f + static_cast<float>(boss_.phase - 1) * RotatingDangerAccelPerPhase);
+        const float warnLead = std::max(0.05f, omega * RotatingDangerWarnTime); // 先行警告の角度幅
+        const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 12.0f);
+        const float midR = ArenaRadius * 0.5f;
+        const V2 center{ 0.0f, 0.0f };
+        for (int j = 0; j < bands; ++j)
+        {
+            const float c = dangerRot_ + TwoPi * static_cast<float>(j) / static_cast<float>(bands);
+            // 先行警告帯（危険化する前方）：点滅して「次に危ない場所」を示す。
+            spriteCanvas_.DrawArc(center, midR, ArenaRadius, c + sectorArc * 0.5f + warnLead * 0.5f, warnLead,
+                WithAlpha(Gold, 0.08f + 0.16f * pulse), 0.058f, 40);
+            // 危険帯（本体）：床を赤く塗る。
+            spriteCanvas_.DrawArc(center, midR, ArenaRadius, c, sectorArc,
+                WithAlpha(Red, 0.18f + 0.10f * pulse), 0.057f, 40);
+            // 外周の縁取り（境界を見やすく）。
+            spriteCanvas_.DrawArc(center, ArenaRadius * 0.92f, 0.28f, c, sectorArc, WithAlpha(Red, 0.55f), 0.056f, 40);
+        }
+    }
+    // 集束装置（フィールドギミック）：本体＋チャージリング、満タン発光、予兆線、照射ビーム。
+    for (const auto& c : collectors_)
+    {
+        const float cf = ClampFloat(c.charge / CollectorCapacity, 0.0f, 1.0f);
+        const bool full = c.charge >= CollectorCapacity || c.warnT > 0.0f || c.beamT > 0.0f;
+        const float glow = full ? (0.6f + 0.4f * (0.5f + 0.5f * std::sin(gameTime_ * 10.0f))) : 0.0f;
+        // 本体（砲台）。
+        spriteCanvas_.DrawCircle(c.pos, CollectorRadius, WithAlpha(Navy, 0.85f), 0.30f, 28);
+        spriteCanvas_.DrawCircle(c.pos, CollectorRadius * 0.6f, WithAlpha(Sky, 0.7f + 0.3f * c.flash + glow), 0.29f, 24);
+        spriteCanvas_.DrawRing(c.pos, CollectorRadius * 1.18f, 0.08f, WithAlpha(Cream, 0.4f), 0.29f, 32);
+        // チャージリング（溜まり具合を弧で表示）。
+        if (cf > 0.0f)
+            spriteCanvas_.DrawArc(c.pos, CollectorRadius * 1.3f, 0.12f, -Pi * 0.5f + TwoPi * cf * 0.5f, TwoPi * cf, WithAlpha(Gold, 0.85f), 0.288f, 48);
+        // 予兆線（照射方向を固定表示・細い点滅ライン）。
+        if (c.warnT > 0.0f)
+        {
+            const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 30.0f);
+            const V2 mid = c.pos + FromAngle(c.beamAngle) * (CollectorBeamLength * 0.5f);
+            spriteCanvas_.DrawQuad(nullptr, mid, { CollectorBeamHalfWidth * 0.5f, CollectorBeamLength }, c.beamAngle - Pi * 0.5f, WithAlpha(Gold, 0.25f + 0.4f * pulse), 0.055f);
+        }
+        // 照射ビーム（収束ビーム）。
+        if (c.beamT > 0.0f)
+        {
+            const float bp = ClampFloat(c.beamT / CollectorBeamTime, 0.0f, 1.0f);
+            const V2 mid = c.pos + FromAngle(c.beamAngle) * (CollectorBeamLength * 0.5f);
+            spriteCanvas_.DrawQuad(nullptr, mid, { CollectorBeamHalfWidth * 2.0f * bp, CollectorBeamLength }, c.beamAngle - Pi * 0.5f, WithAlpha(Sky, 0.85f * bp), 0.054f);
+            spriteCanvas_.DrawQuad(nullptr, mid, { CollectorBeamHalfWidth * bp, CollectorBeamLength }, c.beamAngle - Pi * 0.5f, WithAlpha(Cream, 0.9f * bp), 0.053f);
+        }
     }
 
     for (const auto& o : obstacles_)
@@ -387,6 +584,21 @@ void SweetsApp::DrawScene()
             for (int r = 0; r < stage; ++r)
             {
                 spriteCanvas_.DrawRing(s.pos, s.radius * (1.4f + r * 0.5f), 0.06f, WithAlpha(Cream, 0.6f - r * 0.12f), 0.25f, 32);
+            }
+            continue;
+        }
+        if (s.fanSlash)
+        {
+            // シールド形状の斬撃：進行方向へ向けた弧（バンド）で描く。壁で跳ねるほど大きくなる。
+            const float angle = AngleOf(s.vel);
+            const float outer = s.radius * 1.7f;
+            const float inner = s.radius * 1.0f;
+            const float arc = 1.8f; // シールドの開き角
+            spriteCanvas_.DrawArc(s.pos, outer, inner, angle, arc, WithAlpha(s.color, 0.9f), 0.247f, 44);
+            spriteCanvas_.DrawArc(s.pos, outer * 0.93f, inner * 1.04f, angle, arc * 0.92f, WithAlpha(Cream, 0.72f), 0.246f, 44);
+            if (s.reflected)
+            {
+                spriteCanvas_.DrawArc(s.pos, outer * 1.12f, inner, angle, arc, WithAlpha(Gold, 0.72f), 0.245f, 44);
             }
             continue;
         }
@@ -675,6 +887,12 @@ void SweetsApp::DrawAdditiveScene()
 
     for (const auto& s : shots_)
     {
+        if (s.fanSlash)
+        {
+            // シールド斬撃の発光：弧に沿ったグロー。
+            spriteCanvas_.DrawArc(s.pos, s.radius * 1.9f, s.radius * 0.9f, AngleOf(s.vel), 1.9f, WithAlpha(s.color, fxAlpha(0.45f * enemyGlowFx)), 0.055f, 44);
+            continue;
+        }
         if (s.visual == ShotVisualKind::Blade)
         {
             DrawSprite2D(L"effect_sword_line", s.pos, { s.radius * 5.0f, s.radius * 18.0f }, AngleOf(s.vel) - Pi * 0.5f, WithAlpha(Red, fxAlpha(0.52f * enemyGlowFx)), 0.055f);
@@ -865,8 +1083,16 @@ void SweetsApp::CompositeScene()
 #else
     post.params = XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f);
 #endif
-    // params2: x=ブルーム強度, y=ビネット, z=トーンマッピング有効, w=未使用
-    post.params2 = XMFLOAT4(0.75f, 0.28f, 1.0f, 0.0f);
+    // ネガポジ（色反転）量。発動中は1.0、入り/抜けを短くフェード。
+    float negaInvert = 0.0f;
+    if (negaposiT_ > 0.0f)
+    {
+        const float fadeIn = ClampFloat((NegaPosiDuration - negaposiT_) / 0.3f, 0.0f, 1.0f);
+        const float fadeOut = ClampFloat(negaposiT_ / 0.4f, 0.0f, 1.0f);
+        negaInvert = std::min(fadeIn, fadeOut);
+    }
+    // params2: x=ブルーム強度, y=ビネット, z=トーンマッピング有効, w=ネガポジ反転量
+    post.params2 = XMFLOAT4(0.75f, 0.28f, 1.0f, negaInvert);
     context_->UpdateSubresource(postCB_.Get(), 0, nullptr, &post, 0, 0);
     ID3D11Buffer* pcb = postCB_.Get();
     context_->PSSetConstantBuffers(0, 1, &pcb);
