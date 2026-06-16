@@ -432,6 +432,53 @@ void SweetsApp::DrawScene()
             spriteCanvas_.DrawRing(m.pos, m.radius * (0.8f + ip), 0.14f * (1.0f - ip) + 0.04f, WithAlpha(Red, 0.85f * (1.0f - ip)), 0.049f, 44);
         }
     }
+    // 間欠泉（フィールドギミック）：待機＝地割れマーカー、予兆＝蒸気の収束リング、噴出＝噴き上げ。
+    for (const auto& g : geysers_)
+    {
+        if (g.activeT > 0.0f)
+        {
+            const float ap = ClampFloat(1.0f - g.activeT / GeyserActiveTime, 0.0f, 1.0f); // 0→1で減衰
+            spriteCanvas_.DrawCircle(g.pos, GeyserRadius * (0.7f + 0.5f * ap), WithAlpha(Sky, 0.7f * (1.0f - ap)), 0.05f, 36);
+            spriteCanvas_.DrawRing(g.pos, GeyserRadius * (0.6f + ap), 0.14f * (1.0f - ap) + 0.04f, WithAlpha(Cream, 0.85f * (1.0f - ap)), 0.049f, 44);
+            spriteCanvas_.DrawCircle(g.pos, GeyserRadius * 0.22f, WithAlpha(Cream, 0.6f * (1.0f - ap)), 0.048f, 18);
+        }
+        else if (g.warnT > 0.0f)
+        {
+            const float wp = ClampFloat(1.0f - g.warnT / GeyserWarnTime, 0.0f, 1.0f); // 0→1で収束
+            const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 22.0f);
+            spriteCanvas_.DrawRing(g.pos, GeyserRadius, 0.09f, WithAlpha(Sky, 0.4f + 0.4f * pulse), 0.05f, 40);
+            spriteCanvas_.DrawRing(g.pos, GeyserRadius * (1.4f - wp), 0.06f, WithAlpha(Mint, 0.45f + 0.5f * wp), 0.049f, 32);
+        }
+        else
+        {
+            // 待機：噴出位置がわかる薄い地割れマーカー。
+            spriteCanvas_.DrawRing(g.pos, GeyserRadius * 0.5f, 0.05f, WithAlpha(Sky, 0.16f), 0.02f, 28);
+            spriteCanvas_.DrawCircle(g.pos, GeyserRadius * 0.12f, WithAlpha(Mint, 0.18f), 0.02f, 14);
+        }
+    }
+    // 回転する危険帯（フィールドギミック）：危険セクター＝赤ウェッジ、先行警告＝点滅オレンジ。
+    if (fieldGimmick_ == FieldGimmick::RotatingDanger)
+    {
+        const int bands = std::min(RotatingDangerMaxBands, std::max(1, boss_.phase));
+        const float sectorArc = TwoPi / RotatingDangerSectors;
+        const float omega = RotatingDangerSpeed * (1.0f + static_cast<float>(boss_.phase - 1) * RotatingDangerAccelPerPhase);
+        const float warnLead = std::max(0.05f, omega * RotatingDangerWarnTime); // 先行警告の角度幅
+        const float pulse = 0.5f + 0.5f * std::sin(gameTime_ * 12.0f);
+        const float midR = ArenaRadius * 0.5f;
+        const V2 center{ 0.0f, 0.0f };
+        for (int j = 0; j < bands; ++j)
+        {
+            const float c = dangerRot_ + TwoPi * static_cast<float>(j) / static_cast<float>(bands);
+            // 先行警告帯（危険化する前方）：点滅して「次に危ない場所」を示す。
+            spriteCanvas_.DrawArc(center, midR, ArenaRadius, c + sectorArc * 0.5f + warnLead * 0.5f, warnLead,
+                WithAlpha(Gold, 0.08f + 0.16f * pulse), 0.058f, 40);
+            // 危険帯（本体）：床を赤く塗る。
+            spriteCanvas_.DrawArc(center, midR, ArenaRadius, c, sectorArc,
+                WithAlpha(Red, 0.18f + 0.10f * pulse), 0.057f, 40);
+            // 外周の縁取り（境界を見やすく）。
+            spriteCanvas_.DrawArc(center, ArenaRadius * 0.92f, 0.28f, c, sectorArc, WithAlpha(Red, 0.55f), 0.056f, 40);
+        }
+    }
 
     for (const auto& o : obstacles_)
     {

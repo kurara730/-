@@ -211,6 +211,16 @@ void SweetsApp::OnKeyDown(WPARAM key)
         case '7': boss_.bigMove = static_cast<int>(BossBigMove::Meteor); boss_.meteorCd = 0.0f;     message_ = L"[DBG] 大技:隕石"; messageT_ = 1.0f; break;
         case '8': boss_.bigMove = static_cast<int>(BossBigMove::InvincibleChase); boss_.rushCd = 0.0f; message_ = L"[DBG] 大技:突進"; messageT_ = 1.0f; break;
         case '9': boss_.grabCd = 0.0f;      message_ = L"[DBG] つかみ";     messageT_ = 1.0f; break;
+        case 'G':
+        {
+            // フィールドギミックを順番に切り替えて即テスト（なし→集束装置→回転危険帯→間欠泉）。
+            const int next = (static_cast<int>(fieldGimmick_) + 1) % 4;
+            fieldGimmick_ = static_cast<FieldGimmick>(next);
+            SetupFieldGimmick();
+            const wchar_t* nm[4] = { L"なし", L"集束装置(未)", L"回転危険帯", L"間欠泉" };
+            message_ = std::wstring(L"[DBG] ギミック:") + nm[next]; messageT_ = 1.4f;
+            break;
+        }
         default: break;
         }
     }

@@ -323,6 +323,35 @@ enum class BossBigMove
 // ボスラッシュ（連続戦）の体数。
 constexpr int GauntletBossCount = 3;
 
+// フィールドギミック（ボスごとに1つ割り当て）。ラッシュ順：ボス1=集束装置 / ボス2=回転危険帯 / ボス3=間欠泉。
+enum class FieldGimmick
+{
+    None = 0,
+    Collector,       // 集束装置（反射弾を溜めてボスへビーム照射）※未実装
+    RotatingDanger,  // 回転する危険帯／安置 ※未実装
+    Geyser           // 間欠泉（噴出にボスを誘い込み追加ダメージ）
+};
+
+// 間欠泉（フィールドギミック）：固定スポットが周期で噴出。
+// プレイヤーは踏むと被弾、ボスを巻き込むと追加ダメージ（誘導報酬）。
+constexpr int   GeyserSpotCount = 4;          // 噴出点の数
+constexpr float GeyserCycle = 4.0f;           // 各スポットの噴出周期（秒）
+constexpr float GeyserWarnTime = 0.85f;       // 予兆（地割れ／蒸気）の時間
+constexpr float GeyserActiveTime = 0.4f;      // 噴出の判定／演出の時間
+constexpr float GeyserRadius = 1.7f;          // 噴出の半径
+constexpr float GeyserPlayerDamageMul = 1.1f; // プレイヤー被ダメージ（boss.atk基準）
+constexpr float GeyserBossDamage = 90.0f;     // ボスを巻き込んだ時の追加ダメージ（与ダメ基準で固定）
+
+// 回転する危険帯（フィールドギミック）：円を8セクターに分割し、危険セクターが回転する。
+// 危険帯に立っていると継続ダメージ。対象はプレイヤーのみ（位置取り専用プレッシャー）。
+constexpr int   RotatingDangerSectors = 8;           // 円の分割数（1セクター=45度）
+constexpr int   RotatingDangerMaxBands = 3;          // 危険セクターの上限
+constexpr float RotatingDangerSpeed = 0.5f;          // 回転速度（rad/秒・基本）
+constexpr float RotatingDangerAccelPerPhase = 0.18f; // フェーズ毎の回転加速
+constexpr float RotatingDangerWarnTime = 0.7f;       // 危険化の予兆時間（先行警告帯の角度幅算出に使用）
+constexpr float RotatingDangerDpsMul = 0.7f;         // 継続ダメージ＝boss.atk×これ（毎秒・小さめのチップ）
+constexpr float RotatingDangerTickInterval = 0.5f;   // チップ適用間隔（i-frame 0.45 < これ で安定適用）
+
 // カスタムボスのHP倍率スライダーの範囲。
 constexpr float CustomBossHpScaleMin = 0.5f;
 constexpr float CustomBossHpScaleMax = 4.0f;

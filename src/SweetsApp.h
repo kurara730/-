@@ -163,6 +163,9 @@ private:
     void UpdateBoss(float dt);
     void UpdateBossTurrets(float dt); // タレットはボスのダウン中も常時稼働
     void UpdateMeteors(float dt);     // 隕石（大技）の予兆→着弾処理
+    void UpdateGeysers(float dt);     // 間欠泉（フィールドギミック）の周期→噴出処理
+    void UpdateRotatingDanger(float dt); // 回転する危険帯（フィールドギミック）の回転＋継続ダメージ
+    void SetupFieldGimmick();         // 現在の fieldGimmick_ に応じてフィールドギミックを初期化
     void UpdateShots(float dt);
     void ReleaseCaughtIfNoBomb();
     void UpdatePickups(float dt);
@@ -408,6 +411,10 @@ private:
     std::vector<Enemy> enemies_;
     std::vector<Shot> shots_;
     std::vector<Meteor> meteors_;       // 隕石（大技）
+    std::vector<Geyser> geysers_;       // 間欠泉（フィールドギミック）
+    FieldGimmick fieldGimmick_ = FieldGimmick::None; // ボスごとに割り当てるフィールドギミック
+    float dangerRot_ = 0.0f;            // 回転危険帯：危険セクターの回転角（ラジアン）
+    float dangerTickT_ = 0.0f;          // 回転危険帯：チップダメージの適用タイマー
     std::vector<Slash> slashes_;
     std::vector<Pickup> pickups_;
     std::vector<Obstacle> obstacles_;

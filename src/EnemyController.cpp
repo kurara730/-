@@ -452,6 +452,15 @@ void SweetsApp::SpawnBoss()
         boss_.bigMove = static_cast<int>(BossBigMove::MegaBeam);
     }
 
+    // フィールドギミック（ボスごとに1つ）。ラッシュ順：ボス1=集束装置 / ボス2=回転危険帯 / ボス3=間欠泉。
+    fieldGimmick_ = FieldGimmick::None;
+    if (gameMode_ == GameMode::BossOnlyDebug)
+    {
+        const FieldGimmick gims[3] = { FieldGimmick::Collector, FieldGimmick::RotatingDanger, FieldGimmick::Geyser };
+        fieldGimmick_ = gims[gauntletIndex_ % 3];
+    }
+    SetupFieldGimmick();
+
     bossGimmick_ = {};
     bossGimmick_.type = boss_.bossType;
     bossGimmick_.nextPattern = PatternForBoss(boss_.bossType, 0);
@@ -759,6 +768,113 @@ void SweetsApp::UpdateMeteors(float dt)
     }
     meteors_.erase(std::remove_if(meteors_.begin(), meteors_.end(),
         [](const Meteor& m) { return m.impacted && m.impactT <= 0.0f; }), meteors_.end());
+}
+
+// 現在の fieldGimmick_ に応じてフィールドギミックの実体を初期化する。
+// 間欠泉：固定スポットをリング状に配置し、位相をずらして順番に噴出させる。
+void SweetsApp::SetupFieldGimmick()
+{
+    geysers_.clear();
+    dangerRot_ = 0.0f;
+    dangerTickT_ = 0.0f;
+    if (fieldGimmick_ == FieldGimmick::Geyser)
+    {
+        for (int i = 0; i < GeyserSpotCount; ++i)
+        {
+            Geyser g{};
+            const float a = TwoPi * i / GeyserSpotCount;
+            g.pos = FromAngle(a) * (ArenaRadius * 0.55f);
+            g.cycleT = GeyserCycle * i / GeyserSpotCount; // 位相ずらし＝順番に噴く
+            geysers_.push_back(g);
+        }
+    }
+}
+
+// 間欠泉（フィールドギミック）の更新。cycle で溜め→warn 予兆→active 噴出。
+// 噴出の瞬間、踏んでいるプレイヤーは被弾し、巻き込まれたボスは追加ダメージを受ける（誘導報酬）。
+void SweetsApp::UpdateGeysers(float dt)
+{
+    if (fieldGimmick_ != FieldGimmick::Geyser) return;
+    const float tmul = slowT_ > 0.0f ? 0.5f : 1.0f;
+    for (auto& g : geysers_)
+    {
+        if (g.activeT > 0.0f)
+        {
+            g.activeT -= dt * tmul;
+            if (g.activeT <= 0.0f) { g.activeT = 0.0f; g.cycleT = 0.0f; g.fired = false; }
+        }
+        else if (g.warnT > 0.0f)
+        {
+            g.warnT -= dt * tmul;
+            if (g.warnT <= 0.0f)
+            {
+                g.warnT = 0.0f;
+                g.activeT = GeyserActiveTime;
+                g.fired = true;
+                // プレイヤー被弾
+                for (auto& p : players_)
+                {
+                    if (!p.active || p.downed || p.inv > 0.0f) continue;
+                    if (Len(p.pos - g.pos) <= GeyserRadius + p.radius)
+                        ResolvePlayerHit(p, boss_.atk * GeyserPlayerDamageMul, AngleOf(p.pos - g.pos));
+                }
+                // ボスを巻き込むと追加ダメージ（おびき寄せ報酬）
+                if (boss_.active && Len(boss_.pos - g.pos) <= GeyserRadius + boss_.radius)
+                {
+                    DamageBoss(GeyserBossDamage, false, 0);
+                    Burst(g.pos, Gold, 34);
+                }
+                Burst(g.pos, Sky, 26);
+                shakeMag_ = std::max(shakeMag_, 0.22f); shakeLife_ = std::max(shakeLife_, 0.14f); shakeT_ = shakeLife_;
+            }
+        }
+        else
+        {
+            g.cycleT += dt * tmul;
+            if (g.cycleT >= GeyserCycle)
+            {
+                g.cycleT = GeyserCycle;
+                g.warnT = GeyserWarnTime;
+            }
+        }
+    }
+}
+
+// 回転する危険帯（フィールドギミック）の更新。危険セクターが時計回りに回転し、
+// 立っているプレイヤーへ一定間隔でチップダメージを与える（対象はプレイヤーのみ）。
+void SweetsApp::UpdateRotatingDanger(float dt)
+{
+    if (fieldGimmick_ != FieldGimmick::RotatingDanger) return;
+    const float tmul = slowT_ > 0.0f ? 0.5f : 1.0f;
+    const float omega = RotatingDangerSpeed * (1.0f + static_cast<float>(boss_.phase - 1) * RotatingDangerAccelPerPhase);
+    dangerRot_ += omega * dt * tmul;
+    while (dangerRot_ > TwoPi) dangerRot_ -= TwoPi;
+
+    const int bands = std::min(RotatingDangerMaxBands, std::max(1, boss_.phase));
+    const float halfArc = (TwoPi / RotatingDangerSectors) * 0.5f;
+
+    dangerTickT_ -= dt * tmul;
+    const bool doTick = dangerTickT_ <= 0.0f;
+    if (doTick) dangerTickT_ = RotatingDangerTickInterval;
+    if (!doTick) return;
+
+    for (auto& p : players_)
+    {
+        if (!p.active || p.downed || p.inv > 0.0f) continue;
+        if (Len(p.pos) < 0.4f) continue; // ほぼ中心は角度が不定なので除外
+        const float pa = AngleOf(p.pos);
+        bool inDanger = false;
+        for (int j = 0; j < bands; ++j)
+        {
+            const float c = dangerRot_ + TwoPi * static_cast<float>(j) / static_cast<float>(bands);
+            float d = pa - c;
+            while (d > Pi) d -= TwoPi;
+            while (d < -Pi) d += TwoPi;
+            if (std::fabs(d) <= halfArc) { inDanger = true; break; }
+        }
+        if (inDanger)
+            ResolvePlayerHit(p, boss_.atk * RotatingDangerDpsMul * RotatingDangerTickInterval, pa);
+    }
 }
 
 void SweetsApp::UpdateBoss(float dt)

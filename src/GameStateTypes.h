@@ -198,6 +198,16 @@ struct Meteor
     bool impacted = false;  // 着弾ダメージ適用済み
 };
 
+// 間欠泉（フィールドギミック）：固定スポットが周期で噴出。cycleで溜め→warn予兆→active噴出の3段。
+struct Geyser
+{
+    V2 pos{};
+    float cycleT = 0.0f;    // 周期タイマー（GeyserCycleでwarn開始）
+    float warnT = 0.0f;     // 予兆残り
+    float activeT = 0.0f;   // 噴出残り
+    bool fired = false;     // この噴出のダメージ適用済み
+};
+
 // 通常ボスと隠しボスで共通利用する状態です。
 // 隠しボス固有のギミックは HiddenBossCore など別構造に分け、ここは本体HPと攻撃状態を持ちます。
 struct Boss
